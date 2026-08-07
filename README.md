@@ -53,7 +53,7 @@ les checkpoints sont des cibles, à toi de trouver le chemin dans le réseau.
 ## La ville
 
 Les bâtiments viennent des emprises OSM (`building`) sur une zone de 5,9 × 3,5 km
-autour du circuit : 23 250 bâtiments pour 4,3 Mo, contre 57 428 sur la ville
+autour du circuit : 23 423 bâtiments pour 4,3 Mo, contre 57 428 sur la ville
 entière. L'emprise doit rester large : une zone trop serrée faisait tomber la
 ville dans le vide dès qu'on montait vers l'Hôtel de Ville.
 
@@ -109,7 +109,7 @@ une fonction pure, premier match gagne, du signal le plus fiable au plus
 heuristique. Aucune façade n'est colorée au hasard : tout descend d'un tag OSM,
 d'une jointure spatiale, ou à défaut d'un hash déterministe de l'id OSM.
 
-La cascade a été **calée sur un comptage préalable des 22 509 emprises**, pas sur
+La cascade a été **calée sur un comptage préalable des emprises**, pas sur
 une intuition. Trois mesures ont changé la conception :
 
 | signal supposé | bâtiments atteints | verdict |
@@ -132,11 +132,11 @@ réellement :
 
 | archétype | bâtiments | surface de façade |
 | --- | --- | --- |
-| faubourg | 17 364 (77,1 %) | 42,8 % |
-| pierre | 2 763 (12,3 %) | 20,8 % |
-| barre | 1 262 (5,6 %) | 21,8 % |
-| brique | 910 (4,0 %) | 11,6 % |
-| moderne | 210 (0,9 %) | 3,1 % |
+| faubourg | 17 397 (76,7 %) | 42,0 % |
+| pierre | 2 880 (12,7 %) | 21,9 % |
+| barre | 1 278 (5,6 %) | 21,6 % |
+| brique | 914 (4,0 %) | 11,4 % |
+| moderne | 213 (0,9 %) | 3,1 % |
 
 Lecture par quartier, sur 200 m : Hôtel de Ville **69 % pierre**, place Dorian
 **64 % pierre**, Montreynaud **48 % brique**. Le cœur lit bien comme un centre
@@ -160,11 +160,11 @@ produirait un unique point brillant au lieu d'une lecture de verre, pour le coû
 d'un matériau standard à la place d'un Lambert. Le moderne se distingue par son
 albédo froid et la teinte froide de ses fenêtres.
 
-**Repères posés à la main.** Huit bâtiments reçoivent une configuration bespoke
-qui écrase l'archétype, relevée par id OSM dans le cache et non devinée : la
-Platine, le Zénith, l'ancienne Manufacture d'Armes, la cathédrale Saint-Charles,
-l'Opéra, le musée d'Art et d'Industrie, le chevalement du Puits Couriot, la
-centrale Manufrance. Geoffroy-Guichard n'y figure pas : **le stade n'est pas
+**Repères posés à la main.** Neuf bâtiments reçoivent une configuration bespoke
+qui écrase l'archétype, relevée par id OSM dans le cache et non devinée :
+l'Hôtel de Ville, la Platine, le Zénith, l'ancienne Manufacture d'Armes, la
+cathédrale Saint-Charles, l'Opéra, le musée d'Art et d'Industrie, le chevalement
+du Puits Couriot, la centrale Manufrance. Geoffroy-Guichard n'y figure pas : **le stade n'est pas
 tagué `building` dans OSM**, il n'existe donc pas dans les emprises. Le vert-noir
 ASSE ne se justifierait nulle part ailleurs, ce serait un gadget.
 
@@ -186,7 +186,7 @@ s'auto-intersectaient et retombaient à plat. Le retrait est donc proportionné 
 la taille de l'emprise puis réduit tant qu'il échoue : 1 → 0,6 → 0,35 → 0,2. Il
 ne reste que **31 abandons (0,2 %)**. `insetRing` vit dans `lib/buildings.ts` et
 non dans le rendu, précisément pour que ce réglage se mesure dans Node sur les
-22 509 emprises réelles.
+22 682 emprises réelles.
 
 La géométrie est découpée en paquets de 400 m pour que three.js puisse faire
 son frustum culling, et par archétype à l'intérieur d'un paquet puisqu'ils ne
@@ -244,6 +244,76 @@ l'extérieur, ou abandonnée : **1 531 mâts sur 10 085 tombaient sur le bitume*
 Coût mesuré : 871k triangles pour les bâtiments, 243k pour les routes et leurs
 43 301 traits d'axe.
 
+## La couche reconnaissance : le caractère du vide
+
+Cible : quelqu'un qui **connaît** Saint-Étienne mais n'arrive pas à raccrocher
+ce qu'il voit à la carte qu'il a en tête. L'information est déjà dans sa
+mémoire, le travail est de lui donner assez de points d'accroche corrects pour
+déclencher le match. Ce n'est donc pas la peine de prouver que c'est Sainté avec
+des monuments : il le sait déjà.
+
+Ce qui sépare deux places de loin, avant tout détail lisible, c'est le
+**caractère du vide**, parce que c'est comme ça qu'un habitant range sa mémoire :
+minéral resserré, jardin clos arboré, parc ouvert. `characterFor()` dans
+`lib/places.ts` tague chaque espace ouvert en MINÉRAL / JARDIN / PARC depuis les
+tags OSM, et le rendu répartit la distinction sur les canaux qui survivent à la
+distance : couleur de sol, clôtures, allées.
+
+| canal | MINÉRAL | JARDIN | PARC |
+| --- | --- | --- | --- |
+| sol | `#565049` gris chaud dur | `#2b3324` vert grisâtre | `#2c3d22` pelouse franche |
+| clôture | aucune | **rendue, c'est sa signature** | aucune |
+| allées | aucune, tout se marche | ornementales | gravier clair sur la pelouse |
+
+Résultat du test, caractère dominant pondéré par la surface dans un rayon de
+130 m, Dorian servant de témoin :
+
+| place | attendu | obtenu |
+| --- | --- | --- |
+| Place du Peuple | minéral | **minéral 100 %** |
+| Place Jean Jaurès | jardin | **jardin 62 %**, minéral 38 % |
+| Place Carnot | parc | **parc 77 %** |
+| Place Dorian (témoin) | minéral | **minéral 79 %** |
+
+### Deux corrections que la mesure a imposées
+
+**`place=square` ne doit pas être une surface.** C'est une emprise de nommage,
+pas un revêtement. La place Sadi Carnot est un `place=square` de **17 282 m²**
+qui englobe le parc de **8 366 m²** ; la peindre en dalle posait une plaque
+minérale par-dessus le parc et faisait lire Carnot comme une place dure, soit
+exactement l'inverse de ce qu'elle est. Le test est passé de `minéral 69 %` à
+`parc 77 %` en la retirant.
+
+**La clôture ne peut pas être exigée pour un jardin.** C'est bien le canal le
+plus discriminant quand il existe, mais **OSM ne cartographie aucune barrière
+autour de Jean Jaurès** : 0 m mesuré dans 130 m. L'exiger renvoyait la place en
+minéral, donc indistinguable du Peuple. Ce qui sépare réellement Jaurès, ce sont
+les arbres, **132 dans 130 m contre 21 au Peuple et 23 à Dorian**, et ses
+plates-bandes de 283 à 501 m². La clôture est donc un signal *suffisant*, jamais
+*nécessaire*. Un massif de moins de 1 200 m² compte comme jardin et non comme
+parc, sans quoi les plates-bandes de Jaurès peignaient la place en pelouse.
+
+Sur 99 km de barrières cartographiées, **270 lignes soit 17 km** longent un
+espace ouvert et sont seules embarquées ; les allées retenues sont les 665 dont
+le milieu tombe dans un espace ouvert, soit 36 km. Les deux jointures sont
+faites hors ligne dans `fetch-osm.mjs`.
+
+### Les relations multipolygones
+
+Les bâtiments à cour intérieure sont cartographiés en **relation multipolygone**
+et non en way. L'import ne prenait que les ways, donc ils n'existaient pas :
+**l'Hôtel de Ville (relation 5201020, 3 861 m²) était purement absent de la
+scène**, avec la Préfecture de la Loire, la Cité Grüner et 170 autres contours.
+Les ways membres sont recousus bout à bout ; les anneaux intérieurs sont ignorés,
+un bâtiment plein valant très largement mieux qu'un bâtiment absent. Les contours
+issus de relations portent l'id OSM **en négatif** pour ne pas collisionner avec
+les ids de way.
+
+En revanche, contrairement à ce qu'on pouvait craindre, ce bug ne bloquait aucune
+des ancres des trois places : la **cathédrale Saint-Charles** (way 63322493) et
+la **gare de Châteaucreux** (way 63322681) sont de simples ways, présentes depuis
+le début.
+
 ## Le décor
 
 Avant d'écrire une ligne de rendu, les couches ont été **comptées** sur la bbox
@@ -261,6 +331,8 @@ de travail. C'est ce qui a décidé lesquelles valaient le coup :
 | `railway=tram` | 128 | signature stéphanoise |
 | `amenity=fountain` | 10 | posées, elles tombent sur les places |
 | `highway=street_lamp` | 760 | plus maigre que le procédural, écarté |
+| `barrier` au contact d'un espace ouvert | 270 (17 km) | signature du jardin |
+| allées dans un espace ouvert | 665 (36 km) | signature du parc |
 
 Le piège des places : sur les 179 `highway=pedestrian`, **50 seulement sont des
 contours fermés**. Les 129 autres sont des lignes, et c'est le secteur piétonnier
@@ -296,6 +368,7 @@ src/lib/input.ts        clavier
 src/lib/buildings.ts    emprises OSM, déduction des hauteurs, retrait de toit
 src/lib/archetypes.ts   cascade d'archétypes de façade et palettes
 src/lib/features.ts     décor OSM : sols triangulés, arbres, tram, mobilier
+src/lib/places.ts       caractère des espaces ouverts : minéral / jardin / parc
 src/scene/              rendu three.js (routes, sols, bâtiments, arbres, tram,
                         voiture, portiques, caméra)
 src/state/store.ts      zustand

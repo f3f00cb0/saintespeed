@@ -8,6 +8,7 @@
 
 import earcut from "earcut";
 import type { Projector } from "./project";
+import { characterFor, Character } from "./places";
 
 export type AreaKind =
   | "pedestrian"
@@ -19,15 +20,35 @@ export type AreaKind =
   | "parking"
   | "water";
 
+/** Un espace au sol, avec ce que les jointures hors ligne ont releve dessus. */
+export type RawArea = {
+  i: number;
+  k: AreaKind;
+  g: [number, number][];
+  n?: string; // name
+  s?: string; // surface
+  lz?: string; // leisure
+  sq?: number; // place=square
+  nt?: number; // arbres dans le polygone
+  fl?: number; // metres de cloture le long du perimetre
+  np?: number; // allees a l'interieur
+};
+
+/** k : f grille, h haie, w mur. */
+export type RawFence = { g: [number, number][]; k: "f" | "h" | "w" };
+export type RawPath = { g: [number, number][]; s?: string };
+
 export type RawFeatures = {
-  areas: { i: number; k: AreaKind; g: [number, number][] }[];
+  areas: RawArea[];
   /** rues pietonnes : des lignes ouvertes, elargies en dalle au rendu */
-  pedLines: { i: number; g: [number, number][] }[];
+  pedLines: { i: number; g: [number, number][]; n?: string; s?: string }[];
   trees: [number, number][];
   treeRows: { i: number; g: [number, number][] }[];
   tram: { i: number; g: [number, number][] }[];
   fountains: [number, number][];
   lamps: [number, number][];
+  fences: RawFence[];
+  paths: RawPath[];
 };
 
 const EMPTY: RawFeatures = {
@@ -38,6 +59,8 @@ const EMPTY: RawFeatures = {
   tram: [],
   fountains: [],
   lamps: [],
+  fences: [],
+  paths: [],
 };
 
 /** largeur d'une rue pietonne, en metres */
@@ -128,7 +151,10 @@ function unclose(g: [number, number][]): [number, number][] {
 }
 
 function blank(): RawFeatures {
-  return { areas: [], pedLines: [], trees: [], treeRows: [], tram: [], fountains: [], lamps: [] };
+  return {
+    areas: [], pedLines: [], trees: [], treeRows: [], tram: [],
+    fountains: [], lamps: [], fences: [], paths: [],
+  };
 }
 
 function fromOverpass(data: any): RawFeatures {
@@ -199,7 +225,13 @@ export type FlatArea = {
   area: number;
   cx: number;
   cy: number;
+  /** mineral / jardin / parc, ou null si ce n'est pas un espace ouvert */
+  character: Character | null;
+  name?: string;
 };
+
+export type FlatFence = { pts: { x: number; y: number }[]; kind: "f" | "h" | "w" };
+export type FlatPath = { pts: { x: number; y: number }[]; soft: boolean };
 
 export type FlatFeatures = {
   areas: FlatArea[];
@@ -207,6 +239,8 @@ export type FlatFeatures = {
   tram: { x: number; y: number }[][];
   fountains: { x: number; y: number }[];
   lamps: { x: number; y: number }[];
+  fences: FlatFence[];
+  paths: FlatPath[];
 };
 
 function signedArea(ring: number[]): number {
@@ -289,6 +323,11 @@ export function prepareFeatures(raw: RawFeatures, proj: Projector): FlatFeatures
       area: 0,
       cx: cx / P.length,
       cy: cy / P.length,
+      // Une rue pietonne est minerale par construction : c'est du sol dur qui
+      // se marche entierement. Le secteur pietonnier du centre est entierement
+      // cartographie comme ca.
+      character: Character.Mineral,
+      name: line.n,
     });
   }
 
@@ -308,6 +347,17 @@ export function prepareFeatures(raw: RawFeatures, proj: Projector): FlatFeatures
     const tris = earcut(flat);
     if (tris.length < 3) continue;
 
+    const character = characterFor({
+      kind: a.k,
+      leisure: a.lz,
+      surface: a.s,
+      square: !!a.sq,
+      area: surface,
+      trees: a.nt ?? 0,
+      fenceLen: a.fl ?? 0,
+      paths: a.np ?? 0,
+    });
+
     const y = areaHeight(a.k);
     const pos = new Float32Array(tris.length * 3);
     for (let i = 0; i < tris.length; i++) {
@@ -326,7 +376,7 @@ export function prepareFeatures(raw: RawFeatures, proj: Projector): FlatFeatures
     cx /= flat.length / 2;
     cy /= flat.length / 2;
 
-    areas.push({ id: a.i, kind: a.k, pos, area: surface, cx, cy });
+    areas.push({ id: a.i, kind: a.k, pos, area: surface, cx, cy, character, name: a.n });
   }
 
   // --- arbres -------------------------------------------------------------
@@ -360,11 +410,36 @@ export function prepareFeatures(raw: RawFeatures, proj: Projector): FlatFeatures
     .map((t) => t.g.map(([lon, lat]) => proj.project(lon, lat)))
     .filter((p) => p.length >= 2);
 
+  // --- clotures et allees --------------------------------------------------
+  // Deja filtrees a la generation : seules celles au contact d'un espace ouvert
+  // sont dans le cache, le reste de la ville en est couvert mais ne servirait
+  // a rien ici.
+  const fences: FlatFence[] = [];
+  for (const f of raw.fences ?? []) {
+    if (!f.g || f.g.length < 2) continue;
+    fences.push({ pts: f.g.map(([lon, lat]) => proj.project(lon, lat)), kind: f.k });
+  }
+
+  // Une allee de terre ou de gravier lit "parc", une allee betonnee lit
+  // "amenagement". On garde juste cette bascule, le detail exact de la surface
+  // ne survit pas a la distance.
+  const SOFT = /^(gravel|fine_gravel|compacted|dirt|ground|earth|sand|grass|unpaved|wood)$/;
+  const paths: FlatPath[] = [];
+  for (const p of raw.paths ?? []) {
+    if (!p.g || p.g.length < 2) continue;
+    paths.push({
+      pts: p.g.map(([lon, lat]) => proj.project(lon, lat)),
+      soft: SOFT.test(p.s ?? ""),
+    });
+  }
+
   return {
     areas,
     trees,
     tram,
     fountains: raw.fountains.map(([lon, lat]) => proj.project(lon, lat)),
     lamps: raw.lamps.map(([lon, lat]) => proj.project(lon, lat)),
+    fences,
+    paths,
   };
 }

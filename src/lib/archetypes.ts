@@ -346,6 +346,12 @@ export function isUnlit(kind: string | undefined, landmark?: Landmark): boolean 
 }
 
 export const LANDMARKS = new Map<number, Landmark>([
+  // Hotel de Ville : pierre monumentale du coeur de ville. Il est arrive tard
+  // dans la scene, non par oubli mais parce qu'il est cartographie en relation
+  // multipolygone (rel 5201020) et que l'import ne prenait que les ways : il
+  // n'existait tout simplement pas. Les contours issus de relations portent
+  // l'id OSM en negatif, d'ou la clef.
+  [-5201020, { archetype: Archetype.Pierre, wall: 0xe2d8c1, label: "Hotel de Ville" }],
   // Cite du Design : long volume clair perfore, la signature moderne de la
   // ville. Elle etait hors de l'ancienne bbox batiments.
   [63303051, { archetype: Archetype.Moderne, wall: 0xd6dade, label: "La Platine" }],

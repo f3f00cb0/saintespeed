@@ -50,9 +50,14 @@ const COMMERCE_AMENITY =
 // jointures spatiales (POI -> batiment, zone -> batiment, axe -> batiment) sont
 // faites ici, hors ligne : le navigateur recoit un simple drapeau par batiment
 // au lieu de refaire 15 000 tests de point-dans-polygone au chargement.
+// Les batiments a cour interieure sont cartographies en relation multipolygone,
+// pas en way. Ne prendre que les ways les fait disparaitre : l'Hotel de Ville
+// (relation 5201020) n'existait tout simplement pas dans la scene, et 176
+// relations sont dans ce cas sur la bbox.
 const BUILDINGS_QUERY =
   `[out:json][timeout:300];(` +
   `way["building"]${bb(BUILD_BBOX)};` +
+  `relation["building"]${bb(BUILD_BBOX)};` +
   `way["landuse"~"^(industrial|retail|commercial|brownfield)$"]${bb(BUILD_BBOX)};` +
   `node["shop"]${bb(BUILD_BBOX)};` +
   `node["amenity"~"^(${COMMERCE_AMENITY})$"]${bb(BUILD_BBOX)};` +
@@ -61,19 +66,26 @@ const BUILDINGS_QUERY =
 // Tout le decor en un seul pull, on trie par tag a l'arrivee. Les places
 // pietonnes et les parcs sont ce qui bouche les trous noirs des grandes places,
 // le reste est de l'habillage.
+// Les clotures et les allees ne sont tirees que sur la bbox batiments : ce sont
+// les couches les plus volumineuses et elles ne servent qu'a caracteriser les
+// espaces ouverts de la ville rendue, pas les confins.
 const FEATURES_QUERY =
   `[out:json][timeout:300];(` +
   `node["natural"="tree"]${bb(BBOX)};` +
   `way["natural"="tree_row"]${bb(BBOX)};` +
   `way["highway"="pedestrian"]${bb(BBOX)};` +
   `way["highway"="footway"]["area"="yes"]${bb(BBOX)};` +
-  `way["leisure"~"park|garden|pitch"]${bb(BBOX)};` +
+  `way["leisure"~"park|garden|pitch|playground"]${bb(BBOX)};` +
+  `way["place"="square"]${bb(BBOX)};` +
   `way["landuse"~"grass|forest|meadow|cemetery"]${bb(BBOX)};` +
   `way["natural"="water"]${bb(BBOX)};` +
   `way["amenity"="parking"]${bb(BBOX)};` +
   `way["railway"="tram"]${bb(BBOX)};` +
   `node["amenity"="fountain"]${bb(BBOX)};` +
   `node["highway"="street_lamp"]${bb(BBOX)};` +
+  // caractere des espaces ouverts : cloture et allees
+  `way["barrier"~"^(fence|hedge|wall|railing)$"]${bb(BUILD_BBOX)};` +
+  `way["highway"~"^(footway|path|steps)$"]${bb(BUILD_BBOX)};` +
   `);out geom;`;
 
 const ENDPOINTS = [
@@ -239,6 +251,45 @@ function segDist(px, py, a, b) {
 // saisi a la va-vite et l'emprise reelle.
 const COMMERCE_RADIUS = 40;
 
+// --- relations multipolygones ----------------------------------------------
+// Un multipolygone OSM decrit son contour exterieur en plusieurs ways qui se
+// touchent bout a bout. Il faut les recoudre pour retrouver l'anneau. Les
+// anneaux interieurs (role "inner", les cours) sont ignores : le batiment sera
+// plein plutot qu'absent, ce qui est tres largement preferable.
+function stitchRings(members) {
+  const parts = members
+    .filter((m) => m.type === "way" && (m.role === "outer" || !m.role) && m.geometry?.length > 1)
+    .map((m) => m.geometry.map((p) => [r6(p.lon), r6(p.lat)]));
+
+  const rings = [];
+  const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+
+  while (parts.length) {
+    let ring = parts.shift();
+    let grew = true;
+    while (grew && !same(ring[0], ring[ring.length - 1])) {
+      grew = false;
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        const tail = ring[ring.length - 1];
+        if (same(p[0], tail)) {
+          ring = ring.concat(p.slice(1));
+        } else if (same(p[p.length - 1], tail)) {
+          ring = ring.concat(p.slice(0, -1).reverse());
+        } else {
+          continue;
+        }
+        parts.splice(i, 1);
+        grew = true;
+        break;
+      }
+    }
+    if (same(ring[0], ring[ring.length - 1])) ring.pop();
+    if (ring.length >= 3) rings.push(ring);
+  }
+  return rings;
+}
+
 // --- batiments : format maison, contour + niveaux -------------------------
 // Un GeoJSON complet couterait 8 Mo pour la meme information. On ne garde que
 // le contour et ce qui sert a deviner la hauteur et l'archetype de facade.
@@ -261,6 +312,22 @@ function buildingsToCompact(json) {
   const out = [];
   const zones = []; // polygones landuse projetes
   const pois = []; // commerces, projetes
+
+  let relRings = 0;
+
+  // Un batiment, quel que soit son support OSM (way simple ou relation
+  // multipolygone), se ramene ici a une liste de contours a plat.
+  const contours = [];
+  for (const el of json.elements) {
+    const t = el.tags || {};
+    if (el.type === "relation" && t.building && Array.isArray(el.members)) {
+      for (const ring of stitchRings(el.members)) {
+        // id negatif : evite toute collision avec les ids de way
+        contours.push({ id: -el.id, tags: t, g: ring });
+        relRings++;
+      }
+    }
+  }
 
   for (const el of json.elements) {
     const t = el.tags || {};
@@ -285,8 +352,13 @@ function buildingsToCompact(json) {
     const last = g[g.length - 1];
     if (first[0] === last[0] && first[1] === last[1]) g.pop();
     if (g.length < 3) continue;
+    contours.push({ id: el.id, tags: t, g });
+  }
 
-    const b = { i: el.id, g };
+  for (const c of contours) {
+    const t = c.tags;
+    const g = c.g;
+    const b = { i: c.id, g };
     const lv = levelsOf(t);
     const h = heightOf(t);
     if (lv !== null) b.l = lv;
@@ -419,7 +491,7 @@ function buildingsToCompact(json) {
     attribution: ATTRIBUTION,
     bbox: [BUILD_BBOX[1], BUILD_BBOX[0], BUILD_BBOX[3], BUILD_BBOX[2]],
     buildings: out,
-    joins: { zones: zones.length, pois: pois.length, poiHits, zoneHits, axisSegs, axisHits },
+    joins: { zones: zones.length, pois: pois.length, poiHits, zoneHits, axisSegs, axisHits, relRings },
   };
 }
 
@@ -435,13 +507,29 @@ function classifyArea(t) {
   if (t.natural === "water") return "water";
   if (t.highway === "pedestrian") return "pedestrian";
   if (t.highway === "footway" && t.area === "yes") return "pedestrian";
+  // Volontairement PAS de "place=square" : c'est une emprise de nommage, pas
+  // une surface. La place Sadi Carnot est un place=square de 17 282 m2 qui
+  // englobe le parc de 8 366 m2 ; la peindre en dalle posait une plaque
+  // minerale par dessus le parc et faisait lire Carnot comme une place dure,
+  // exactement l'inverse de ce qu'elle est.
   if (t.amenity === "parking") return "parking";
   if (t.leisure === "pitch") return "pitch";
+  if (t.leisure === "playground") return "park";
   if (t.leisure === "park" || t.leisure === "garden") return "park";
   if (t.landuse === "cemetery") return "cemetery";
   if (t.landuse === "forest") return "forest";
   if (t.landuse === "grass" || t.landuse === "meadow") return "grass";
   return null;
+}
+
+// Distance d'un point a un segment, reutilisee par les jointures de decor.
+function ptSegDist(px, py, ax, ay, bx, by) {
+  const vx = bx - ax;
+  const vy = by - ay;
+  const L = vx * vx + vy * vy;
+  let t = L ? ((px - ax) * vx + (py - ay) * vy) / L : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + vx * t), py - (ay + vy * t));
 }
 
 function featuresToCompact(json) {
@@ -452,6 +540,8 @@ function featuresToCompact(json) {
   const tram = [];
   const fountains = [];
   const lamps = [];
+  const rawFences = [];
+  const rawPaths = [];
 
   for (const el of json.elements) {
     const t = el.tags || {};
@@ -474,6 +564,14 @@ function featuresToCompact(json) {
       treeRows.push({ i: el.id, g });
       continue;
     }
+    if (t.barrier) {
+      rawFences.push({ g, kind: t.barrier });
+      continue;
+    }
+    if (/^(footway|path|steps)$/.test(t.highway ?? "") && t.area !== "yes") {
+      rawPaths.push({ g, surface: t.surface ?? null });
+      continue;
+    }
 
     // une surface est forcement un contour ferme
     const first = g[0];
@@ -485,7 +583,7 @@ function featuresToCompact(json) {
     // secteur pietonnier en noir, on les garde comme polylignes a elargir au
     // rendu.
     if (!closed) {
-      if (t.highway === "pedestrian") pedLines.push({ i: el.id, g });
+      if (t.highway === "pedestrian") pedLines.push({ i: el.id, g, n: t.name, s: t.surface });
       continue;
     }
 
@@ -494,7 +592,88 @@ function featuresToCompact(json) {
 
     const k = classifyArea(t);
     if (!k) continue;
-    areas.push({ i: el.id, k, g });
+    const a = { i: el.id, k, g };
+    if (t.name) a.n = t.name;
+    if (t.surface) a.s = t.surface;
+    if (t.leisure) a.lz = t.leisure;
+    if (t.place === "square") a.sq = 1;
+    areas.push(a);
+  }
+
+  // --- caractere des espaces ouverts ---------------------------------------
+  // Trois jointures faites ici, hors ligne : arbres dans le polygone, cloture
+  // le long du perimetre, allees a l'interieur. Le navigateur ne recoit que le
+  // resultat, il ne refait aucun test geometrique au chargement.
+  const proj = makeProj((BBOX[0] + BBOX[2]) / 2);
+  const openKinds = new Set(["pedestrian", "park", "grass"]);
+
+  const polys = areas.map((a) => {
+    if (!openKinds.has(a.k)) return null;
+    const ring = a.g.map(([lon, lat]) => proj(lon, lat));
+    return { a, ring, ...bboxOf(ring), area: ringArea(ring) };
+  });
+
+  const inside = (p, poly) =>
+    p.x >= poly.minx && p.x <= poly.maxx && p.y >= poly.miny && p.y <= poly.maxy &&
+    pointInRing(p.x, p.y, poly.ring);
+
+  // arbres
+  for (const poly of polys) {
+    if (!poly) continue;
+    poly.a.nt = 0;
+  }
+  for (const [lon, lat] of trees) {
+    const p = proj(lon, lat);
+    for (const poly of polys) {
+      if (!poly) continue;
+      if (inside(p, poly)) { poly.a.nt++; break; }
+    }
+  }
+
+  // clotures : on ne garde que celles qui longent un espace ouvert, et on note
+  // la longueur cumulee sur chaque polygone. C'est le canal le plus
+  // discriminant d'un jardin, et le plus sous-exploite.
+  const fences = [];
+  for (const f of rawFences) {
+    const pts = f.g.map(([lon, lat]) => proj(lon, lat));
+    let keep = false;
+    let len = 0;
+    for (let i = 0; i < pts.length - 1; i++) len += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+    for (const poly of polys) {
+      if (!poly) continue;
+      let touch = false;
+      for (const p of pts) {
+        if (p.x < poly.minx - 12 || p.x > poly.maxx + 12 || p.y < poly.miny - 12 || p.y > poly.maxy + 12) continue;
+        // au contact : soit dedans, soit a moins de 12 m d'une arete
+        if (pointInRing(p.x, p.y, poly.ring)) { touch = true; break; }
+        for (let i = 0; i < poly.ring.length && !touch; i++) {
+          const a = poly.ring[i];
+          const b = poly.ring[(i + 1) % poly.ring.length];
+          if (ptSegDist(p.x, p.y, a.x, a.y, b.x, b.y) < 12) touch = true;
+        }
+        if (touch) break;
+      }
+      if (touch) {
+        keep = true;
+        poly.a.fl = Math.round((poly.a.fl ?? 0) + len);
+      }
+    }
+    if (keep) fences.push({ g: f.g, k: f.kind === "hedge" ? "h" : f.kind === "wall" ? "w" : "f" });
+  }
+
+  // allees : seules celles dont le milieu tombe dans un espace ouvert
+  const paths = [];
+  for (const p of rawPaths) {
+    const pts = p.g.map(([lon, lat]) => proj(lon, lat));
+    const mid = pts[Math.floor(pts.length / 2)];
+    for (const poly of polys) {
+      if (!poly) continue;
+      if (inside(mid, poly)) {
+        paths.push({ g: p.g, s: p.surface ?? undefined });
+        poly.a.np = (poly.a.np ?? 0) + 1;
+        break;
+      }
+    }
   }
 
   return {
@@ -507,6 +686,8 @@ function featuresToCompact(json) {
     tram,
     fountains,
     lamps,
+    fences,
+    paths,
   };
 }
 
@@ -549,7 +730,8 @@ if (doBuildings) {
   );
   const j = data.joins;
   console.log(
-    `  jointures : ${j.zones} zones landuse, ${j.pois} POI commerce, ${j.axisSegs} segments d'axe\n` +
+    `  contours issus de relations multipolygones : ${j.relRings}\n` +
+      `  jointures : ${j.zones} zones landuse, ${j.pois} POI commerce, ${j.axisSegs} segments d'axe\n` +
       `  zone industrielle : ${pct(data.buildings.filter((b) => b.z === "i").length)}\n` +
       `  rez commerce : ${pct(data.buildings.filter((b) => b.s).length)} ` +
       `(POI ${data.buildings.filter((b) => b.s & 1).length}, ` +
@@ -581,6 +763,11 @@ if (doFeatures) {
       `  rues pietonnes : ${data.pedLines.length} polylignes\n` +
       `  arbres : ${data.trees.length} isoles, ${data.treeRows.length} alignements\n` +
       `  tram : ${data.tram.length} troncons · fontaines : ${data.fountains.length} · ` +
-      `lampadaires OSM : ${data.lamps.length}`,
+      `lampadaires OSM : ${data.lamps.length}\n` +
+      `  clotures au contact d'un espace ouvert : ${data.fences.length} · ` +
+      `allees dans un espace ouvert : ${data.paths.length}\n` +
+      `  espaces ouverts avec cloture : ${data.areas.filter((a) => a.fl).length} · ` +
+      `avec arbres : ${data.areas.filter((a) => a.nt).length} · ` +
+      `avec surface taguee : ${data.areas.filter((a) => a.s).length}`,
   );
 }

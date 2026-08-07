@@ -16,6 +16,7 @@ import { Ground } from "./scene/Ground";
 import { Trees } from "./scene/Trees";
 import { Tram } from "./scene/Tram";
 import { Fountains } from "./scene/Fountains";
+import { Fences } from "./scene/Fences";
 import { Lamps } from "./scene/Lamps";
 import { Sky, HORIZON } from "./scene/Sky";
 import { ChaseCamera } from "./scene/Camera";
@@ -140,11 +141,13 @@ export default function App() {
             <Sky />
             {/* le decor passe avant les routes : les surfaces sont sous la
                 chaussee, qui doit rester lisible par dessus une place */}
-            {features && <Ground areas={features.areas} />}
+            {features && <Ground areas={features.areas} paths={features.paths} />}
             <Roads ways={ways} proj={graph!.proj} />
             {features && <Tram lines={features.tram} />}
             {features && <Trees trees={features.trees} />}
             {features && <Fountains points={features.fountains} />}
+            {/* la ceinture d'un jardin est ce qui le separe d'un parc de loin */}
+            {features && <Fences fences={features.fences} />}
             {centre && <Lamps ways={ways} proj={graph!.proj} centre={centre} graph={graph!} />}
             {showBuildings && buildings.length > 0 && <Buildings buildings={buildings} />}
             <Checkpoints />
