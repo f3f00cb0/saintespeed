@@ -84,7 +84,10 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
   // Le centre autour de l'Hotel de Ville, place Dorian, rue de la Republique.
   // Pierre de taille creme, rythme de fenetres regulier, toit zinc sombre.
   [Archetype.Pierre]: {
-    wall: [0xd8cdb4, 0xcfc3a6, 0xe0d6bf],
+    // Creme plus froid. Avec l'ancienne valeur (0xd8cdb4), pierre et faubourg
+    // convergeaient sous la lumiere de nuit au lieu de diverger : les deux
+    // teintes se rejoignaient dans le meme beige une fois le fog applique.
+    wall: [0xddd6c2, 0xcbc5b2, 0xe8e1cc],
     roof: 0x3a3d42, // zinc
     sloped: true,
     litRatio: 0.35,
@@ -159,7 +162,8 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
   // Le tissu ordinaire hors centre et hors barres : enduit beige melange,
   // souvent un commerce en rez.
   [Archetype.Faubourg]: {
-    wall: [0xc9b79a, 0xb0a48f, 0xd0c0a4],
+    // Ocre plus chaud et plus sombre, pour s'ecarter franchement de la pierre.
+    wall: [0xc4ac82, 0xb49d76, 0xd2ba91],
     roof: 0x4a3f38, // tuile assombrie
     sloped: true,
     litRatio: 0.3,

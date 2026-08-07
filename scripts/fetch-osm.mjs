@@ -22,12 +22,33 @@ const BBOX = [45.38, 4.33, 45.49, 4.44];
 // ne tombe pas dans le vide en sortant du trace : une emprise trop serree faisait
 // disparaitre la ville des qu'on montait vers l'Hotel de Ville.
 //
-// Bord nord remonte de 45,4415 a 45,465 : l'ancienne limite coupait juste sous
-// la Manufacture. Mesure a l'appui, la Cite du Design (45,449), Le Soleil
-// (45,447), Montreynaud (45,460) et Geoffroy-Guichard (45,461) renvoyaient tous
-// zero batiment, donc les reperes du nord de la ville n'existaient tout
-// simplement pas dans la scene.
-const BUILD_BBOX = [45.4115, 4.3765, 45.465, 4.4215];
+// Les batiments couvrent maintenant toute la ville, soit la meme emprise que
+// les routes. L'emprise a grandi deux fois : d'abord le bord nord remonte a
+// 45,465 parce que la Cite du Design, Le Soleil, Montreynaud et
+// Geoffroy-Guichard renvoyaient zero batiment, puis la ville entiere pour
+// mesurer ce que l'architecture encaisse reellement.
+const BUILD_BBOX = BBOX;
+
+// Le decor lourd (clotures, allees) reste borne au coeur de ville : ce sont les
+// couches les plus volumineuses et elles ne servent qu'a caracteriser les
+// espaces ouverts qu'on traverse, pas les confins.
+const DECOR_BBOX = [45.4115, 4.3765, 45.465, 4.4215];
+
+// Un "out geom" sur 57 000 emprises depasse la centaine de mega-octets et
+// Overpass rend un 504 avant la fin. On decoupe donc la bbox en cases et on
+// fusionne : chaque case est reessayee independamment, donc un echec ne perd
+// pas le travail deja fait.
+const BUILD_SPLIT = 3;
+
+function splitBBox(b, n) {
+  const out = [];
+  const dLat = (b[2] - b[0]) / n;
+  const dLon = (b[3] - b[1]) / n;
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++)
+      out.push([b[0] + i * dLat, b[1] + j * dLon, b[0] + (i + 1) * dLat, b[1] + (j + 1) * dLon]);
+  return out;
+}
 
 const HIGHWAYS = "motorway|trunk|primary|secondary|tertiary|residential|unclassified|living_street";
 const LINKS = "motorway_link|trunk_link|primary_link|secondary_link|tertiary_link";
@@ -54,13 +75,13 @@ const COMMERCE_AMENITY =
 // pas en way. Ne prendre que les ways les fait disparaitre : l'Hotel de Ville
 // (relation 5201020) n'existait tout simplement pas dans la scene, et 176
 // relations sont dans ce cas sur la bbox.
-const BUILDINGS_QUERY =
+const buildingsQuery = (box) =>
   `[out:json][timeout:300];(` +
-  `way["building"]${bb(BUILD_BBOX)};` +
-  `relation["building"]${bb(BUILD_BBOX)};` +
-  `way["landuse"~"^(industrial|retail|commercial|brownfield)$"]${bb(BUILD_BBOX)};` +
-  `node["shop"]${bb(BUILD_BBOX)};` +
-  `node["amenity"~"^(${COMMERCE_AMENITY})$"]${bb(BUILD_BBOX)};` +
+  `way["building"]${bb(box)};` +
+  `relation["building"]${bb(box)};` +
+  `way["landuse"~"^(industrial|retail|commercial|brownfield)$"]${bb(box)};` +
+  `node["shop"]${bb(box)};` +
+  `node["amenity"~"^(${COMMERCE_AMENITY})$"]${bb(box)};` +
   `);out geom;`;
 
 // Tout le decor en un seul pull, on trie par tag a l'arrivee. Les places
@@ -90,8 +111,8 @@ const FEATURES_QUERY =
   `way["amenity"="fountain"]${bb(BBOX)};` +
   `node["highway"="street_lamp"]${bb(BBOX)};` +
   // caractere des espaces ouverts : cloture et allees
-  `way["barrier"~"^(fence|hedge|wall|railing)$"]${bb(BUILD_BBOX)};` +
-  `way["highway"~"^(footway|path|steps)$"]${bb(BUILD_BBOX)};` +
+  `way["barrier"~"^(fence|hedge|wall|railing)$"]${bb(DECOR_BBOX)};` +
+  `way["highway"~"^(footway|path|steps)$"]${bb(DECOR_BBOX)};` +
   `);out geom;`;
 
 const ENDPOINTS = [
@@ -128,10 +149,10 @@ async function hit(url, query) {
   return JSON.parse(text);
 }
 
-async function fetchWithRetry(query, label) {
+async function fetchWithRetry(query, label, rounds = 8) {
   // Overpass public rend beaucoup de 504/429 aux heures chargees. On insiste,
   // c'est un script de generation lance a la main, pas un chemin critique.
-  for (let round = 0; round < 8; round++) {
+  for (let round = 0; round < rounds; round++) {
     for (const url of ENDPOINTS) {
       process.stdout.write(`  ${label} tour ${round + 1} - ${new URL(url).host} ... `);
       try {
@@ -148,7 +169,27 @@ async function fetchWithRetry(query, label) {
     console.log(`  tous les miroirs KO, nouvelle tentative dans ${wait / 1000}s`);
     await sleep(wait);
   }
-  throw new Error("Overpass injoignable apres 5 tours");
+  throw new Error("Overpass injoignable apres " + rounds + " tours");
+}
+
+// Overpass ne rend pas une case trop lourde : il coupe a 504 quel que soit le
+// miroir. Le coeur dense de Saint-Etienne est dans ce cas. Plutot que d'insister
+// sur une case impossible, on la recoupe en quatre et on redescend. Deux tours
+// suffisent pour decider : au dela, c'est la taille qui bloque, pas la charge
+// du serveur.
+async function fetchBoxAdaptive(box, label, depth = 0) {
+  try {
+    return (await fetchWithRetry(buildingsQuery(box), label, 2)).elements;
+  } catch (err) {
+    if (depth >= 3) throw err;
+    console.log(`  ${label} trop lourde, on la recoupe en 4`);
+    const out = [];
+    const subs = splitBBox(box, 2);
+    for (let i = 0; i < subs.length; i++) {
+      out.push(...(await fetchBoxAdaptive(subs[i], `${label}.${i + 1}`, depth + 1)));
+    }
+    return out;
+  }
 }
 
 // --- routes : GeoJSON compact ---------------------------------------------
@@ -743,9 +784,25 @@ if (doRoads) {
 }
 
 if (doBuildings) {
-  console.log("batiments ->", BUILD_BBOX.join(", "));
-  const json = await fetchWithRetry(BUILDINGS_QUERY, "batiments");
-  const data = buildingsToCompact(json);
+  const boxes = splitBBox(BUILD_BBOX, BUILD_SPLIT);
+  console.log(`batiments -> ${BUILD_BBOX.join(", ")} en ${boxes.length} cases`);
+  // Les cases se recouvrent sur leurs bords : un meme way peut revenir
+  // plusieurs fois, on deduplique par id et par type.
+  const seen = new Set();
+  const elements = [];
+  for (let i = 0; i < boxes.length; i++) {
+    const els = await fetchBoxAdaptive(boxes[i], `case ${i + 1}/${boxes.length}`);
+    let fresh = 0;
+    for (const el of els) {
+      const k = `${el.type[0]}${el.id}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      elements.push(el);
+      fresh++;
+    }
+    console.log(`    case ${i + 1} : ${els.length} elements, ${fresh} nouveaux, ${elements.length} cumules`);
+  }
+  const data = buildingsToCompact({ elements });
   const body = JSON.stringify(data);
   await writeFile(resolve(PUBLIC, "sainte-buildings.json"), body);
   const pts = data.buildings.reduce((a, b) => a + b.g.length, 0);

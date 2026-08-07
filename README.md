@@ -52,16 +52,17 @@ les checkpoints sont des cibles, à toi de trouver le chemin dans le réseau.
 
 ## La ville
 
-Les bâtiments viennent des emprises OSM (`building`) sur une zone de 5,9 × 3,5 km
-autour du circuit : 23 423 bâtiments pour 4,3 Mo, contre 57 428 sur la ville
-entière. L'emprise doit rester large : une zone trop serrée faisait tomber la
-ville dans le vide dès qu'on montait vers l'Hôtel de Ville.
+Les bâtiments viennent des emprises OSM (`building`) sur **toute la ville** :
+57 630 emprises pour 9,9 Mo, dont 55 049 retenues au rendu. L'emprise a grandi
+deux fois, d'abord jusqu'au nord de la ville, puis à la totalité une fois le
+streaming en place.
 
-Le bord nord est passé de 45,4415 à 45,465. L'ancienne limite coupait juste sous
-la Manufacture, et **la Cité du Design, Le Soleil, Montreynaud et
-Geoffroy-Guichard renvoyaient tous zéro bâtiment** : les repères du nord de la
-ville n'existaient tout simplement pas dans la scène. L'élargissement a aussi
-triplé le signal industriel, voir plus bas.
+Le bord nord était à 45,4415 : **la Cité du Design, Le Soleil, Montreynaud et
+Geoffroy-Guichard renvoyaient tous zéro bâtiment**, les repères du nord
+n'existaient tout simplement pas dans la scène. Overpass rend un 504 sur une
+emprise de cette taille, donc le fetch bâtiments est découpé en 9 cases avec
+**sous-découpage adaptatif** : une case qui échoue deux tours est recoupée en
+quatre, jusqu'à trois niveaux, et chaque case est indépendante.
 
 **Aucune texture n'est embarquée.** Les façades sont peintes au démarrage dans
 un canvas : rangées de fenêtres, fenêtres allumées en émissif, une texture par
@@ -98,6 +99,66 @@ hypercentre est mesuré à 4 niveaux de médiane et 5 au p75 ; viser la médiane
 donnait un cœur de ville qui lisait bas. Le p75 reste une valeur relevée dans
 OSM. Résultat : médiane 5 niveaux et p90 à 6 dans le cœur, contre 3 en
 périphérie.
+
+## Streaming par anneaux de distance
+
+La ville entière fait **55 049 emprises, 2,00 M de triangles et 247 Mo de
+tampons GPU**. Le frustum culling n'y change rien : il épargne le dessin, pas la
+mémoire, et une géométrie cullée reste résidente. C'est donc la mémoire qui
+bloquait, pas les draw calls.
+
+La géométrie n'est plus construite d'un bloc au chargement. Les emprises sont
+indexées en **1 467 tuiles de 240 m**, et chaque tuile est construite à la
+demande selon sa distance au joueur, puis libérée derrière lui.
+
+| anneau | niveau | contenu |
+| --- | --- | --- |
+| 0 à 300 m | plein | fenêtres, socle commerçant, coiffe |
+| 300 à 700 m | réduit | sans socle, **coiffe conservée** |
+| 700 à 1400 m | silhouette | une boîte par bâtiment, 1 draw call par tuile |
+| au-delà | déchargé | |
+
+Mesuré en rejouant la politique le long des axes réels, à 50 km/h, 2 000 ticks à
+6 Hz :
+
+| | chargement complet | streaming |
+| --- | --- | --- |
+| triangles résidents | 2,00 M | **93 k** |
+| mémoire | 247 Mo | **12,3 Mo** |
+| tuiles résidentes | — | médiane 141, max 148 |
+
+Soit **20x moins de mémoire**. Trois propriétés vérifiées dans le même harnais :
+
+- **Pas de clignotement.** L'hystérésis monte le détail à 300 m mais ne le
+  redescend qu'à 350 m, 700/780 puis 1400/1550. Sur 5,6 minutes de trajet,
+  **aucune tuile ne dépasse 8 changements de niveau** (max 7, médiane 3).
+- **Pas de fuite.** Après téléportation hors carte, 0 tuile résidente.
+- **Pas de saturation.** Le budget est de 3 tuiles construites par tick ; il
+  n'est atteint que sur **2,8 %** des ticks, et la médiane est de 0.
+
+La libération est **différée d'un tick**. Disposer dans le tick du remplacement
+laisserait un maillage monté pointer sur une géométrie libérée jusqu'au prochain
+rendu de React : on ajoute d'abord, on retire au tour suivant. La planification
+vise un point **avancé le long du vecteur vitesse** (3 s, plafonné à 260 m), donc
+ce qui est devant monte en détail plus tôt que ce qui est derrière.
+
+**La coiffe de toit survit au niveau réduit, et ce n'est pas négociable.** À
+moyenne distance c'est la silhouette qui porte l'identité, pas la couleur :
+mesuré à travers tout le pipeline, le zinc du centre et la tuile du faubourg ne
+sont plus qu'à **ΔE2000 5,6 à 700 m et 3,8 à 1 000 m**. Sans la coiffe, pierre et
+faubourg deviennent le même prisme beige. En silhouette, le sommet de la boîte
+est rétréci de 28 % sur les archétypes à toit en pente : ça rend la lecture
+plat/pente **pour zéro triangle de plus**, et c'est le seul canal d'identité qui
+survive au-delà de 700 m.
+
+**Ce qui n'est pas fait, et pourquoi.** Le bake glTF + Draco + worker n'a pas été
+écrit. La mesure dit que le gain mémoire vient à 90 % du fait de ne pas
+construire les tuiles lointaines, ce que le générateur existant fait déjà très
+bien : une tuile de 36 emprises coûte environ 1,3 ms. Le bake glTF sert la
+**portabilité vers un client natif**, pas la performance navigateur, et il
+supprimerait en plus le coût du cache JSON parsé en mémoire (les 9,9 Mo de
+`sainte-buildings.json` restent résidents pour pouvoir générer à la demande).
+C'est un choix à faire pour cette raison-là, pas pour débloquer le navigateur.
 
 ## Les archétypes de façade
 
@@ -152,6 +213,13 @@ les 259 emprises longues et étroites hors centre ont une médiane taguée de
 ne touche donc **que la matière et la trame de fenêtres**. Les hauteurs restent
 celles de `inferLevels`. Vérifié après coup : p50 9,3 m, p90 15,5 m, p99 18,6 m,
 max 68,2 m, identiques au chiffre près avant et après.
+
+**Pierre et faubourg divergent volontairement.** Ce sont les deux archétypes
+les plus proches en teinte et à eux deux ils couvrent 89 % du bâti, donc s'ils
+fusionnent la variété disparaît. La pierre est passée à `#ddd6c2`, un crème plus
+froid, et le faubourg à `#c4ac82`, un ocre plus chaud et plus sombre : sous la
+lumière de nuit et le brouillard, les valeurs d'origine se rejoignaient dans le
+même beige.
 
 **Réflexion spéculaire du moderne : écartée.** La spec demandait `roughness 0.3`.
 La scène n'a qu'une `hemisphereLight` et une directionnelle rasante à 0,9, et
@@ -409,6 +477,7 @@ src/lib/buildings.ts    emprises OSM, déduction des hauteurs, retrait de toit
 src/lib/archetypes.ts   cascade d'archétypes de façade et palettes
 src/lib/features.ts     décor OSM : sols triangulés, arbres, tram, mobilier
 src/lib/places.ts       caractère des espaces ouverts : minéral / jardin / parc
+src/lib/streaming.ts    politique de streaming : tuiles, anneaux, hystérésis
 src/scene/              rendu three.js (routes, sols, bâtiments, arbres, tram,
                         voiture, portiques, caméra)
 src/state/store.ts      zustand

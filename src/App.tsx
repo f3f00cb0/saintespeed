@@ -17,6 +17,7 @@ import { Trees } from "./scene/Trees";
 import { Tram } from "./scene/Tram";
 import { Fountains } from "./scene/Fountains";
 import { Fences } from "./scene/Fences";
+import { Perf } from "./scene/Perf";
 import { Lamps } from "./scene/Lamps";
 import { Sky, HORIZON } from "./scene/Sky";
 import { ChaseCamera } from "./scene/Camera";
@@ -150,6 +151,7 @@ export default function App() {
             {features && <Fences fences={features.fences} />}
             {centre && <Lamps ways={ways} proj={graph!.proj} centre={centre} graph={graph!} />}
             {showBuildings && buildings.length > 0 && <Buildings buildings={buildings} />}
+            <Perf />
             <Checkpoints />
             <Car graph={graph!} />
             <ChaseCamera walls={walls} />
