@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Sainté // réseau</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --ink:#14150f;
+    --ink2:#1c1d15;
+    --bone:#f2ede0;
+    --ochre:#e0b15e;
+    --moss:#9aa06f;
+    --slate:#4a5450;
+    --signal:#ff5d3b;
+    --dim:#8a8c7a;
+    --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
+    --disp: "Helvetica Neue", "Arial Narrow", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--ink);color:var(--bone);overflow:hidden;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  #app{position:fixed;inset:0}
+  canvas{display:block;cursor:crosshair}
+
+  .panel{position:fixed;z-index:5;pointer-events:none}
+
+  #hud{top:16px;left:16px}
+  #hud .kicker{font:600 10px/1 var(--mono);letter-spacing:.32em;color:var(--ochre);text-transform:uppercase}
+  #hud h1{margin:6px 0 0;font:400 30px/.92 var(--disp);letter-spacing:-.01em;text-transform:uppercase}
+  #hud h1 b{font-weight:800}
+  #hud .sub{margin-top:8px;font:400 11px/1.5 var(--mono);color:var(--dim);max-width:34ch}
+
+  #status{top:16px;right:16px;text-align:right;font:500 11px/1.5 var(--mono);color:var(--dim)}
+  #status .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ochre);
+    margin-left:6px;vertical-align:middle;animation:pulse 1.1s ease-in-out infinite}
+  #status.ok .dot{background:var(--moss);animation:none}
+  #status.err .dot{background:var(--signal);animation:none}
+  @keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+  #status .count{color:var(--bone)}
+
+  #probe{left:16px;bottom:16px;font:500 11px/1.5 var(--mono);color:var(--dim);
+    border-left:2px solid var(--signal);padding-left:10px;min-height:34px}
+  #probe .t{color:var(--signal);text-transform:uppercase;letter-spacing:.06em}
+  #probe .c{color:var(--bone)}
+  #probe.empty{border-color:#3a3b30}
+  #probe.empty .t{color:var(--dim)}
+
+  #scale{right:16px;bottom:16px;text-align:right;font:500 10px/1 var(--mono);color:var(--dim)}
+  #scale .bar{height:3px;background:var(--bone);margin-top:5px;margin-left:auto;opacity:.85}
+
+  #hint{left:50%;bottom:14px;transform:translateX(-50%);font:500 10px/1 var(--mono);
+    color:var(--dim);letter-spacing:.04em;text-align:center;white-space:nowrap}
+
+  /* overlay de repli si Overpass est injoignable (CORS / sandbox / réseau) */
+  #fallback{position:fixed;inset:0;z-index:10;background:rgba(20,21,15,.92);
+    display:none;align-items:center;justify-content:center;padding:24px}
+  #fallback.show{display:flex}
+  #fallback .box{width:min(560px,100%);background:var(--ink2);border:1px solid #33352a;
+    border-radius:10px;padding:22px}
+  #fallback h2{margin:0 0 4px;font:800 16px/1.2 var(--disp);text-transform:uppercase;letter-spacing:.02em}
+  #fallback p{margin:0 0 14px;font:400 12px/1.55 var(--mono);color:var(--dim)}
+  #fallback p a{color:var(--ochre)}
+  #fallback textarea{width:100%;height:150px;resize:vertical;background:var(--ink);color:var(--bone);
+    border:1px solid #33352a;border-radius:6px;padding:10px;font:400 11px/1.4 var(--mono)}
+  #fallback .row{display:flex;gap:10px;margin-top:12px}
+  #fallback button{flex:1;padding:11px;border:0;border-radius:6px;font:700 12px/1 var(--mono);
+    letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+  #btn-load{background:var(--ochre);color:#241c07}
+  #btn-retry{background:transparent;color:var(--bone);border:1px solid #33352a}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="hud" class="panel">
+  <div class="kicker">réseau routier · proto v0</div>
+  <h1>Sain<b>té</b></h1>
+  <div class="sub">Étape 0 : afficher la piste roulable et sonder le bitume au clic. Glisser pour déplacer, molette pour zoomer.</div>
+</div>
+
+<div id="status" class="panel"><span id="status-text">connexion Overpass</span><span class="dot"></span>
+  <div style="margin-top:4px"><span id="ways" class="count">0</span> axes · <span id="segs" class="count">0</span> segments</div>
+</div>
+
+<div id="probe" class="panel empty"><span class="t">sonde</span> · <span class="c">clique une route</span></div>
+
+<div id="scale" class="panel"><span id="scale-label">—</span><div id="scale-bar" class="bar" style="width:80px"></div></div>
+
+<div id="hint" class="panel">glisser · molette · clic = sonde</div>
+
+<div id="fallback">
+  <div class="box">
+    <h2>Overpass injoignable</h2>
+    <p>Le sandbox bloque peut-être l'appel réseau. Exporte le réseau depuis
+      <a href="https://overpass-turbo.eu" target="_blank" rel="noopener">overpass-turbo.eu</a>
+      (GeoJSON ou JSON Overpass) et colle-le ici. En local, l'appel direct marchera.</p>
+    <textarea id="paste" placeholder='{ "elements": [...] }  ou  { "features": [...] }'></textarea>
+    <div class="row">
+      <button id="btn-load">Charger les données collées</button>
+      <button id="btn-retry">Réessayer Overpass</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ---- config réseau ------------------------------------------------------
+// bbox Saint-Étienne (sud, ouest, nord, est)
+const BBOX = [45.38, 4.33, 45.49, 4.44];
+const OVERPASS_QUERY =
+  `[out:json][timeout:60];` +
+  `way["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential|unclassified|living_street)$"]` +
+  `(${BBOX[0]},${BBOX[1]},${BBOX[2]},${BBOX[3]});out geom;`;
+const ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter"
+];
+
+// hiérarchie : largeur (m), couleur, altitude de dessin (les gros axes passent devant)
+const ROADS = {
+  motorway:     { w:14, c:0xf2ede0, z:6 },
+  trunk:        { w:12, c:0xf2ede0, z:6 },
+  primary:      { w:10, c:0xe0b15e, z:5 },
+  secondary:    { w:8,  c:0xc9a55c, z:4 },
+  tertiary:     { w:7,  c:0x9aa06f, z:3 },
+  unclassified: { w:5,  c:0x6f7768, z:2 },
+  residential:  { w:5,  c:0x4a5450, z:1 },
+  living_street:{ w:4,  c:0x4a5450, z:1 }
+};
+const DEFAULT_ROAD = { w:4, c:0x4a5450, z:1 };
+
+// ---- three setup --------------------------------------------------------
+const R = 6378137, D2R = Math.PI/180;
+const app = document.getElementById("app");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14150f);
+
+let W = innerWidth, H = innerHeight;
+let viewSize = 1400;          // demi-hauteur visible en mètres
+let center = { x:0, y:0 };    // centre caméra en mètres monde
+const camera = new THREE.OrthographicCamera(-1,1,1,-1, -1000, 20000);
+camera.position.z = 5000;
+applyCamera();
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(W, H);
+app.appendChild(renderer.domElement);
+
+const raycaster = new THREE.Raycaster();
+const roadMeshes = [];
+let marker = null;
+let proj = null; // {lon0, lat0, k}
+
+function applyCamera(){
+  const aspect = W/H;
+  camera.left   = center.x - viewSize*aspect;
+  camera.right  = center.x + viewSize*aspect;
+  camera.top    = center.y + viewSize;
+  camera.bottom = center.y - viewSize;
+  camera.updateProjectionMatrix();
+  updateScale();
+}
+
+// ---- projection lat/lon -> mètres (équirectangulaire locale) ------------
+function project(lon, lat){
+  return {
+    x: (lon - proj.lon0) * D2R * proj.k * R,
+    y: (lat - proj.lat0) * D2R * R
+  };
+}
+
+// ---- normalisation des sources -> [{type, pts:[[lon,lat],...]}] ---------
+function parse(data){
+  const ways = [];
+  if (data && Array.isArray(data.elements)) {           // JSON Overpass
+    for (const el of data.elements){
+      if (el.type !== "way" || !el.geometry) continue;
+      const type = el.tags && el.tags.highway;
+      ways.push({ type, pts: el.geometry.map(g => [g.lon, g.lat]) });
+    }
+  } else if (data && Array.isArray(data.features)) {    // GeoJSON (export turbo)
+    for (const f of data.features){
+      const g = f.geometry; if (!g) continue;
+      const type = f.properties && f.properties.highway;
+      if (g.type === "LineString") ways.push({ type, pts: g.coordinates });
+      else if (g.type === "MultiLineString") g.coordinates.forEach(c => ways.push({ type, pts:c }));
+    }
+  }
+  return ways.filter(w => w.pts && w.pts.length >= 2);
+}
+
+// ---- construction de la géométrie --------------------------------------
+function build(ways){
+  // reset
+  for (const m of roadMeshes){ scene.remove(m); m.geometry.dispose(); m.material.dispose(); }
+  roadMeshes.length = 0;
+  if (marker){ scene.remove(marker); marker = null; }
+
+  // barycentre pour la projection
+  let sx=0, sy=0, n=0;
+  for (const w of ways) for (const p of w.pts){ sx+=p[0]; sy+=p[1]; n++; }
+  const lon0 = sx/n, lat0 = sy/n;
+  proj = { lon0, lat0, k: Math.cos(lat0*D2R) };
+
+  // rubans regroupés par type (une géométrie par classe = peu de draw calls)
+  const buckets = new Map();
+  let segCount = 0;
+  for (const w of ways){
+    const spec = ROADS[w.type] || DEFAULT_ROAD;
+    let arr = buckets.get(w.type); if (!arr){ arr = []; buckets.set(w.type, arr); }
+    const half = spec.w/2;
+    const P = w.pts.map(p => project(p[0], p[1]));
+    for (let i=0; i<P.length-1; i++){
+      const a=P[i], b=P[i+1];
+      let dx=b.x-a.x, dy=b.y-a.y; const len=Math.hypot(dx,dy);
+      if (len < 0.01) continue;
+      dx/=len; dy/=len;
+      const nx=-dy*half, ny=dx*half;             // normale * demi-largeur
+      const a1x=a.x+nx, a1y=a.y+ny, a2x=a.x-nx, a2y=a.y-ny;
+      const b1x=b.x+nx, b1y=b.y+ny, b2x=b.x-nx, b2y=b.y-ny;
+      arr.push(a1x,a1y, b1x,b1y, b2x,b2y,  a1x,a1y, b2x,b2y, a2x,a2y);
+      segCount++;
+    }
+  }
+
+  let wayCount = 0;
+  for (const [type, arr] of buckets){
+    if (!arr.length) continue;
+    const spec = ROADS[type] || DEFAULT_ROAD;
+    const pos = new Float32Array(arr.length/2*3);
+    for (let i=0, j=0; i<arr.length; i+=2, j+=3){ pos[j]=arr[i]; pos[j+1]=arr[i+1]; pos[j+2]=spec.z; }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.MeshBasicMaterial({ color: spec.c });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData.type = type || "inconnu";
+    scene.add(mesh); roadMeshes.push(mesh);
+  }
+  for (const w of ways) wayCount++;
+
+  // cadrer la vue sur l'ensemble
+  frameAll(ways);
+
+  document.getElementById("ways").textContent = wayCount.toLocaleString("fr-FR");
+  document.getElementById("segs").textContent = segCount.toLocaleString("fr-FR");
+  setStatus("ok", "réseau chargé");
+}
+
+function frameAll(ways){
+  let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
+  for (const w of ways) for (const p of w.pts){
+    const q = project(p[0], p[1]);
+    if (q.x<minx)minx=q.x; if (q.x>maxx)maxx=q.x;
+    if (q.y<miny)miny=q.y; if (q.y>maxy)maxy=q.y;
+  }
+  center.x = (minx+maxx)/2; center.y = (miny+maxy)/2;
+  const aspect = W/H;
+  viewSize = Math.max((maxy-miny)/2, (maxx-minx)/2/aspect) * 1.08;
+  applyCamera();
+}
+
+// ---- sonde au clic ------------------------------------------------------
+function probe(px, py){
+  const ndc = new THREE.Vector2((px/W)*2-1, -(py/H)*2+1);
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(roadMeshes, false);
+  const el = document.getElementById("probe");
+  if (!hits.length){
+    el.className = "panel empty";
+    el.innerHTML = '<span class="t">hors piste</span> · <span class="c">pas de bitume ici</span>';
+    if (marker){ scene.remove(marker); marker=null; }
+    return;
+  }
+  const h = hits[0];
+  const type = h.object.userData.type;
+  if (!marker){
+    const g = new THREE.RingGeometry(6, 9, 32);
+    const m = new THREE.MeshBasicMaterial({ color:0xff5d3b, side:THREE.DoubleSide });
+    marker = new THREE.Mesh(g, m); marker.renderOrder = 10; scene.add(marker);
+  }
+  marker.position.set(h.point.x, h.point.y, 8);
+  const s = viewSize/700; marker.scale.set(s, s, 1); // marqueur taille écran ~constante
+  el.className = "panel";
+  el.innerHTML = `<span class="t">${type}</span> · <span class="c">` +
+    `x ${h.point.x.toFixed(0)}m · y ${h.point.y.toFixed(0)}m</span>`;
+}
+
+// ---- barre d'échelle ----------------------------------------------------
+function updateScale(){
+  const mPerPx = (2*viewSize)/H;
+  let target = mPerPx * 90;                     // ~90px de barre
+  const pow = Math.pow(10, Math.floor(Math.log10(target)));
+  const nice = [1,2,5,10].map(v=>v*pow).reduce((a,b)=> Math.abs(b-target)<Math.abs(a-target)?b:a);
+  const px = nice/mPerPx;
+  document.getElementById("scale-bar").style.width = px.toFixed(0)+"px";
+  document.getElementById("scale-label").textContent =
+    nice>=1000 ? (nice/1000)+" km" : nice+" m";
+}
+
+// ---- interaction : pan / zoom / clic -----------------------------------
+let dragging=false, moved=false, lastX=0, lastY=0;
+const cv = renderer.domElement;
+
+function pointer(e){ const t = e.touches? e.touches[0]:e; return { x:t.clientX, y:t.clientY }; }
+
+function onDown(e){ const p=pointer(e); dragging=true; moved=false; lastX=p.x; lastY=p.y; }
+function onMove(e){
+  if(!dragging) return;
+  const p=pointer(e); const dx=p.x-lastX, dy=p.y-lastY;
+  if (Math.abs(dx)+Math.abs(dy) > 3) moved=true;
+  lastX=p.x; lastY=p.y;
+  const mPerPx=(2*viewSize)/H;
+  center.x -= dx*mPerPx; center.y += dy*mPerPx;
+  applyCamera();
+}
+function onUp(e){
+  if (dragging && !moved){ const p=pointer(e.changedTouches?{changedTouches:e.changedTouches}.changedTouches[0]:e);
+    probe(p.x, p.y); }
+  dragging=false;
+}
+function onWheel(e){
+  e.preventDefault();
+  const rect=cv.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  // point monde sous le curseur avant zoom
+  const aspect=W/H;
+  const wx = center.x + (mx/W*2-1)*viewSize*aspect;
+  const wy = center.y - (my/H*2-1)*viewSize;
+  const f = e.deltaY>0 ? 1.12 : 0.89;
+  viewSize = Math.max(120, Math.min(9000, viewSize*f));
+  // recaler pour zoomer vers le curseur
+  const wx2 = center.x + (mx/W*2-1)*viewSize*aspect;
+  const wy2 = center.y - (my/H*2-1)*viewSize;
+  center.x += wx - wx2; center.y += wy - wy2;
+  applyCamera();
+}
+
+cv.addEventListener("mousedown", onDown);
+window.addEventListener("mousemove", onMove);
+window.addEventListener("mouseup", onUp);
+cv.addEventListener("wheel", onWheel, { passive:false });
+cv.addEventListener("touchstart", e=>{ if(e.touches.length===1) onDown(e); }, {passive:true});
+cv.addEventListener("touchmove", e=>{ if(e.touches.length===1){ onMove(e);} }, {passive:true});
+cv.addEventListener("touchend", e=>{
+  const p = e.changedTouches[0];
+  if (dragging && !moved) probe(p.clientX, p.clientY);
+  dragging=false;
+}, {passive:true});
+
+addEventListener("resize", ()=>{
+  W=innerWidth; H=innerHeight;
+  renderer.setSize(W,H); applyCamera();
+});
+
+// ---- chargement des données --------------------------------------------
+function setStatus(cls, txt){
+  const s=document.getElementById("status"); s.className="panel "+(cls||"");
+  document.getElementById("status-text").textContent=txt;
+}
+function showFallback(show){ document.getElementById("fallback").classList.toggle("show", show); }
+
+async function fetchOverpass(){
+  setStatus("", "connexion Overpass"); showFallback(false);
+  for (const url of ENDPOINTS){
+    try{
+      const res = await fetch(url, {
+        method:"POST",
+        headers:{ "Content-Type":"application/x-www-form-urlencoded" },
+        body:"data="+encodeURIComponent(OVERPASS_QUERY)
+      });
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      const json = await res.json();
+      const ways = parse(json);
+      if(!ways.length) throw new Error("réseau vide");
+      build(ways);
+      return;
+    }catch(err){ console.warn("Overpass", url, err); }
+  }
+  setStatus("err", "Overpass injoignable"); showFallback(true);
+}
+
+document.getElementById("btn-retry").onclick = fetchOverpass;
+document.getElementById("btn-load").onclick = ()=>{
+  const raw = document.getElementById("paste").value.trim();
+  if(!raw) return;
+  try{
+    const ways = parse(JSON.parse(raw));
+    if(!ways.length) throw new Error("aucune voie détectée");
+    showFallback(false); build(ways);
+  }catch(err){ alert("Lecture impossible : "+err.message); }
+};
+
+// ---- boucle de rendu ----------------------------------------------------
+(function loop(){ requestAnimationFrame(loop); renderer.render(scene, camera); })();
+
+fetchOverpass();
+</script>
+</body>
+</html>

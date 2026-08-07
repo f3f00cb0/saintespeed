@@ -1,0 +1,20 @@
+# Reconstruits dans l'image : on ne copie jamais ces dossiers depuis l'hote.
+node_modules
+dist
+tsconfig.tsbuildinfo
+
+# Git et meta
+.git
+.gitignore
+.claude
+
+# Logs et fichiers locaux
+*.log
+.DS_Store
+.vscode
+.idea
+
+# Docs et prototype hors build (inutiles dans le contexte de build)
+DEPLOY.md
+README.md
+sainte-reseau.html
