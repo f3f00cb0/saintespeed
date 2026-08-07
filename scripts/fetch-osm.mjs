@@ -81,7 +81,13 @@ const FEATURES_QUERY =
   `way["natural"="water"]${bb(BBOX)};` +
   `way["amenity"="parking"]${bb(BBOX)};` +
   `way["railway"="tram"]${bb(BBOX)};` +
+  // Une fontaine de place est cartographiee par son bassin, donc en way, pas en
+  // noeud. Ne prendre que les noeuds ratait justement celles qui comptent : la
+  // fontaine de la place du Peuple (way 1300735962, a 32 m du centre de la
+  // place) et les deux bassins devant la cathedrale a Jean Jaures (ways
+  // 582876118 et 582876124, a 49 et 55 m).
   `node["amenity"="fountain"]${bb(BBOX)};` +
+  `way["amenity"="fountain"]${bb(BBOX)};` +
   `node["highway"="street_lamp"]${bb(BBOX)};` +
   // caractere des espaces ouverts : cloture et allees
   `way["barrier"~"^(fence|hedge|wall|railing)$"]${bb(BUILD_BBOX)};` +
@@ -548,7 +554,8 @@ function featuresToCompact(json) {
 
     if (el.type === "node") {
       if (t.natural === "tree") trees.push([r6(el.lon), r6(el.lat)]);
-      else if (t.amenity === "fountain") fountains.push([r6(el.lon), r6(el.lat)]);
+      // rayon par defaut d'une fontaine posee en simple noeud
+      else if (t.amenity === "fountain") fountains.push([r6(el.lon), r6(el.lat), 2.4]);
       else if (t.highway === "street_lamp") lamps.push([r6(el.lon), r6(el.lat)]);
       continue;
     }
@@ -562,6 +569,30 @@ function featuresToCompact(json) {
     }
     if (t.natural === "tree_row") {
       treeRows.push({ i: el.id, g });
+      continue;
+    }
+    // Un bassin de fontaine : on garde son centre et son rayon equivalent, pas
+    // son contour. A cette echelle une vasque ronde suffit, mais la taille
+    // reelle compte : le bassin de la place du Peuple n'a rien a voir avec une
+    // fontaine a boire.
+    if (t.amenity === "fountain") {
+      // Overpass repete le premier point pour fermer le contour, il fausserait
+      // le centroide
+      const ring = g.length > 2 && g[0][0] === g[g.length - 1][0] && g[0][1] === g[g.length - 1][1]
+        ? g.slice(0, -1)
+        : g;
+      let clon = 0, clat = 0;
+      for (const [lon, lat] of ring) {
+        clon += lon;
+        clat += lat;
+      }
+      clon /= ring.length;
+      clat /= ring.length;
+      // un bassin fait quelques metres : le centroide en lon/lat est exact a
+      // cette echelle, seul le rayon demande une projection
+      const pj = makeProj(clat);
+      const r = Math.sqrt(ringArea(ring.map(([lon, lat]) => pj(lon, lat))) / Math.PI);
+      fountains.push([r6(clon), r6(clat), Math.round(Math.max(1, Math.min(12, r)) * 10) / 10]);
       continue;
     }
     if (t.barrier) {

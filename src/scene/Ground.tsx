@@ -7,7 +7,7 @@ import {
   type FlatArea,
   type FlatPath,
 } from "../lib/features";
-import { CHARACTER_NAMES, characterSpec, type Character } from "../lib/places";
+import { CHARACTER_NAMES, characterSpec, Character, MINERAL_PAVED } from "../lib/places";
 
 // Surfaces au sol : places pietonnes, parcs, parkings, eau.
 //
@@ -40,13 +40,18 @@ function merge(areas: FlatArea[]): Layer[] {
   const buckets = new Map<string, { list: FlatArea[]; color: number; z: number }>();
 
   for (const a of areas) {
-    // Un espace ouvert est peint par caractere, tout le reste par nature.
+    // Un espace ouvert est peint par caractere, tout le reste par nature. Le
+    // mineral se dedouble selon le revetement : la pierre appareillee de la
+    // place du Peuple ne doit pas se peindre comme le beton de Dorian.
     const byChar = a.character !== null;
-    const key = byChar ? `c${a.character}` : `k${a.kind}`;
+    const paved = byChar && a.character === Character.Mineral && a.paved;
+    const key = byChar ? `c${a.character}${paved ? "p" : ""}` : `k${a.kind}`;
     let b = buckets.get(key);
     if (!b) {
       const { color, z } = byChar
-        ? (({ ground, z }) => ({ color: ground, z }))(characterSpec(a.character as Character))
+        ? (({ ground, z }) => ({ color: paved ? MINERAL_PAVED : ground, z }))(
+            characterSpec(a.character as Character),
+          )
         : (({ c, z }) => ({ color: c, z }))(areaSpec(a.kind));
       buckets.set(key, (b = { list: [], color, z }));
     }

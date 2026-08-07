@@ -160,11 +160,12 @@ produirait un unique point brillant au lieu d'une lecture de verre, pour le coû
 d'un matériau standard à la place d'un Lambert. Le moderne se distingue par son
 albédo froid et la teinte froide de ses fenêtres.
 
-**Repères posés à la main.** Neuf bâtiments reçoivent une configuration bespoke
+**Repères posés à la main.** Douze bâtiments reçoivent une configuration bespoke
 qui écrase l'archétype, relevée par id OSM dans le cache et non devinée :
 l'Hôtel de Ville, la Platine, le Zénith, l'ancienne Manufacture d'Armes, la
 cathédrale Saint-Charles, l'Opéra, le musée d'Art et d'Industrie, le chevalement
-du Puits Couriot, la centrale Manufrance. Geoffroy-Guichard n'y figure pas : **le stade n'est pas
+du Puits Couriot, la centrale Manufrance et les trois emprises de la gare
+Carnot. Geoffroy-Guichard n'y figure pas : **le stade n'est pas
 tagué `building` dans OSM**, il n'existe donc pas dans les emprises. Le vert-noir
 ASSE ne se justifierait nulle part ailleurs, ce serait un gadget.
 
@@ -298,6 +299,45 @@ espace ouvert et sont seules embarquées ; les allées retenues sont les 665 don
 le milieu tombe dans un espace ouvert, soit 36 km. Les deux jointures sont
 faites hors ligne dans `fetch-osm.mjs`.
 
+### L'ancre distinctive par place
+
+Une fois le caractère du vide posé, un seul élément fort et correct par lieu
+suffit à confirmer le match. Le type d'ancre change d'une place à l'autre, et
+c'est normal.
+
+| place | ancre | état |
+| --- | --- | --- |
+| Peuple | bande piétonne en pierre appareillée | **13 surfaces en pierre contre 23 en bitume** dans 200 m |
+| Peuple | fontaine de la place du Peuple | way 1300735962, **à 32 m** |
+| Jaurès | cathédrale Saint-Charles | way 63322493, repère posé |
+| Jaurès | les fontaines devant | ways 582876118 / 582876124, **à 49 m**, bassin de 10,3 m de rayon |
+| Jaurès | le kiosque | **« Kiosque à musique de Marengo »**, way 161467265, à 31 m |
+| Carnot | le grand parc | way 211462275, 8 366 m², à 9 m |
+| Carnot | l'axe Jules Janin | boulevard `secondary`, passe sur la place |
+| Carnot | la gare | 3 emprises `operator=SNCF`, repères posés |
+
+**Le bug qui cachait les ancres n'était pas celui qu'on croyait.** La spec
+supposait que la cathédrale et la gare manquaient à cause des relations
+multipolygones. Vérification faite, les deux sont de simples ways présentes
+depuis le début. Ce qui manquait vraiment, c'est que **`amenity=fountain` est
+cartographié en `way` quand c'est un bassin**, et l'import ne prenait que les
+nœuds : il ratait donc précisément les trois fontaines qui comptent, celle du
+Peuple et les deux devant la cathédrale. Corrigé, la ville passe de **10 à 34
+fontaines**, et le rayon vient maintenant du bassin réel au lieu d'être
+constant, parce qu'une fontaine de place et une fontaine à boire ne font pas la
+même tache au sol.
+
+Aucun objet n'a eu besoin d'être posé à la main : le kiosque que la spec
+prévoyait d'ajouter aux vraies coordonnées **existe dans OSM** sous le nom
+« Kiosque à musique de Marengo », et « Ô Kiosque » (`building=kiosk`) est déjà
+rendu avec sa vitrine allumée. La seule table d'overrides est celle des repères
+bâtis, où la gare Carnot a été ajoutée : ses trois emprises sont anonymes dans
+le cache et ne se distinguent que par `operator=SNCF`.
+
+Et là, la crainte de la spec était fondée, mais sur le bon bâtiment : **une des
+trois emprises de la gare Carnot est une relation multipolygone** (rel 1000824,
+215 m²) et n'existait donc pas avant le correctif.
+
 ### Les relations multipolygones
 
 Les bâtiments à cour intérieure sont cartographiés en **relation multipolygone**
@@ -329,7 +369,7 @@ de travail. C'est ce qui a décidé lesquelles valaient le coup :
 | `amenity=parking` | 753 | oui |
 | `natural=water` | 113 | oui |
 | `railway=tram` | 128 | signature stéphanoise |
-| `amenity=fountain` | 10 | posées, elles tombent sur les places |
+| `amenity=fountain` nœuds + ways | 34 | posées, elles tombent sur les places |
 | `highway=street_lamp` | 760 | plus maigre que le procédural, écarté |
 | `barrier` au contact d'un espace ouvert | 270 (17 km) | signature du jardin |
 | allées dans un espace ouvert | 665 (36 km) | signature du parc |

@@ -369,4 +369,12 @@ export const LANDMARKS = new Map<number, Landmark>([
   [63308936, { archetype: Archetype.Brique, wall: 0x6f4034, label: "Chevalement du Puits Couriot" }],
   // Centrale energie de Manufrance : brique manufacturiere.
   [63330900, { archetype: Archetype.Brique, wall: 0x8f4a3a, label: "Centrale Manufrance" }],
+  // Gare de Saint-Etienne Carnot : l'ancre batie de la place Carnot. Les trois
+  // emprises portent "operator=SNCF" et sont anonymes dans le cache, d'ou les
+  // ids en dur. La troisieme n'existe que depuis la reparation des relations
+  // multipolygones, ce qui confirme la crainte posee dans la spec : c'etait
+  // bien la gare Carnot qui manquait, pas la cathedrale ni Chateaucreux.
+  [63272393, { archetype: Archetype.Pierre, wall: 0xd2c7ae, label: "Gare Carnot" }],
+  [63275816, { archetype: Archetype.Pierre, wall: 0xd2c7ae, label: "Gare Carnot" }],
+  [-1000824, { archetype: Archetype.Pierre, wall: 0xd2c7ae, label: "Gare Carnot" }],
 ]);

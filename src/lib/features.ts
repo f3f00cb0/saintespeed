@@ -8,7 +8,7 @@
 
 import earcut from "earcut";
 import type { Projector } from "./project";
-import { characterFor, Character } from "./places";
+import { characterFor, isPaved, Character } from "./places";
 
 export type AreaKind =
   | "pedestrian"
@@ -45,7 +45,8 @@ export type RawFeatures = {
   trees: [number, number][];
   treeRows: { i: number; g: [number, number][] }[];
   tram: { i: number; g: [number, number][] }[];
-  fountains: [number, number][];
+  /** [lon, lat, rayon du bassin en metres] */
+  fountains: [number, number, number?][];
   lamps: [number, number][];
   fences: RawFence[];
   paths: RawPath[];
@@ -227,6 +228,8 @@ export type FlatArea = {
   cy: number;
   /** mineral / jardin / parc, ou null si ce n'est pas un espace ouvert */
   character: Character | null;
+  /** revetement de pierre appareillee plutot que bitume */
+  paved: boolean;
   name?: string;
 };
 
@@ -237,7 +240,7 @@ export type FlatFeatures = {
   areas: FlatArea[];
   trees: { x: number; y: number }[];
   tram: { x: number; y: number }[][];
-  fountains: { x: number; y: number }[];
+  fountains: { x: number; y: number; r: number }[];
   lamps: { x: number; y: number }[];
   fences: FlatFence[];
   paths: FlatPath[];
@@ -327,6 +330,7 @@ export function prepareFeatures(raw: RawFeatures, proj: Projector): FlatFeatures
       // se marche entierement. Le secteur pietonnier du centre est entierement
       // cartographie comme ca.
       character: Character.Mineral,
+      paved: isPaved(line.s),
       name: line.n,
     });
   }
@@ -376,7 +380,7 @@ export function prepareFeatures(raw: RawFeatures, proj: Projector): FlatFeatures
     cx /= flat.length / 2;
     cy /= flat.length / 2;
 
-    areas.push({ id: a.i, kind: a.k, pos, area: surface, cx, cy, character, name: a.n });
+    areas.push({ id: a.i, kind: a.k, pos, area: surface, cx, cy, character, paved: isPaved(a.s), name: a.n });
   }
 
   // --- arbres -------------------------------------------------------------
@@ -437,7 +441,7 @@ export function prepareFeatures(raw: RawFeatures, proj: Projector): FlatFeatures
     areas,
     trees,
     tram,
-    fountains: raw.fountains.map(([lon, lat]) => proj.project(lon, lat)),
+    fountains: raw.fountains.map(([lon, lat, r]) => ({ ...proj.project(lon, lat), r: r ?? 2.4 })),
     lamps: raw.lamps.map(([lon, lat]) => proj.project(lon, lat)),
     fences,
     paths,

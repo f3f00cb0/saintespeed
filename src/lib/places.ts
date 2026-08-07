@@ -136,6 +136,7 @@ export const CHARACTERS: Record<Character, CharacterSpec> = {
   // pierre et calade, gris chaud dur : c'est le point clair de la scene, c'est
   // lui qui doit se lire comme "place dure resserree"
   [Character.Mineral]: { ground: 0x565049, path: 0x565049, drawPaths: false, drawFences: false, z: 5 },
+  // Note : le mineral se subdivise en deux tons selon "surface", voir isPaved.
   // dalle plus massifs plantes : vert grisatre, plus sombre et plus mineral
   // qu'un parc, et surtout ceinture
   [Character.Jardin]: { ground: 0x2b3324, path: 0x4a4436, drawPaths: true, drawFences: true, z: 3 },
@@ -146,3 +147,18 @@ export const CHARACTERS: Record<Character, CharacterSpec> = {
 export function characterSpec(c: Character): CharacterSpec {
   return CHARACTERS[c] ?? CHARACTERS[Character.Parc];
 }
+
+// --- dallage contre bitume --------------------------------------------------
+// Une place n'est pas l'autre : le sol de la place du Peuple est tague
+// "paving_stones", celui de Dorian "concrete". Sur les 164 espaces pietons de
+// la bbox, 50 portent un revetement de pierre appareillee (paving_stones 33,
+// sett 16, tiles 1) contre 82 en bitume ou beton. La bande claire du Peuple est
+// une ancre citee par la spec, et elle est litteralement dans le tag.
+const PAVED = /^(paving_stones|sett|cobblestone|tiles|marble|granite|stone)$/;
+
+export function isPaved(surface?: string): boolean {
+  return PAVED.test(surface ?? "");
+}
+
+/** Ton du sol mineral : pierre appareillee, plus claire et plus chaude, contre bitume. */
+export const MINERAL_PAVED = 0x615a4e;
