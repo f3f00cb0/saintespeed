@@ -413,4 +413,34 @@ export const LANDMARKS = new Map<number, Landmark>([
   [63272393, { archetype: Archetype.Pierre, wall: 0xd2c7ae, height: 13, label: "Gare Carnot" }],
   [63275816, { archetype: Archetype.Pierre, wall: 0xd2c7ae, label: "Gare Carnot" }],
   [-1000824, { archetype: Archetype.Pierre, wall: 0xd2c7ae, label: "Gare Carnot" }],
+
+  // --- silhouettes majeures, relevees le 2026-08-14 -------------------------
+  // Les hauteurs viennent des niveaux reels quand la source les donne, jamais
+  // de l'inference : la table inferLevels est calee sur du logement et sortait
+  // ces sept emprises entre 9 et 15 m, y compris une gare a 3,1 m.
+  //
+  // Bourse du Travail, 1901, Lamaiziere : trois niveaux monumentaux en pierre
+  // de taille de Saint-Paul-Trois-Chateaux, peristyle inscrit MH.
+  [63319547, { archetype: Archetype.Pierre, wall: 0xd8cfb8, height: 15, label: "Bourse du Travail" }],
+  // Nouvelles Galeries, 1894, Lamaiziere : 3 000 m2 sur TROIS niveaux. La
+  // facade est sous bardage metallique depuis les annees 1960, d'ou le gris
+  // froid plutot que la pierre, et le dome de la tourelle a disparu.
+  [63281257, { archetype: Archetype.Pierre, wall: 0xb4b5b2, roof: 0x4a4c4e, height: 15, label: "Les Nouvelles Galeries" }],
+  // Prefecture, 1895-1902 : socle plus deux niveaux monumentaux. Elle sortait
+  // en archetype faubourg a 9,3 m, soit un pavillon de banlieue.
+  [-1000783, { archetype: Archetype.Pierre, wall: 0xdcd3bc, height: 18, label: "Prefecture de la Loire" }],
+  // La Comedie, 2017, StudioMilou : volumes bas, la cage de scene de 28 m est
+  // posee par le kit.
+  [63288593, { archetype: Archetype.Moderne, wall: 0x53565c, roof: 0x40434a, height: 12, label: "La Comedie" }],
+  // Centre Deux, 1979 : brique rouge et masse aveugle. Il sortait en verre
+  // moderne, ce qui est faux sur 26 400 m2 d'emprise.
+  [63303610, { archetype: Archetype.Brique, wall: 0x8f4b3c, roof: 0x3a3330, height: 14, unlit: true, label: "Centre Deux" }],
+  // Chateaucreux, 1882-1884, Bouvard pour le PLM : briques polychromes. OSM
+  // tague building:levels=1, ce qui donnait un batiment voyageurs de 3,1 m ;
+  // on garde le niveau unique mais a sa vraie hauteur de hall, la toiture et
+  // le corps d'horloge venant du kit.
+  [63322681, { archetype: Archetype.Brique, wall: 0x9c5a44, roof: 0x40342e, height: 8.5, label: "Gare de Chateaucreux" }],
+  // Palais Mimard, 1893, Lamaiziere : cinq niveaux hauts, brique et pierre,
+  // seul edifice neo-gothique de la ville, sur la ligne de depart.
+  [63300869, { archetype: Archetype.Pierre, wall: 0xc9b79c, roof: 0x4b3f36, height: 19, label: "Le Palais Mimard" }],
 ]);

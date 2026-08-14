@@ -1,7 +1,13 @@
 // Kits des reperes : la silhouette de chaque monument, reprisee a la main a
-// partir de dimensions REELLES (Wikipedia / site officiel, relevees le
-// 2026-08-07), posee sur l'emprise OSM. Voir src/lib/landmarkGeometry.ts pour
-// les primitives, src/scene/Landmarks.tsx pour le rendu.
+// partir de dimensions REELLES (Wikipedia / site officiel / base Merimee,
+// relevees le 2026-08-07 pour les six premiers et le 2026-08-14 pour les sept
+// suivants), posee sur l'emprise OSM. Voir src/lib/landmarkGeometry.ts pour les
+// primitives, src/scene/Landmarks.tsx pour le rendu.
+//
+// La difference avec les familles (src/lib/families.ts) est la source des cotes :
+// une famille deduit ses proportions de l'emprise, un repere les tient d'un
+// releve. Quand un batiment a une entree dans LANDMARKS, il perd sa famille :
+// le bespoke prime.
 //
 // Dimensions sources :
 //   Hotel de Ville    : neoclassique, plan carre a cour, dome de 51 m DETRUIT
@@ -12,6 +18,47 @@
 //   Zenith            : Foster, >25 m, toiture aluminium galbee + facade vitree.
 //   Gare Carnot       : gare historique en pierre, pavillon d'horloge central.
 //   Chevalement       : 35 m, metal, molettes Ø 5,5 m.
+//   Bourse du Travail : 1901, Leon Lamaiziere. Corps central de CINQ travees,
+//                       deux ailes terminees par des pavillons d'angle, pierre
+//                       de taille de Saint-Paul-Trois-Chateaux, decor
+//                       neoclassique. Facades, toitures et PERISTYLE inscrits
+//                       MH en 2002.
+//   Nouvelles Galeries: 1894, Lamaiziere. Art nouveau, ossature de fonte, angle
+//                       traite en tourelle. 3 000 m2 sur TROIS niveaux. Le dome
+//                       et l'horloge de la tourelle ont BRULE, et le dome a ete
+//                       retire dans les annees 1960 avec la mise sous bardage
+//                       metallique de la facade : on pose donc la tourelle
+//                       ECIMEE, pas le dome. MH 2007.
+//   Prefecture        : 1895-1902, neoclassique. QUADRILATERE a pavillons
+//                       d'angle, pierre de taille, facade a DEUX niveaux sur
+//                       socle, baies cintrees au premier niveau. Elle regarde
+//                       la place Jean Jaures, au sud.
+//   La Comedie        : 2017, StudioMilou. Trois volumes, salle de 700 places,
+//                       plateau de 400 m2, et une CAGE DE SCENE DE 28 M en
+//                       polycarbonate opaque qui rayonne de l'interieur : c'est
+//                       une lanterne, et c'est toute sa silhouette de nuit.
+//   Centre Deux       : inaugure en 1979 sur le terrain de l'ancienne prison.
+//                       39 000 m2 commerciaux, 80 boutiques, grands volumes en
+//                       BRIQUE ROUGE. Masse aveugle : pas de trame de fenetres.
+//   Chateaucreux      : batiment voyageurs de 1882-1884, Joseph-Antoine Bouvard
+//                       pour le PLM. Ossature metallique hourdee de BRIQUES
+//                       POLYCHROMES, plan en U (corps central et deux ailes sur
+//                       cour), entree sous marquise, toiture surmontee d'une
+//                       importante HORLOGE.
+//   Palais Mimard     : 1893, Lamaiziere, pour le rubanier Adrien David, achete
+//                       en 1905 par Etienne Mimard (Manufrance). Seul exemple
+//                       NEO-GOTHIQUE de la ville, mele de neo-renaissance
+//                       italienne, brique et pierre, plan en U sur cour. MH.
+//                       Il donne sur la place Anatole France, donc sur la ligne
+//                       de depart du circuit.
+//
+// Orientation des facades principales : mesuree, pas supposee. Pour chaque
+// emprise on a compare la distance des quatre milieux de facade au reseau reel
+// (voir le harnais dans les notes du chantier). Deux resultats valent d'etre
+// notes : la Prefecture sort cote sud, ce que confirme la source historique
+// (batie au nord de l'ancienne place Marengo), et le Palais Mimard sortait
+// ambigu a 30 contre 34 m, tranche par la position relevee de la place Anatole
+// France, au sud du batiment.
 
 import type { Emit, Anchor, Tint, Dims } from "./landmarkGeometry";
 import {
@@ -42,6 +89,13 @@ const FLOOD: [number, number, number] = [2.4, 2.4, 2.6]; // projecteurs blanc fr
 const MOLETTE: [number, number, number] = [0.5, 0.5, 0.55]; // metal non eclaire
 const ARCADE: [number, number, number] = [1.9, 1.45, 0.8]; // baie voutee chaude
 const STATUE: Tint = { r: 0.42, g: 0.38, b: 0.3 }; // bronze patine
+const SHOPFRONT: [number, number, number] = [2.1, 1.85, 1.35]; // vitrine, blanc chaud
+const FOYER: [number, number, number] = [1.75, 1.6, 1.3]; // hall de theatre eclaire
+// La cage de scene de la Comedie : polycarbonate opaque rayonnant de
+// l'interieur. Volontairement moins violent qu'un projecteur, c'est une
+// lanterne diffuse, pas une source ponctuelle.
+const LANTERN: [number, number, number] = [1.45, 1.5, 1.6];
+const STAGE: Tint = { r: 0.28, g: 0.29, b: 0.32 }; // sa base mate
 
 // --- Hotel de Ville ---------------------------------------------------------
 // Corps principal garde (emprise reelle en anneau a cour, orientee par le
@@ -218,6 +272,322 @@ const stade: KitBuilder = (e, a) => {
   addGlowBox(e, a, { x: -xOff, y: 0, w: 1.2, d: (outerW - 2 * standD) * 0.96, h: 0.6, base: standH, color: FLOOD });
 };
 
+// --- Bourse du Travail ------------------------------------------------------
+// Corps central de cinq travees encadre de deux ailes a pavillons d'angle. Le
+// peristyle est protege au titre des MH, donc c'est lui qu'il faut voir : six
+// colonnes et leur entablement devant le corps central, cote rue (y+ local,
+// rue mesuree a 9,1 m contre 27,8 m sur l'autre long cote).
+const bourseDuTravail: KitBuilder = (e, a, tex, tint, roofTint, dims) => {
+  const H = dims.height; // 15 m, trois niveaux monumentaux
+  const front = dims.maxy;
+  const STONE: Tint = { r: 0.5, g: 0.48, b: 0.42 };
+
+  // 1) Les cinq travees du rez-de-chaussee, en baies cintrees eclairees.
+  const bayW = Math.min(dims.w * 0.52, 5 * 5.4);
+  const pitch = bayW / 5;
+  for (let i = 0; i < 5; i++) {
+    addArchGlow(e, a, {
+      x: -bayW / 2 + pitch * (i + 0.5), y: front, base: 1.2,
+      w: pitch * 0.62, hRect: 3.4, color: ARCADE, axis: "y", sign: 1,
+    });
+  }
+
+  // 2) Le peristyle : colonnes en saillie de 2 m sur le trottoir, entablement
+  //    continu. Six colonnes pour cinq travees, une par trumeau plus les deux
+  //    d'about.
+  const colY = front + 2;
+  const colH = H * 0.62;
+  for (let i = 0; i <= 5; i++) {
+    addCylinder(e, a, {
+      x: -bayW / 2 + pitch * i, y: colY, r: 0.62, h: colH, base: 0.6,
+      segments: 8, tint: STONE, cap: true,
+    });
+  }
+  addBox(e, a, null, {
+    x: 0, y: colY, w: bayW + 2.4, d: 2.6, h: 1.5, base: 0.6 + colH,
+    skin: "plain", tint: STONE, roofTint: STONE,
+  });
+
+  // 3) Fronton du corps central, au-dessus du peristyle.
+  addGable(e, a, null, {
+    x: 0, y: front - 3, w: bayW + 3, d: 8, wallH: 0.6, ridgeH: 3.4, base: H,
+    tint: roofTint, wallSkin: "plain",
+  });
+
+  // 4) Les quatre pavillons d'angle, qui depassent la corniche des ailes.
+  const pw = Math.min(11, dims.w * 0.2);
+  const pd = Math.min(11, dims.d * 0.32);
+  for (const sx of [-1, 1] as const) {
+    for (const sy of [-1, 1] as const) {
+      const px = sx > 0 ? dims.maxx - pw / 2 : dims.minx + pw / 2;
+      const py = sy > 0 ? dims.maxy - pd / 2 : dims.miny + pd / 2;
+      addBox(e, a, tex, {
+        x: px, y: py, w: pw, d: pd, h: 3.2, base: H, skin: "facade", tint, roofTint,
+      });
+      // toiture en pavillon : pyramide a quatre pans
+      addCylinder(e, a, {
+        x: px, y: py, r: Math.min(pw, pd) * 0.62, rTop: 0.1, h: 3.6,
+        base: H + 3.2, segments: 4, tint: roofTint, cap: false,
+      });
+    }
+  }
+};
+
+// --- Les Nouvelles Galeries -------------------------------------------------
+// L'angle est traite en tourelle, et c'est le seul geste qui compte ici. Le
+// dome qui la couronnait a brule, puis a ete retire dans les annees 1960 en
+// meme temps que la facade passait sous bardage metallique : on pose donc la
+// tourelle ECIMEE, terminee par une terrasse et sa couronne, exactement comme
+// l'Hotel de Ville n'a pas son dome de 1952. L'angle de rue est mesure : sommet
+// local (38, -19), cote de la rue Gambetta (y- local, rue a 3,7 m).
+const nouvellesGaleries: KitBuilder = (e, a, tex, tint, roofTint, dims) => {
+  const H = dims.height; // 15 m, trois niveaux de grand magasin
+  const front = dims.miny;
+  const turretX = dims.maxx - 8;
+  const turretY = front + 8;
+
+  // 1) La tourelle d'angle : tambour polygonal qui monte de 5 m au-dessus de
+  //    l'attique, ecime, avec une balustrade en couronnement.
+  addCylinder(e, a, {
+    x: turretX, y: turretY, r: 7.4, rTop: 7.4, h: 5, base: H,
+    segments: 12, tint, cap: true,
+  });
+  addCylinder(e, a, {
+    x: turretX, y: turretY, r: 7.9, rTop: 7.9, h: 0.9, base: H + 5,
+    segments: 12, tint: roofTint, cap: false,
+  });
+
+  // 2) La vitrine du grand magasin : bandeau eclaire continu au rez-de-chaussee
+  //    sur la facade de rue. Un grand magasin s'annonce par sa vitrine.
+  addGlowBox(e, a, {
+    x: (dims.minx + dims.maxx) / 2, y: front + 0.15,
+    w: dims.w * 0.92, d: 0.3, h: 3.6, base: 1, color: SHOPFRONT,
+  });
+
+  // 3) Bandeau d'attique, qui donne l'assise horizontale du bardage.
+  addBox(e, a, tex, {
+    x: (dims.minx + dims.maxx) / 2, y: (dims.miny + dims.maxy) / 2,
+    w: dims.w * 0.98, d: dims.d * 0.98, h: 1.4, base: H, skin: "facade", tint, roofTint,
+  });
+};
+
+// --- Prefecture de la Loire -------------------------------------------------
+// Quadrilatere a pavillons d'angle, deux niveaux sur socle, baies cintrees au
+// premier niveau. Elle regarde la place Jean Jaures, au sud, soit le bout x+
+// local (rue mesuree a 7,3 m, et la source historique dit bien que la
+// prefecture a ete batie au nord de l'ancienne place Marengo).
+const prefecture: KitBuilder = (e, a, tex, tint, roofTint, dims) => {
+  const H = dims.height; // 18 m, socle plus deux niveaux monumentaux
+  const front = dims.maxx;
+  const STONE: Tint = { r: 0.52, g: 0.5, b: 0.44 };
+
+  // 1) Le socle : bandeau plein en pierre au pied de tout le quadrilatere.
+  addBox(e, a, null, {
+    x: (dims.minx + dims.maxx) / 2, y: (dims.miny + dims.maxy) / 2,
+    w: dims.w * 1.01, d: dims.d * 1.01, h: 1.8, skin: "plain", tint: STONE, roofTint: STONE,
+  });
+
+  // 2) Les baies cintrees du premier niveau, sur la facade d'honneur.
+  const bays = 7;
+  const span = Math.min(dims.d * 0.66, bays * 5.2);
+  for (let i = 0; i < bays; i++) {
+    addArchGlow(e, a, {
+      x: front, y: -span / 2 + (span / bays) * (i + 0.5), base: 1.8,
+      w: (span / bays) * 0.55, hRect: 4.2, color: ARCADE, axis: "x", sign: 1,
+    });
+  }
+
+  // 3) Le pavillon d'entree, en leger avant-corps, avec son fronton.
+  const pavD = Math.min(20, dims.d * 0.4);
+  addBox(e, a, tex, {
+    x: front - 5, y: 0, w: 10, d: pavD, h: 2.6, base: H, skin: "facade", tint, roofTint,
+  });
+  addGable(e, a, null, {
+    x: front - 5, y: 0, w: 10, d: pavD, wallH: 0.5, ridgeH: 3.6, base: H + 2.6,
+    tint: roofTint, wallSkin: "plain",
+  });
+
+  // 4) Les quatre pavillons d'angle du quadrilatere, coiffes en pavillon.
+  const pw = Math.min(14, dims.w * 0.16);
+  const pd = Math.min(14, dims.d * 0.26);
+  for (const sx of [-1, 1] as const) {
+    for (const sy of [-1, 1] as const) {
+      const px = sx > 0 ? dims.maxx - pw / 2 : dims.minx + pw / 2;
+      const py = sy > 0 ? dims.maxy - pd / 2 : dims.miny + pd / 2;
+      addBox(e, a, tex, {
+        x: px, y: py, w: pw, d: pd, h: 2.8, base: H, skin: "facade", tint, roofTint,
+      });
+      addCylinder(e, a, {
+        x: px, y: py, r: Math.min(pw, pd) * 0.6, rTop: 0.1, h: 4.4,
+        base: H + 2.8, segments: 4, tint: roofTint, cap: false,
+      });
+    }
+  }
+};
+
+// --- La Comedie de Saint-Etienne --------------------------------------------
+// Tout tient dans la cage de scene : 28 m, en polycarbonate opaque qui rayonne
+// de l'interieur pendant les representations. De nuit c'est une lanterne posee
+// sur des volumes bas, et c'est la seule chose qu'on reconnait de loin. Le
+// plateau fait 400 m2, soit environ 20 x 20 m, ce qui donne l'emprise de la
+// cage ; sa position dans l'emprise est deduite, elle, faute de plan.
+const comedie: KitBuilder = (e, a, _tex, _tint, roofTint, dims) => {
+  const H = dims.height; // 12 m, les volumes bas
+  const cx = (dims.minx + dims.maxx) / 2;
+  const cy = (dims.miny + dims.maxy) / 2;
+
+  // 1) La cage de scene, de 0 a 28 m : une masse mate, puis la lanterne.
+  addBox(e, a, null, {
+    x: cx, y: cy, w: 20, d: 20, h: 18, skin: "plain", tint: STAGE, roofTint: STAGE,
+  });
+  addGlowBox(e, a, { x: cx, y: cy, w: 20.4, d: 20.4, h: 10, base: 18, color: LANTERN });
+
+  // 2) Le socle vitre et l'auvent d'entree, cote parvis (x- local, la rue la
+  //    plus proche a 63 m : le batiment est au milieu de la plaine Achille).
+  addGlowBox(e, a, {
+    x: dims.minx + 0.2, y: cy, w: 0.4, d: dims.d * 0.5, h: 4.5, base: 0.8, color: FOYER,
+  });
+  addBox(e, a, null, {
+    x: dims.minx + 4, y: cy, w: 8, d: dims.d * 0.55, h: 0.5, base: 5.2,
+    skin: "plain", tint: roofTint, roofTint,
+  });
+
+  // 3) Edicules techniques sur les volumes bas : une salle a 700 places a
+  //    beaucoup de machinerie, et ca casse la lecture de simple boite.
+  for (const s of [-1, 1] as const) {
+    addBox(e, a, null, {
+      x: cx + s * 22, y: cy + s * 8, w: 9, d: 7, h: 2.4, base: H,
+      skin: "plain", tint: roofTint, roofTint,
+    });
+  }
+};
+
+// --- Centre Deux ------------------------------------------------------------
+// 26 400 m2 d'emprise, 321 m de long : c'est la plus grande emprise de la ville
+// et elle sort aujourd'hui en verre moderne, ce qui est faux. Grands volumes en
+// brique rouge de 1979, masse AVEUGLE (le kit ne pose donc aucune fenetre, et
+// l'entree LANDMARKS coupe la trame lumineuse). Ce qui la fait reconnaitre :
+// des volumes decroches, la machinerie de toiture, et les entrees eclairees.
+const centreDeux: KitBuilder = (e, a, _tex, tint, roofTint, dims) => {
+  const H = dims.height; // 14 m, deduit de deux a trois niveaux commerciaux
+  const cy = (dims.miny + dims.maxy) / 2;
+
+  // 1) Trois volumes decroches le long de l'axe : la galerie n'est pas une
+  //    dalle unique, elle monte et descend.
+  const steps = [
+    { u: 0.18, w: dims.w * 0.3, h: 4.5 },
+    { u: 0.52, w: dims.w * 0.22, h: 7.5 },
+    { u: 0.82, w: dims.w * 0.24, h: 3 },
+  ];
+  for (const s of steps) {
+    addBox(e, a, null, {
+      x: dims.minx + dims.w * s.u, y: cy, w: s.w, d: dims.d * 0.72, h: s.h, base: H,
+      skin: "plain", tint, roofTint,
+    });
+  }
+
+  // 2) Machinerie de toiture : une rangee de caissons de ventilation.
+  for (let i = 0; i < 9; i++) {
+    addBox(e, a, null, {
+      x: dims.minx + dims.w * (0.08 + i * 0.1), y: cy + dims.d * (i % 2 ? 0.22 : -0.2),
+      w: 7, d: 5, h: 2, base: H, skin: "plain", tint: roofTint, roofTint,
+    });
+  }
+
+  // 3) Entrees eclairees sur les trois cotes bordes de rue (mesure : 11,1 m a
+  //    l'est, 12,7 et 13,8 m sur les deux longs cotes).
+  addGlowBox(e, a, { x: dims.maxx - 0.2, y: cy, w: 0.4, d: 14, h: 5, base: 0.5, color: SHOPFRONT });
+  for (const sy of [-1, 1] as const) {
+    addGlowBox(e, a, {
+      x: dims.minx + dims.w * 0.6, y: sy > 0 ? dims.maxy - 0.2 : dims.miny + 0.2,
+      w: 18, d: 0.4, h: 5, base: 0.5, color: SHOPFRONT,
+    });
+  }
+};
+
+// --- Gare de Chateaucreux ---------------------------------------------------
+// Batiment voyageurs de 1882-1884 : ossature metallique hourdee de briques
+// polychromes, plan en U (corps central, deux ailes), entree sous marquise, et
+// une importante horloge en couronnement. OSM la tague building:levels=1 avec
+// roof:levels=2, d'ou un corps bas et une haute toiture. Le parvis est au sud,
+// soit le cote y- local.
+const chateaucreux: KitBuilder = (e, a, tex, tint, roofTint, dims) => {
+  const H = dims.height; // 8,5 m, le niveau unique tague par OSM
+  const front = dims.miny;
+  const cx = (dims.minx + dims.maxx) / 2;
+
+  // 1) Haute toiture a croupes sur toute la longueur (roof:levels=2).
+  addGable(e, a, null, {
+    x: cx, y: (dims.miny + dims.maxy) / 2, w: dims.w * 0.99, d: dims.d * 0.9,
+    wallH: 0.5, ridgeH: 5.5, base: H, tint: roofTint, wallSkin: "plain",
+  });
+
+  // 2) Corps central plus haut, qui porte l'horloge des deux cotes.
+  const bw = Math.min(22, dims.w * 0.2);
+  const bd = dims.d * 0.86;
+  addBox(e, a, tex, { x: cx, y: 0, w: bw, d: bd, h: 4.5, base: H, skin: "facade", tint, roofTint });
+  addGable(e, a, null, {
+    x: cx, y: 0, w: bw, d: bd, wallH: 0.4, ridgeH: 4.4, base: H + 4.5,
+    tint: roofTint, wallSkin: "plain",
+  });
+  addDisc(e, a, { x: cx, y: front + 0.6, z: H + 6.2, r: 2.2, facing: "y-", color: CLOCK });
+  addDisc(e, a, { x: cx, y: dims.maxy - 0.6, z: H + 6.2, r: 2.2, facing: "y+", color: CLOCK });
+
+  // 3) La marquise du parvis, et les baies du hall sous elle.
+  addBox(e, a, null, {
+    x: cx, y: front + 3, w: dims.w * 0.42, d: 6, h: 0.5, base: 5.4,
+    skin: "plain", tint: roofTint, roofTint,
+  });
+  for (let i = -2; i <= 2; i++) {
+    addArchGlow(e, a, {
+      x: cx + i * 7, y: front, base: 0.8, w: 4.2, hRect: 3.6,
+      color: ARCADE, axis: "y", sign: -1,
+    });
+  }
+};
+
+// --- Le Palais Mimard -------------------------------------------------------
+// Seul edifice neo-gothique de la ville, brique et pierre, plan en U sur cour.
+// Il donne au sud sur la place Anatole France, donc sur la ligne de depart : il
+// est vu de pres et longtemps, ce qui justifie les lucarnes et les pinacles.
+// Facade principale au bout x- local (position de la place relevee au sud).
+const palaisMimard: KitBuilder = (e, a, tex, tint, roofTint, dims) => {
+  const H = dims.height; // 19 m, cinq niveaux hauts de 1893
+  const front = dims.minx;
+  const cy = (dims.miny + dims.maxy) / 2;
+
+  // 1) Toiture neo-gothique raide sur le corps principal, faite en travers de
+  //    l'emprise pour que le pignon regarde la place.
+  const bodyW = Math.min(12, dims.w * 0.42);
+  addGable(e, a, null, {
+    x: front + bodyW / 2, y: cy, w: bodyW, d: dims.d * 0.92,
+    wallH: 0.8, ridgeH: 7.5, base: H, tint: roofTint, wallSkin: "plain",
+  });
+
+  // 2) Trois lucarnes sur le rampant qui regarde la place.
+  for (let i = -1; i <= 1; i++) {
+    addGable(e, a, tex, {
+      x: front + 2.2, y: cy + i * (dims.d * 0.26), w: 2.6, d: 2.2,
+      wallH: 1.8, ridgeH: 3.4, base: H + 1, tint, wallSkin: "facade",
+    });
+  }
+
+  // 3) Quatre pinacles, la signature neo-gothique.
+  for (const sx of [-1, 1] as const) {
+    for (const sy of [-1, 1] as const) {
+      addCylinder(e, a, {
+        x: sx > 0 ? front + bodyW - 1 : front + 1, y: cy + sy * (dims.d * 0.42),
+        r: 0.9, rTop: 0.08, h: 5.5, base: H, segments: 6, tint: roofTint, cap: false,
+      });
+    }
+  }
+
+  // 4) La porte cocheres eclairee du corps principal, sur la place.
+  addArchGlow(e, a, {
+    x: front, y: cy, base: 0, w: 3.4, hRect: 4.2, color: ARCADE, axis: "x", sign: -1,
+  });
+};
+
 /** Reperes poses sur une emprise OSM existante (clef = id OSM). */
 export const LANDMARK_KITS = new Map<number, KitBuilder>([
   [-5201020, hotelDeVille],
@@ -225,6 +595,13 @@ export const LANDMARK_KITS = new Map<number, KitBuilder>([
   [63272393, gareCarnot],
   [49047886, zenith],
   [63308936, chevalement],
+  [63319547, bourseDuTravail],
+  [63281257, nouvellesGaleries],
+  [-1000783, prefecture],
+  [63288593, comedie],
+  [63303610, centreDeux],
+  [63322681, chateaucreux],
+  [63300869, palaisMimard],
 ]);
 
 /** Repere sans emprise OSM : position + orientation reelles. */

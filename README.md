@@ -262,12 +262,13 @@ produirait un unique point brillant au lieu d'une lecture de verre, pour le coû
 d'un matériau standard à la place d'un Lambert. Le moderne se distingue par son
 albédo froid et la teinte froide de ses fenêtres.
 
-**Repères posés à la main.** Douze bâtiments reçoivent une configuration bespoke
-qui écrase l'archétype, relevée par id OSM dans le cache et non devinée :
+**Repères posés à la main.** Dix-neuf bâtiments reçoivent une configuration
+bespoke qui écrase l'archétype, relevée par id OSM dans le cache et non devinée :
 l'Hôtel de Ville, la Platine, le Zénith, l'ancienne Manufacture d'Armes, la
 cathédrale Saint-Charles, l'Opéra, le musée d'Art et d'Industrie, le chevalement
-du Puits Couriot, la centrale Manufrance et les trois emprises de la gare
-Carnot. Geoffroy-Guichard n'y figure pas : **le stade n'est pas
+du Puits Couriot, la centrale Manufrance, les trois emprises de la gare
+Carnot, puis la Bourse du Travail, les Nouvelles Galeries, la Préfecture, la
+Comédie, Centre Deux, Châteaucreux et le Palais Mimard. Geoffroy-Guichard n'y figure pas : **le stade n'est pas
 tagué `building` dans OSM**, il n'existe donc pas dans les emprises. Le vert-noir
 ASSE ne se justifierait nulle part ailleurs, ce serait un gadget.
 
@@ -458,7 +459,7 @@ le début.
 
 ## Les familles de silhouettes
 
-Les six repères de `src/lib/landmarks.ts` sont bespoke, un kit par monument. Ça
+Les repères de `src/lib/landmarks.ts` sont bespoke, un kit par monument. Ça
 ne passe pas à l'échelle, et surtout le déficit était ailleurs. Un export
 Overpass curaté du patrimoine stéphanois (`export.geojson`, 642 features) le
 chiffre : **197 emprises notables, dont 87 de patrimoine ou de culte, et quatre
@@ -501,13 +502,49 @@ exactement le même clocher de 36 m. Avec un tirage de ±8 % seedé sur l'id, le
 flèches se répartissent de 17 à 51 m, médiane 37.
 
 À 1 876 emprises, pas question de construire ces kits une fois pour toutes comme
-les six monuments : ils passent par les **tuiles**, donc par le streaming, et
+les monuments bespoke : ils passent par les **tuiles**, donc par le streaming, et
 suivent le niveau de détail. Au-delà de 700 m la masse est conservée (une flèche
 sur la ligne d'horizon est précisément ce qui fait reconnaître la ville) mais les
 lumières sont abandonnées, et les verrières de sheds basculent en volume plein
 pour ne pas laisser la toiture ajourée. Le coût mesuré est de **64 000 triangles
 sur la ville entière, 520 au pire dans une tuile de 240 m**, contre 2,00 M pour
 les emprises seules.
+
+## Sept silhouettes relevées, pas déduites
+
+Une famille déduit ses proportions de l'emprise. Un repère bespoke tient ses
+cotes d'un relevé, et c'est toute la différence. Sept silhouettes majeures sont
+passées en bespoke le 2026-08-14, sur sources (Wikipédia, site de la ville, base
+Mérimée) :
+
+| bâtiment | ce que dit la source | ce qui sortait avant |
+| --- | --- | --- |
+| **Bourse du Travail** | 1901, Léon Lamaizière. Corps central de cinq travées, deux ailes à pavillons d'angle, pierre de taille de Saint-Paul-Trois-Châteaux. Façades, toitures et **péristyle** inscrits MH en 2002 | boîte de verre moderne à 9,3 m |
+| **Les Nouvelles Galeries** | 1894, Lamaizière. Art nouveau, ossature de fonte, angle en tourelle. 3 000 m² sur trois niveaux | pierre à 12,4 m, sans l'angle |
+| **Préfecture de la Loire** | 1895-1902, néoclassique. Quadrilatère à pavillons d'angle, deux niveaux sur socle, baies cintrées au premier | **archétype faubourg à 9,3 m**, soit un pavillon de banlieue |
+| **La Comédie** | 2017, StudioMilou. Salle de 700 places, plateau de 400 m², **cage de scène de 28 m** en polycarbonate opaque qui rayonne de l'intérieur | barre de logement à 12,4 m |
+| **Centre Deux** | inauguré en 1979 sur le terrain de l'ancienne prison. 39 000 m² commerciaux, grands volumes en **brique rouge** | verre moderne sur 26 400 m² d'emprise |
+| **Gare de Châteaucreux** | 1882-1884, Joseph-Antoine Bouvard pour le PLM. Ossature métallique hourdée de **briques polychromes**, plan en U, entrée sous marquise, importante horloge | **3,1 m de haut** : OSM la tague `building:levels=1` |
+| **Le Palais Mimard** | 1893, Lamaizière, pour le rubanier Adrien David. Seul édifice **néo-gothique** de la ville, brique et pierre, plan en U | pierre à 15,5 m, sans toiture ni lucarnes |
+
+Trois choses que la recherche a corrigées, et qui auraient été fausses écrites de
+mémoire. La Bourse du Travail n'est pas art déco des années 30 mais
+**néoclassique de 1901**. Le dôme des Nouvelles Galeries a brûlé puis a été
+**retiré dans les années 1960**, en même temps que la façade passait sous bardage
+métallique : on pose donc la tourelle écimée, exactement comme l'Hôtel de Ville
+n'a pas son dôme détruit en 1952. Et Centre Deux date de **1979**, pas de 1971.
+
+**L'orientation des façades est mesurée.** Un péristyle ou une marquise posés sur
+la mauvaise façade regardent un mur. Pour chaque emprise, la distance des quatre
+milieux de façade au réseau routier réel a été comparée. La Préfecture sort côté
+sud, ce que confirme la source (bâtie au nord de l'ancienne place Marengo,
+aujourd'hui place Jean Jaurès). Le Palais Mimard sortait ambigu, 30 contre 34 m,
+tranché par la position relevée de la place Anatole France au sud du bâtiment.
+La tourelle des Nouvelles Galeries est posée sur le sommet d'emprise le plus
+proche d'un carrefour, en local (38, -19).
+
+Coût : 1 048 triangles pour les sept kits, et ils sont construits une fois pour
+toutes avec les autres repères, hors streaming.
 
 ## Le décor
 
@@ -569,7 +606,7 @@ src/lib/frame.ts        repère local d'une emprise (axe principal, bbox locale)
 src/lib/notable.ts      GÉNÉRÉ : patrimoine, culte et noms depuis export.geojson
 src/lib/families.ts     affectation d'une famille de silhouette à une emprise
 src/lib/familyKits.ts   géométrie des familles : clocher, sheds, marquise, édicules
-src/lib/landmarks.ts    kits bespoke des six monuments (prime sur les familles)
+src/lib/landmarks.ts    kits bespoke des monuments (prime sur les familles)
 src/lib/streaming.ts    politique de streaming : tuiles, anneaux, hystérésis
 src/lib/quality.ts      niveaux de rendu et descente sur frame médiane mesurée
 src/scene/              rendu three.js (routes, sols, bâtiments, arbres, tram,
