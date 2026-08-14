@@ -413,14 +413,23 @@ export const LANDMARKS = new Map<number, Landmark>([
   [63308936, { archetype: Archetype.Brique, wall: 0x6f6f76, roof: 0x55555c, replaceBase: true, label: "Chevalement du Puits Couriot" }],
   // Centrale energie de Manufrance : brique manufacturiere.
   [63330900, { archetype: Archetype.Brique, wall: 0x8f4a3a, label: "Centrale Manufrance" }],
-  // Gare de Saint-Etienne Carnot : l'ancre batie de la place Carnot. Les trois
-  // emprises portent "operator=SNCF" et sont anonymes dans le cache, d'ou les
-  // ids en dur. La troisieme n'existe que depuis la reparation des relations
-  // multipolygones, ce qui confirme la crainte posee dans la spec : c'etait
-  // bien la gare Carnot qui manquait, pas la cathedrale ni Chateaucreux.
-  [63272393, { archetype: Archetype.Pierre, wall: 0xd2c7ae, height: 13, label: "Gare Carnot" }],
-  [63275816, { archetype: Archetype.Pierre, wall: 0xd2c7ae, label: "Gare Carnot" }],
-  [-1000824, { archetype: Archetype.Pierre, wall: 0xd2c7ae, label: "Gare Carnot" }],
+  // Gare de Saint-Etienne Carnot, place Sadi Carnot. Les trois emprises du
+  // batiment voyageurs portent "operator=SNCF" et sont anonymes dans le cache,
+  // d'ou les ids en dur. La troisieme n'existe que depuis la reparation des
+  // relations multipolygones.
+  //
+  // Elles etaient en PIERRE, ce qui etait faux : la gare est de 1980, oeuvre de
+  // M. Beynet, moderniste et en beton. Le campanile a horloge que le kit leur
+  // ajoutait a ete supprime pour la meme raison (voir src/lib/landmarks.ts).
+  [63272393, { archetype: Archetype.Moderne, wall: 0xb2b4b6, roof: 0x3a3c3f, height: 13, label: "Gare Carnot" }],
+  [63275816, { archetype: Archetype.Moderne, wall: 0xb2b4b6, roof: 0x3a3c3f, label: "Gare Carnot" }],
+  [-1000824, { archetype: Archetype.Moderne, wall: 0xb2b4b6, roof: 0x3a3c3f, label: "Gare Carnot" }],
+  // Les deux auvents de quai, cartographies en building=roof. Sans traitement
+  // ils sortaient en murs pleins de 9,3 m de haut le long des quais, ce qui
+  // ecrasait la gare au sol. replaceBase : c'est le kit qui les dessine, avec
+  // les piles, le tablier et l'encadrement orange vitre.
+  [1365990293, { archetype: Archetype.Moderne, wall: 0xc4581c, roof: 0xb04e18, height: 14, replaceBase: true, label: "Quai sud de la gare Carnot" }],
+  [1365990292, { archetype: Archetype.Moderne, wall: 0xc4581c, roof: 0xb04e18, height: 14, replaceBase: true, label: "Quai nord de la gare Carnot" }],
 
   // --- silhouettes majeures, relevees le 2026-08-14 -------------------------
   // Les hauteurs viennent des niveaux reels quand la source les donne, jamais

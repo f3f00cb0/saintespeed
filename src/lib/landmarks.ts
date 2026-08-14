@@ -21,7 +21,9 @@
 //   Stade G.-Guichard : terrain 105 x 68 m, 4 tribunes, 192 projecteurs en
 //                       toiture (pas de mats), vert/blanc (ASSE).
 //   Zenith            : Foster, >25 m, toiture aluminium galbee + facade vitree.
-//   Gare Carnot       : gare historique en pierre, pavillon d'horloge central.
+//   Gare Carnot       : 1980, M. Beynet. Gare AERIENNE sur viaduc, deux quais
+//                       de 150 m sous un encadrement metallique ORANGE vitre.
+//                       Ni pierre, ni campanile, ni horloge : voir le kit.
 //   Chevalement       : 35 m, metal, molettes Ø 5,5 m.
 //   Bourse du Travail : 1901, Leon Lamaiziere. Corps central de CINQ travees,
 //                       deux ailes terminees par des pavillons d'angle, pierre
@@ -288,23 +290,99 @@ const cathedrale: KitBuilder = (e, a, _tex, tint, roofTint, dims) => {
   }
 };
 
-// --- Gare Carnot ------------------------------------------------------------
-// Batiment voyageurs historique : campanile d'horloge elance au centre de la
-// facade, grandes baies voutrees du hall, et fronton.
-const gareCarnot: KitBuilder = (e, a, tex, tint, roofTint, dims) => {
-  const H = dims.height; // 13 m, voir landmark.height
-  // campanile central, plus haut que le corps
-  const cw = Math.min(7, dims.w * 0.35);
-  const cd = Math.min(7, dims.d * 0.9);
-  addBox(e, a, tex, { x: 0, y: 0, w: cw, d: cd, h: 9, base: H, skin: "facade", tint, roofTint });
-  addDisc(e, a, { x: cw / 2 + 0.1, y: 0, z: H + 6.2, r: 2.0, facing: "x+", color: CLOCK });
-  addDisc(e, a, { x: -cw / 2 - 0.1, y: 0, z: H + 6.2, r: 2.0, facing: "x-", color: CLOCK });
-  // fleche du campanile
-  addCylinder(e, a, { x: 0, y: 0, r: cw * 0.48, rTop: 0.1, h: 5, base: H + 9, segments: 4, tint: roofTint, cap: false });
-  // grandes baies voutrees du hall, au nu des deux pignons
-  for (const s of [-1, 1]) {
-    const fx = s > 0 ? dims.maxx : dims.minx;
-    addArchGlow(e, a, { x: fx, y: 0, base: 1.2, w: Math.min(5.5, dims.d * 0.6), hRect: 5.5, color: ARCADE, axis: "x", sign: s as -1 | 1 });
+// --- Gare de Saint-Etienne-Carnot -------------------------------------------
+//
+// Reprise le 2026-08-14 sur source, apres un signalement en jeu : "elle est au
+// sol". C'etait le probleme, et le kit precedent en etait la cause. Il en
+// faisait une gare de pierre du XIXe siecle, campanile central, horloge sur ses
+// deux faces, fleche et grandes baies voutees de hall. Tout est faux :
+//
+//   La gare Carnot est MISE EN SERVICE LE 28 SEPTEMBRE 1980, par l'architecte
+//   M. Beynet. C'est une GARE AERIENNE CONSTRUITE SUR UN VIADUC, place Sadi
+//   Carnot, avec DEUX QUAIS DE 150 M couverts d'un ENCADREMENT METALLIQUE
+//   ORANGE COMPOSE DE VITRES qui ouvre la vue sur le centre-ville. L'espace
+//   voyageurs a ete rehabilite entre 2000 et 2006.
+//
+// Son fait architectural principal est donc d'etre EN L'AIR, et c'est
+// exactement ce qui manquait.
+//
+// Ce que la donnee OSM fournit sur place : les deux auvents de quai, mappes en
+// building=roof, 63 m sur 2 a 2,6 m, espaces de 10,3 m, axe a 7,8 degres. Le
+// rendu courant en faisait deux murs pleins de 9,3 m de haut, ce qui explique
+// l'impression de gare ecrasee au sol. Le kit les remplace (replaceBase) par la
+// vraie section : piles, tablier, quai eclaire, encadrement orange vitre.
+//
+// Deux valeurs ne sont PAS sourcees et sont assumees comme telles. La hauteur du
+// tablier d'abord : aucune source ne donne le tirant d'air du viaduc, 9,5 m est
+// la valeur courante d'un viaduc ferroviaire urbain et elle place le quai juste
+// au-dessus des toitures basses du quartier. La longueur du tablier ensuite : on
+// le fait courir de 72 m a l'ouest a 32 m a l'est du centre des quais, parce que
+// c'est le couloir libre mesure dans le bati (le premier obstacle est a 75 m a
+// l'ouest, et a l'est le tablier s'encastre dans le batiment voyageurs, ce qui
+// est bien la maniere dont une gare aerienne tient). Les quais reels font 150 m,
+// OSM n'en cartographie que 63 : on ne couvre que ce qui est cartographie.
+const CONCRETE: Tint = { r: 0.44, g: 0.45, b: 0.47 }; // piles et tablier
+const ORANGE: Tint = { r: 0.74, g: 0.31, b: 0.1 }; // l'encadrement metallique
+const PLATFORM: [number, number, number] = [1.5, 1.4, 1.15]; // quai eclaire
+const GLAZING: [number, number, number] = [1.25, 1.05, 0.72]; // vitres de l'abri
+
+/**
+ * Un quai de la gare Carnot. `withDeck` n'est vrai que pour l'auvent sud : le
+ * tablier et les piles sont communs aux deux quais, on ne les pose qu'une fois,
+ * decales vers le nord de la moitie de l'ecart mesure entre les deux auvents.
+ */
+const quaiCarnot = (withDeck: boolean): KitBuilder => (e, a, _tex, _tint, _roofTint, dims) => {
+  const DECK = 9.5; // niveau du quai, non source, voir en-tete
+  const GAP = 10.3; // ecart mesure entre les deux auvents
+  const platW = Math.max(4.5, dims.d + 2.6); // largeur de quai autour de l'auvent
+
+  if (withDeck) {
+    // Le tablier, centre entre les deux quais, et ses piles.
+    const y = GAP / 2;
+    const x0 = -72, x1 = 32;
+    const len = x1 - x0;
+    const mid = (x0 + x1) / 2;
+    addBox(e, a, null, {
+      x: mid, y, w: len, d: GAP + platW, h: 1.1, base: DECK - 1.1,
+      skin: "plain", tint: CONCRETE, roofTint: CONCRETE,
+    });
+    for (let x = x0 + 6; x < x1; x += 13) {
+      addBox(e, a, null, {
+        x, y, w: 2.6, d: 3.4, h: DECK - 1.1, base: 0,
+        skin: "plain", tint: CONCRETE, roofTint: CONCRETE,
+      });
+    }
+  }
+
+  // Le quai lui-meme : une bande eclairee au niveau du tablier. C'est elle qui
+  // signale une gare aerienne depuis la rue, bien avant l'abri.
+  addGlowBox(e, a, {
+    x: 0, y: 0, w: dims.w, d: platW * 0.8, h: 0.22, base: DECK, color: PLATFORM,
+  });
+
+  // L'encadrement metallique orange : poteaux, poutre de rive, couverture.
+  const roofZ = DECK + 4.4;
+  for (let i = 0; i <= 10; i++) {
+    const x = dims.minx + (dims.w * i) / 10;
+    for (const sy of [-1, 1] as const) {
+      addCylinder(e, a, {
+        x, y: (sy * platW) / 2.6, r: 0.16, h: roofZ - DECK, base: DECK,
+        segments: 6, tint: ORANGE, cap: false,
+      });
+    }
+  }
+  addBox(e, a, null, {
+    x: 0, y: 0, w: dims.w, d: platW, h: 0.32, base: roofZ,
+    skin: "plain", tint: ORANGE, roofTint: ORANGE,
+  });
+
+  // Les vitres, sur les deux rives : c'est par elles qu'on voit le centre-ville
+  // depuis le quai, et de nuit c'est ce qui fait lire la gare.
+  for (const sy of [-1, 1] as const) {
+    addGlowBox(e, a, {
+      x: 0, y: (sy * platW) / 2.5, w: dims.w * 0.98, d: 0.18, h: 2.3,
+      base: DECK + 1.5, color: GLAZING,
+    });
   }
 };
 
@@ -690,7 +768,10 @@ const palaisMimard: KitBuilder = (e, a, tex, tint, roofTint, dims) => {
 export const LANDMARK_KITS = new Map<number, KitBuilder>([
   [-5201020, hotelDeVille],
   [63322493, cathedrale],
-  [63272393, gareCarnot],
+  // Les deux auvents de quai, mappes building=roof : le kit leur rend leur
+  // section reelle de gare aerienne. Le sud porte en plus le tablier commun.
+  [1365990293, quaiCarnot(true)],
+  [1365990292, quaiCarnot(false)],
   [49047886, zenith],
   [63308936, chevalement],
   [63319547, bourseDuTravail],

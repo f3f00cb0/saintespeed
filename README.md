@@ -636,6 +636,37 @@ le bloom le rez-de-chaussée fusionnait en un bandeau blanc sans forme. Les baie
 de l'Hôtel de Ville ont leur propre valeur, juste au-dessus du seuil, et les
 arcades sont un peu plus étroites : on lit les arcs et les trumeaux.
 
+### La gare Carnot était au sol, elle est aérienne
+
+Signalé en jeu : « la gare Carnot est au sol ». C'était le problème, et le kit en
+était la cause. Il en faisait une **gare de pierre du XIXe siècle**, campanile
+central, horloge sur ses deux faces, flèche et grandes baies voûtées. La source
+dit tout autre chose :
+
+> La gare est **mise en service le 28 septembre 1980**, par l'architecte
+> M. Beynet. C'est une **gare aérienne construite sur un viaduc**, place Sadi
+> Carnot, avec **deux quais de 150 m** couverts d'un **encadrement métallique
+> orange composé de vitres** qui ouvre la vue sur le centre-ville.
+
+Son fait architectural principal est donc d'**être en l'air**, et c'est
+exactement ce qui manquait.
+
+La donnée OSM contenait pourtant l'essentiel : les deux auvents de quai, mappés
+en `building=roof`, **63 m sur 2 à 2,6 m, espacés de 10,3 m**. Le rendu courant
+en faisait deux murs pleins de 9,3 m de haut le long des quais, ce qui est
+précisément l'impression de gare écrasée. Ils passent en `replaceBase` et le kit
+leur rend leur section : piles, tablier, quai éclairé, encadrement orange vitré.
+Le bâtiment voyageurs, lui, quitte l'archétype pierre pour le moderne : il est de
+1980 et en béton.
+
+Deux valeurs ne sont pas sourcées et sont assumées comme telles. La **hauteur du
+tablier** (9,5 m) est la valeur courante d'un viaduc ferroviaire urbain, aucune
+source ne donne le tirant d'air. La **longueur du tablier** vient d'une mesure :
+le couloir bâti est libre de 75 m à l'ouest, et à l'est le tablier s'encastre
+dans le bâtiment voyageurs, ce qui est bien la manière dont une gare aérienne
+tient. Les quais réels font 150 m, OSM n'en cartographie que 63 : on ne couvre
+que ce qui est cartographié.
+
 ## Le décor
 
 Avant d'écrire une ligne de rendu, les couches ont été **comptées** sur la bbox

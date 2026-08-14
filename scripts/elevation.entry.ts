@@ -67,9 +67,11 @@ export function render(id: number, cachePath: string, outPath: string, side: Sid
   kit(e, f, { tileU: 18.6, patch: [0.5, 0.5] } as any, tint, roofTint, f);
 
   // L'extrusion de l'emprise, que le kit ne dessine pas mais qui porte tout.
-  // Positions en coordonnees MONDE, comme celles des kits.
+  // Positions en coordonnees MONDE, comme celles des kits. Un repere en
+  // replaceBase n'en a pas : le jeu ne dessine que son kit, la montrer ici
+  // ferait croire a un volume qui n'existe pas.
   const base = newEmit();
-  {
+  if (!lm.replaceBase) {
     const n = b.ring.length;
     for (let i = 0; i < n; i++) {
       const p = b.ring[i];
