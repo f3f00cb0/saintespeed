@@ -592,6 +592,24 @@ l'attique à panneaux, et les deux passages voûtés des ailes au niveau de la
 place. La hauteur de corniche passe de 16 à 18,5 m, mise à l'échelle sur la
 largeur de façade mesurée (49,3 m), pour 22,7 m au sommet du cadran.
 
+### L'origine d'un kit est le centre de la bbox, pas le centroïde
+
+Repéré à l'œil sur l'élévation : les deux passages voûtés des ailes de l'Hôtel de
+Ville n'étaient pas à la même distance des bords. Or un édifice néoclassique est
+strictement symétrique, c'est la définition même de sa composition.
+
+La cause n'était pas dans le kit mais dans le repère. `frameOf` plaçait son
+origine sur le **centroïde du contour**, et un kit compose une façade autour de
+`x = 0`. Le centroïde d'une emprise réelle n'est presque jamais au milieu de sa
+façade : mesuré sur les douze repères bespoke, l'écart va de **1,9 m** (Palais
+Mimard) à **19,1 m** (Nouvelles Galeries), et vaut 2,4 m sur l'Hôtel de Ville.
+Les douze kits étaient donc désaxés, à des degrés divers.
+
+L'origine est maintenant le **centre de la bbox** : `minx` vaut exactement `-w/2`
+et `maxx` vaut `+w/2`, donc écrire `x = 0` dans un kit, c'est écrire « sur
+l'axe ». Un seul endroit corrigé, douze kits redressés, plus les 1 876 emprises
+à famille qui utilisent le même repère.
+
 ## Le décor
 
 Avant d'écrire une ligne de rendu, les couches ont été **comptées** sur la bbox

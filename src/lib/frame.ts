@@ -34,6 +34,16 @@ export type Frame = Anchor & Dims;
  * L'orientation est l'axe principal (direction propre de plus grande valeur
  * propre), sauf si `rotOverride` est fourni (batiment quasi carre dont la
  * facade a un sens precis, ex. l'Hotel de Ville).
+ *
+ * L'origine est le CENTRE DE LA BBOX, et non le centroide du contour. La
+ * difference n'est pas cosmetique : un kit compose une facade symetriquement
+ * autour de x = 0, or le centroide d'une emprise reelle n'est presque jamais au
+ * milieu de sa facade. Mesure sur les douze reperes bespoke, l'ecart va de 1,9 m
+ * (Palais Mimard) a 19,1 m (Nouvelles Galeries) ; sur l'Hotel de Ville il valait
+ * 2,4 m, assez pour que les deux passages voutes des ailes ne soient plus a la
+ * meme distance des bords, sur un edifice neoclassique dont toute la composition
+ * est axiale. Avec cette origine, minx vaut exactement -w/2 et maxx +w/2 : ecrire
+ * x = 0 dans un kit, c'est ecrire "sur l'axe".
  */
 export function frameOf(
   ring: { x: number; y: number }[],
@@ -71,9 +81,21 @@ export function frameOf(
   }
   area = Math.abs(area / 2);
 
+  // Recentrage sur la bbox : on deplace l'ancre du centroide vers le milieu de
+  // l'etendue, en repassant l'offset local en coordonnees monde.
+  const ox = (minx + maxx) / 2;
+  const oy = (miny + maxy) / 2;
+  const cr = Math.cos(rot);
+  const sr = Math.sin(rot);
+  const w = maxx - minx;
+  const d = maxy - miny;
+
   return {
-    x: cx, y: cy, rot,
-    w: maxx - minx, d: maxy - miny,
-    area, height, minx, maxx, miny, maxy,
+    x: cx + ox * cr - oy * sr,
+    y: cy + ox * sr + oy * cr,
+    rot,
+    w, d, area, height,
+    minx: -w / 2, maxx: w / 2,
+    miny: -d / 2, maxy: d / 2,
   };
 }
