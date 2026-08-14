@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sainté Speed — références façades</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --fond: #0e1526;
+        --texte: #cdd6e4;
+        --accent: #ffca7a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--fond);
+        color: var(--texte);
+        font-family: system-ui, sans-serif;
+        padding: 2rem clamp(1rem, 4vw, 4rem);
+      }
+      h1 { margin: 0 0 0.3rem; font-size: 1.5rem; }
+      h1 b { color: var(--accent); }
+      .intro { max-width: 62rem; line-height: 1.5; opacity: 0.85; }
+      .intro code { background: #1a2338; padding: 0.1em 0.4em; border-radius: 4px; }
+      section { margin-top: 2.5rem; border-top: 1px solid #223050; padding-top: 1.2rem; }
+      section > h2 { margin: 0 0 0.2rem; font-size: 1.15rem; text-transform: capitalize; }
+      section > p.role { margin: 0 0 1rem; opacity: 0.7; font-size: 0.9rem; max-width: 62rem; }
+      .face { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-start; }
+      .genere, .reelles { flex: 1 1 26rem; min-width: 0; }
+      .genere h3, .reelles h3 {
+        font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em;
+        opacity: 0.6; margin: 0 0 0.6rem;
+      }
+      .genere canvas { display: block; max-width: 100%; border-radius: 6px; margin-bottom: 0.8rem; }
+      .genere .legende { font-size: 0.8rem; opacity: 0.6; margin-bottom: 0.8rem; }
+      .nuancier { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.8rem; }
+      .nuancier span { width: 2.2rem; height: 1.2rem; border-radius: 3px; display: inline-block; border: 1px solid #0006; }
+      .photos { display: flex; flex-wrap: wrap; gap: 0.8rem; }
+      .photos figure { margin: 0; flex: 1 1 18rem; max-width: 26rem; }
+      .photos img { width: 100%; border-radius: 6px; display: block; background: #000; }
+      .photos figcaption { font-size: 0.72rem; opacity: 0.6; margin-top: 0.3rem; line-height: 1.35; }
+      .photos figcaption a { color: inherit; }
+      .vide { opacity: 0.6; font-style: italic; }
+      .erreur-proto {
+        max-width: 46rem; line-height: 1.6; background: #1a2338;
+        border: 1px solid #34456e; border-radius: 8px; padding: 1rem 1.4rem;
+      }
+    </style>
+    <script>
+      // La planche charge du TypeScript transpile par Vite : en file://, le
+      // navigateur bloque le module script par CORS. Autant le dire clairement
+      // au lieu de laisser l'erreur dans la console.
+      if (location.protocol === "file:") {
+        document.addEventListener("DOMContentLoaded", () => {
+          document.getElementById("planche").innerHTML =
+            '<p class="erreur-proto">Cette page doit être servie par le serveur de développement : ' +
+            "lancez <code>npm run dev</code> puis ouvrez " +
+            "<code>http://localhost:5173/reference/index.html</code> " +
+            "(ou le port affiché par Vite).</p>";
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <h1>Sain<b>té</b> Speed — planche de références façades</h1>
+    <p class="intro">
+      Chaque archetype de façade du jeu, peint par le même code que la scène
+      (<code>src/lib/facades.ts</code>), face aux photos du vrai Saint-Étienne
+      qui ont servi à le caler. Les photos viennent de Wikimedia Commons
+      (licence et auteur sous chaque image, détail dans
+      <code>reference/photos/manifest.json</code>). Pour les rafraîchir :
+      <code>npm run fetch-reference</code>.
+    </p>
+    <main id="planche"></main>
+    <script type="module" src="./board.ts"></script>
+  </body>
+</html>

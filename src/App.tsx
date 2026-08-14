@@ -12,6 +12,7 @@ import { Roads } from "./scene/Roads";
 import { Car } from "./scene/Car";
 import { Checkpoints } from "./scene/Checkpoints";
 import { Buildings } from "./scene/Buildings";
+import { Landmarks } from "./scene/Landmarks";
 import { Ground } from "./scene/Ground";
 import { Trees } from "./scene/Trees";
 import { Tram } from "./scene/Tram";
@@ -151,6 +152,9 @@ export default function App() {
             {features && <Fences fences={features.fences} />}
             {centre && <Lamps ways={ways} proj={graph!.proj} centre={centre} graph={graph!} />}
             {showBuildings && buildings.length > 0 && <Buildings buildings={buildings} />}
+            {showBuildings && buildings.length > 0 && (
+              <Landmarks buildings={buildings} proj={graph!.proj} />
+            )}
             <Perf />
             <Checkpoints />
             <Car graph={graph!} />

@@ -3,3 +3,10 @@ dist
 tsconfig.tsbuildinfo
 
 .claude
+.DS_Store
+
+# Photos de reference : 3,9 Mo de fichiers Wikimedia Commons, outil de dev
+# uniquement (planche de comparaison des facades, jamais dans le build).
+# `npm run fetch-reference` les retelecharge, la selection etant figee dans
+# scripts/fetch-reference.mjs. On versionne l'outil, pas les images.
+reference/photos

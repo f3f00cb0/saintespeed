@@ -2,32 +2,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { FLOOR, insetRing, type FlatBuilding } from "../lib/buildings";
-import {
-  ARCHETYPE_COUNT,
-  Archetype,
-  STYLES,
-  hash01,
-  type ArchetypeStyle,
-} from "../lib/archetypes";
+import { Archetype, STYLES, hash01, type ArchetypeStyle } from "../lib/archetypes";
 import { car } from "../lib/car";
 import { Lod, TILE, planStreaming, tileKey, type TileRef } from "../lib/streaming";
+import { TILE_V, SHOP_TILE_U, FLOORS_PER_TILE } from "../lib/facades";
+import { getFacadeTextures, getShopTexture, type Painted } from "../lib/facadeTextures";
+import { Family } from "../lib/families";
+import { kitFor } from "../lib/familyKits";
+import { newEmit, type Buf as KitBuf, type Emit } from "../lib/landmarkGeometry";
+import { NOTABLE } from "../lib/notable";
 
-// Facades procedurales : aucune texture n'est embarquee, tout est peint dans un
-// canvas au demarrage. Une texture par archetype, la couleur du mur venant du
-// vertex color, la trame de fenetres de la texture.
-//
-// Les UV sont en metres et pas normalisees, ce qui aligne les rangees de
-// fenetres sur les etages quelle que soit la taille du batiment. La tuile
-// horizontale vaut "bays" travees, elle change donc d'un archetype a l'autre :
-// c'est ce qui donne au grand ensemble sa trame serree et a l'atelier ses
-// grandes ouvertures, gratuitement, sans texture plus lourde.
-//
-// Le rez-de-chaussee n'est pas une rangee de la tuile. Il l'a ete, et le
-// RepeatWrapping vertical faisait donc reapparaitre la vitrine au sixieme etage
-// sur les 189 emprises de plus de 18,6 m. La tuile ne contient plus que des
-// etages courants, tous interchangeables, et le socle commercant est une
-// geometrie separee posee sur les seuls batiments que la donnee OSM designe
-// comme commercants.
+// La peinture des facades vit dans lib/facades.ts : des canvas purs, sans
+// three.js, pour que la planche de comparaison (reference/) puisse afficher
+// exactement les memes tuiles que le jeu, a cote des photos du vrai
+// Saint-Etienne. Ici on se contente de les emballer en textures.
 //
 // --- streaming -------------------------------------------------------------
 //
@@ -36,14 +24,6 @@ import { Lod, TILE, planStreaming, tileKey, type TileRef } from "../lib/streamin
 // residents en permanence : le frustum culling n'y change rien, il epargne le
 // dessin, pas la memoire. Les tuiles sont donc construites a la demande autour
 // du joueur et liberees derriere lui. Voir lib/streaming.ts pour la politique.
-
-const FLOORS_PER_TILE = 6;
-const TILE_V = FLOOR * FLOORS_PER_TILE; // 18,6 m de haut par tuile de texture
-const CELL_PX = 96; // un etage et une travee font 3,1 m, la texture reste carree
-
-// Coin de mur nu reserve en haut a gauche de chaque texture. L'acrotere et les
-// bandeaux de toit y pointent pour ne pas heriter de fenetres.
-const PATCH_PX = 12;
 
 const PARAPET = 0.75; // bandeau vertical des toits plats
 const ROOF_RISE = 1.9; // hauteur du bandeau incline des toits en pente
@@ -57,159 +37,6 @@ const BUILD_BUDGET = 3;
 // Le streaming tourne a 6 Hz, pas a chaque frame : la position du joueur ne
 // change pas assez en 16 ms pour justifier de replanifier 1 467 tuiles.
 const STREAM_HZ = 6;
-
-function seeded(seed: number): number {
-  let x = (seed | 0) ^ 0x85ebca6b;
-  x ^= x << 13;
-  x ^= x >>> 17;
-  x ^= x << 5;
-  return ((x >>> 0) % 100000) / 100000;
-}
-
-type Painted = {
-  map: THREE.CanvasTexture;
-  emissiveMap: THREE.CanvasTexture;
-  /** Largeur d'une tuile de texture en metres, propre a l'archetype. */
-  tileU: number;
-  /** Point UV du carre de mur nu. */
-  patch: [number, number];
-};
-
-// --- une texture d'archetype ------------------------------------------------
-function paintArchetype(style: ArchetypeStyle): Painted {
-  const w = style.bays * CELL_PX;
-  const h = FLOORS_PER_TILE * CELL_PX;
-
-  const albedo = document.createElement("canvas");
-  const glow = document.createElement("canvas");
-  albedo.width = glow.width = w;
-  albedo.height = glow.height = h;
-  const a = albedo.getContext("2d")!;
-  const g = glow.getContext("2d")!;
-
-  a.fillStyle = "#ffffff"; // blanc : la couleur vient du vertex color
-  a.fillRect(0, 0, w, h);
-  g.fillStyle = "#000000";
-  g.fillRect(0, 0, w, h);
-
-  const [winW, winH] = style.win;
-
-  for (let iy = 0; iy < FLOORS_PER_TILE; iy++) {
-    for (let ix = 0; ix < style.bays; ix++) {
-      const ox = ix * CELL_PX;
-      const oy = iy * CELL_PX;
-      const seed = ix * 73 + iy * 149 + style.bays * 1013;
-
-      a.fillStyle = `rgba(0,0,0,${(0.02 + seeded(seed * 3) * 0.05).toFixed(3)})`;
-      a.fillRect(ox, oy, CELL_PX, CELL_PX);
-
-      // nez de dalle en bas de chaque etage, donne la lecture horizontale
-      a.fillStyle = "rgba(0,0,0,0.20)";
-      a.fillRect(ox, oy + CELL_PX * 0.94, CELL_PX, CELL_PX * 0.06);
-
-      const lit = seeded(seed) < style.litRatio;
-      const ww = CELL_PX * winW;
-      const wh = CELL_PX * winH;
-      const wx = ox + (CELL_PX - ww) / 2;
-      const wy = oy + CELL_PX * 0.22;
-
-      a.fillStyle = style.frame;
-      a.globalAlpha = 0.55;
-      a.fillRect(wx - CELL_PX * 0.03, wy - CELL_PX * 0.04, ww + CELL_PX * 0.06, wh + CELL_PX * 0.08);
-      a.globalAlpha = 1;
-
-      const [glass, halo] =
-        style.warm[Math.floor(seeded(seed * 5) * style.warm.length) % style.warm.length];
-      a.fillStyle = lit ? glass : style.dark;
-      a.fillRect(wx, wy, ww, wh);
-
-      a.fillStyle = lit ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0.45)";
-      a.fillRect(wx + ww / 2 - CELL_PX * 0.012, wy, CELL_PX * 0.024, wh);
-      a.fillStyle = "rgba(255,255,255,0.10)";
-      a.fillRect(wx - CELL_PX * 0.02, wy + wh, ww + CELL_PX * 0.04, CELL_PX * 0.025);
-
-      if (lit) {
-        g.fillStyle = halo;
-        g.globalAlpha = 0.4 + seeded(seed * 17) * 0.45;
-        g.fillRect(wx, wy, ww, wh);
-        g.globalAlpha = 1;
-      }
-    }
-  }
-
-  a.fillStyle = "rgba(0,0,0,0.10)";
-  a.fillRect(0, 0, PATCH_PX, PATCH_PX);
-  g.fillStyle = "#000000";
-  g.fillRect(0, 0, PATCH_PX, PATCH_PX);
-
-  const map = new THREE.CanvasTexture(albedo);
-  const emissiveMap = new THREE.CanvasTexture(glow);
-  for (const t of [map, emissiveMap]) {
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 4;
-    t.colorSpace = THREE.SRGBColorSpace;
-  }
-
-  return {
-    map,
-    emissiveMap,
-    tileU: style.bays * FLOOR,
-    patch: [PATCH_PX / 2 / w, 1 - PATCH_PX / 2 / h],
-  };
-}
-
-// --- socle commercant -------------------------------------------------------
-const SHOP_BAYS = 3;
-const SHOP_TILE_U = SHOP_BAYS * FLOOR;
-
-function paintShopFront() {
-  const w = SHOP_BAYS * CELL_PX;
-  const h = CELL_PX;
-  const albedo = document.createElement("canvas");
-  const glow = document.createElement("canvas");
-  albedo.width = glow.width = w;
-  albedo.height = glow.height = h;
-  const a = albedo.getContext("2d")!;
-  const g = glow.getContext("2d")!;
-
-  a.fillStyle = "#2a2620";
-  a.fillRect(0, 0, w, h);
-  g.fillStyle = "#000000";
-  g.fillRect(0, 0, w, h);
-
-  for (let ix = 0; ix < SHOP_BAYS; ix++) {
-    const ox = ix * CELL_PX;
-    const seed = ix * 977 + 31;
-    const lit = seeded(seed) < 0.72;
-    const wx = ox + CELL_PX * 0.1;
-    const wy = h * 0.28;
-    const ww = CELL_PX * 0.8;
-    const wh = h * 0.5;
-
-    a.fillStyle = lit ? "#ffca7a" : "#1b1913";
-    a.fillRect(wx, wy, ww, wh);
-    a.fillStyle = "rgba(0,0,0,0.35)";
-    a.fillRect(wx + ww / 2 - CELL_PX * 0.015, wy, CELL_PX * 0.03, wh);
-    a.fillStyle = "#211d18";
-    a.fillRect(ox, h * 0.06, CELL_PX, h * 0.16);
-
-    if (lit) {
-      g.fillStyle = "#ffca7a";
-      g.globalAlpha = 0.7 + seeded(seed * 7) * 0.3;
-      g.fillRect(wx, wy, ww, wh);
-      g.globalAlpha = 1;
-    }
-  }
-
-  const map = new THREE.CanvasTexture(albedo);
-  const emissiveMap = new THREE.CanvasTexture(glow);
-  for (const t of [map, emissiveMap]) {
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 4;
-    t.colorSpace = THREE.SRGBColorSpace;
-  }
-  return { map, emissiveMap };
-}
 
 // --- geometrie --------------------------------------------------------------
 
@@ -265,6 +92,15 @@ function emitDetailed(
   const shop = lod === Lod.Full && b.shopFront && h > FLOOR * 1.35;
   const base0 = shop ? FLOOR : 0;
 
+  // Decalage de tuile propre au batiment, en nombres entiers de travees et
+  // d'etages : chaque emprise tire sa propre trame de fenetres allumees de la
+  // meme texture. Sans ca, tous les batiments d'un archetype montraient la
+  // meme facade repetee tous les 18,6 m, le premier truc qui trahit le procedu-
+  // ral. L'offset entier garde les niveaux alignes et les fenetres entieres aux
+  // angles ; le RepeatWrapping fait le reste.
+  const du = Math.floor(hash01(b.id, 41) * style.bays) / style.bays;
+  const dv = Math.floor(hash01(b.id, 43) * FLOORS_PER_TILE) / FLOORS_PER_TILE;
+
   let run = 0;
   for (let i = 0; i < n; i++) {
     const p = ring[i];
@@ -292,10 +128,10 @@ function emitDetailed(
       S.uv.push(su0, 0, su1, 0, su1, 1, su0, 0, su1, 1, su0, 1);
     }
 
-    const u0 = run / tex.tileU;
-    const u1 = (run + len) / tex.tileU;
+    const u0 = run / tex.tileU + du;
+    const u1 = (run + len) / tex.tileU + du;
     run += len;
-    const v = (h - base0) / TILE_V;
+    const v = dv + (h - base0) / TILE_V;
 
     W.pos.push(px, base0, pz, qx, base0, qz, qx, h, qz, px, base0, pz, qx, h, qz, px, h, pz);
 
@@ -321,7 +157,7 @@ function emitDetailed(
       const f = ramp(hs[k], h);
       W.col.push(tint.r * f, tint.g * f, tint.b * f);
     }
-    W.uv.push(u0, 0, u1, 0, u1, v, u0, 0, u1, v, u0, v);
+    W.uv.push(u0, dv, u1, dv, u1, v, u0, dv, u1, v, u0, v);
   }
 
   // --- couronnement ---------------------------------------------------------
@@ -458,6 +294,52 @@ function toGeometry(b: Buf, withUv: boolean): THREE.BufferGeometry {
   return g;
 }
 
+// --- kits de famille --------------------------------------------------------
+//
+// Un clocher, une toiture en sheds ou une cage d'ascenseur ne sont pas des
+// reperes bespoke : ce sont des silhouettes de FAMILLE posees sur environ
+// 1 100 emprises (voir src/lib/families.ts). A ce nombre, il n'est pas question
+// de les construire une fois pour toutes comme les six monuments de
+// Landmarks.tsx : elles passent par les tuiles, donc par le streaming, et
+// suivent le meme niveau de detail que le reste.
+//
+// Les kits n'ecrivent que dans des tampons pleins (teinte par sommet, aucune
+// texture) et lumineux, ce qui les rend fusionnables tels quels dans les
+// tampons de la tuile : un draw call de plus par tuile pour les lumieres, zero
+// pour la masse.
+
+/** Ce que le kit doit savoir du batiment, au dela de son emprise. */
+function kitContext(b: FlatBuilding, far: boolean) {
+  const note = NOTABLE.get(b.id);
+  return { far, mh: note?.mh ?? false, religion: note?.religion, id: b.id };
+}
+
+/** Pose les kits de toutes les emprises a famille d'une tuile dans un tampon. */
+function emitFamilies(list: FlatBuilding[], far: boolean, e: Emit): boolean {
+  let any = false;
+  for (const b of list) {
+    if (b.family === Family.None || !b.frame || b.landmark?.replaceBase) continue;
+    const kit = kitFor(b.family);
+    if (!kit) continue;
+    kit(e, b.frame, b.frame, kitContext(b, far));
+    any = true;
+  }
+  return any;
+}
+
+/** Recopie un tampon de kit dans un tampon de tuile (position et couleur). */
+function appendPlain(dst: { pos: number[]; col: number[] }, src: KitBuf) {
+  for (let i = 0; i < src.pos.length; i++) dst.pos.push(src.pos[i]);
+  for (let i = 0; i < src.col.length; i++) dst.col.push(src.col[i]);
+}
+
+/** Idem, en gardant les normales du kit : la silhouette ne les recalcule pas. */
+function appendWithNormals(dst: Buf, src: KitBuf) {
+  for (let i = 0; i < src.pos.length; i++) dst.pos.push(src.pos[i]);
+  for (let i = 0; i < src.norm.length; i++) dst.norm.push(src.norm[i]);
+  for (let i = 0; i < src.col.length; i++) dst.col.push(src.col[i]);
+}
+
 export type TileGeometry = {
   lod: Lod;
   walls: { archetype: Archetype; geometry: THREE.BufferGeometry }[];
@@ -465,6 +347,8 @@ export type TileGeometry = {
   roofs: THREE.BufferGeometry | null;
   /** silhouette : tout l'archetype confondu dans un seul maillage */
   box: THREE.BufferGeometry | null;
+  /** beffrois, verrieres, horloges, feux de balisage : un seul maillage additif */
+  glow: THREE.BufferGeometry | null;
   triangles: number;
 };
 
@@ -473,19 +357,44 @@ function buildTile(list: FlatBuilding[], lod: Lod, painted: Painted[]): TileGeom
 
   if (lod === Lod.Silhouette) {
     const B = newBuf();
-    for (const b of list) emitSilhouette(b, STYLES[b.archetype], B);
+    for (const b of list) {
+      if (b.landmark?.replaceBase) continue; // rendu par Landmarks.tsx
+      emitSilhouette(b, STYLES[b.archetype], B);
+    }
+    // Au dela de 700 m on garde la masse des kits, pas leurs details : une
+    // fleche d'eglise ou une cheminee d'usine sur la ligne d'horizon est
+    // exactement ce qui fait reconnaitre la ville, et ca ne coute que quelques
+    // dizaines de triangles par emprise. Les lumieres, elles, sont abandonnees.
+    const far = newEmit();
+    if (emitFamilies(list, true, far)) {
+      appendWithNormals(B, far.roofs);
+      appendWithNormals(B, far.walls);
+    }
     const box = toGeometry(B, false);
-    return { lod, walls: [], shop: null, roofs: null, box, triangles: B.pos.length / 9 };
+    return { lod, walls: [], shop: null, roofs: null, box, glow: null, triangles: B.pos.length / 9 };
   }
 
   const walls = new Map<Archetype, Buf>();
   const shopBuf = newBuf();
   const roof = { pos: [] as number[], col: [] as number[] };
+  const glowBuf = { pos: [] as number[], col: [] as number[] };
 
   for (const b of list) {
+    if (b.landmark?.replaceBase) continue; // rendu par Landmarks.tsx
     let W = walls.get(b.archetype);
     if (!W) walls.set(b.archetype, (W = newBuf()));
     emitDetailed(b, lod, W, shopBuf, roof, painted[b.archetype], STYLES[b.archetype], scratch);
+  }
+
+  const near = newEmit();
+  if (emitFamilies(list, false, near)) {
+    // Les volumes pleins rejoignent les toits (memes normales recalculees,
+    // meme materiau), les elements lumineux leur propre tampon. Un kit qui
+    // ecrirait des murs textures atterrit ici sans sa texture : c'est voulu,
+    // une famille se pose en volumes pleins, pas en facades.
+    appendPlain(roof, near.roofs);
+    appendPlain(roof, near.walls);
+    appendPlain(glowBuf, near.glow);
   }
 
   const out: TileGeometry["walls"] = [];
@@ -509,7 +418,17 @@ function buildTile(list: FlatBuilding[], lod: Lod, painted: Painted[]): TileGeom
   const shop = shopBuf.pos.length ? toGeometry(shopBuf, true) : null;
   if (shop) triangles += shopBuf.pos.length / 9;
 
-  return { lod, walls: out, shop, roofs, box: null, triangles };
+  // Les lumieres des kits sont additives et non eclairees : ni normales ni UV.
+  let glow: THREE.BufferGeometry | null = null;
+  if (glowBuf.pos.length) {
+    glow = new THREE.BufferGeometry();
+    glow.setAttribute("position", new THREE.Float32BufferAttribute(glowBuf.pos, 3));
+    glow.setAttribute("color", new THREE.Float32BufferAttribute(glowBuf.col, 3));
+    glow.computeBoundingSphere();
+    triangles += glowBuf.pos.length / 9;
+  }
+
+  return { lod, walls: out, shop, roofs, box: null, glow, triangles };
 }
 
 function disposeTile(t: TileGeometry) {
@@ -517,17 +436,14 @@ function disposeTile(t: TileGeometry) {
   t.shop?.dispose();
   t.roofs?.dispose();
   t.box?.dispose();
+  t.glow?.dispose();
 }
 
 // --- composant --------------------------------------------------------------
 
 export function Buildings({ buildings }: { buildings: FlatBuilding[] }) {
-  const painted = useMemo(() => {
-    const p: Painted[] = [];
-    for (let i = 0; i < ARCHETYPE_COUNT; i++) p.push(paintArchetype(STYLES[i as Archetype]));
-    return p;
-  }, []);
-  const shopTex = useMemo(paintShopFront, []);
+  const painted = useMemo(() => getFacadeTextures(), []);
+  const shopTex = useMemo(() => getShopTexture(), []);
 
   // Index des tuiles : une seule passe sur les emprises, aucune geometrie.
   const index = useMemo(() => {
@@ -545,9 +461,15 @@ export function Buildings({ buildings }: { buildings: FlatBuilding[] }) {
       }
       list.push(b);
     }
+    const fam = [0, 0, 0, 0, 0];
+    for (const b of buildings) fam[b.family]++;
     console.log(
       `batiments: ${buildings.length} emprises indexees en ${refs.length} tuiles de ${TILE} m, ` +
         `${Math.round(performance.now() - t0)} ms (geometrie construite a la demande)`,
+    );
+    console.log(
+      `familles: ${fam[Family.Culte]} culte, ${fam[Family.Halle]} halle, ` +
+        `${fam[Family.Gare]} gare, ${fam[Family.Ensemble]} grand ensemble`,
     );
     return { map, refs };
   }, [buildings]);
@@ -624,7 +546,7 @@ export function Buildings({ buildings }: { buildings: FlatBuilding[] }) {
       let meshes = 0;
       for (const t of resident.current.values()) {
         tris += t.triangles;
-        meshes += t.walls.length + (t.shop ? 1 : 0) + (t.roofs ? 1 : 0) + (t.box ? 1 : 0);
+        meshes += t.walls.length + (t.shop ? 1 : 0) + (t.roofs ? 1 : 0) + (t.box ? 1 : 0) + (t.glow ? 1 : 0);
       }
       console.log(
         `streaming stabilise: ${resident.current.size} tuiles residentes ` +
@@ -673,6 +595,13 @@ export function Buildings({ buildings }: { buildings: FlatBuilding[] }) {
             <mesh geometry={t.box}>
               {/* silhouette : ni texture ni emissif, un seul draw call par tuile */}
               <meshLambertMaterial vertexColors side={THREE.DoubleSide} />
+            </mesh>
+          )}
+          {t.glow && (
+            <mesh geometry={t.glow}>
+              {/* beffrois et verrieres : couleurs HDR, hors tone mapping, pour
+                  passer le seuil du bloom comme les kits bespoke */}
+              <meshBasicMaterial vertexColors toneMapped={false} side={THREE.DoubleSide} />
             </mesh>
           )}
         </group>

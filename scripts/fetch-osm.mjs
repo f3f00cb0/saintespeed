@@ -55,10 +55,14 @@ const LINKS = "motorway_link|trunk_link|primary_link|secondary_link|tertiary_lin
 
 const bb = (b) => `(${b[0]},${b[1]},${b[2]},${b[3]})`;
 
+// Les zones pietonnes viennent avec les routes, pas pour etre rendues ici mais
+// pour disqualifier les voies qui les traversent : voir roadsToGeoJSON.
 const ROADS_QUERY =
-  `[out:json][timeout:180];` +
+  `[out:json][timeout:240];(` +
   `way["highway"~"^(${HIGHWAYS}|${LINKS})$"]${bb(BBOX)};` +
-  `out geom;`;
+  `way["highway"="pedestrian"]${bb(BBOX)};` +
+  `way["highway"="footway"]["area"="yes"]${bb(BBOX)};` +
+  `);out geom;`;
 
 // Les commerces qui comptent pour un rez-de-chaussee eclaire. La liste est
 // volontairement fermee : "amenity" tout court ramene les bancs, les corbeilles
@@ -193,11 +197,91 @@ async function fetchBoxAdaptive(box, label, depth = 0) {
 }
 
 // --- routes : GeoJSON compact ---------------------------------------------
+//
+// Une partie du reseau OSM porte "highway=residential" alors qu'on n'y roule
+// pas : les places pietonnes du centre sont modelisees comme des rues, parce
+// que les livraisons et les riverains y passent. Place du Peuple, place Jean
+// Jaures, place de l'Hotel de Ville, rue de la Republique en sont. Les laisser
+// dans le graphe laisse la voiture traverser la zone pietonne.
+//
+// ATTENTION, piege mesure : NE PAS disqualifier une voie parce qu'elle longe le
+// tram. Le tram stephanois roule en site partage sur une bonne partie du
+// reseau, et le critere "proche d'un rail" frappait 63 ways dont le boulevard
+// Jules Janin, la rue Gambetta et la rue Charles de Gaulle, tous parfaitement
+// roulables. Seule l'appartenance a une zone pietonne compte.
+const NON_DRIVABLE_ACCESS = /^(no|private)$/;
+
 function roadsToGeoJSON(json) {
-  const features = [];
+  const drivable = [];
+  const pedRings = [];
+  const pedLines = [];
+
   for (const el of json.elements) {
     if (el.type !== "way" || !el.geometry || el.geometry.length < 2) continue;
     const t = el.tags || {};
+    const g = el.geometry.map((p) => [r6(p.lon), r6(p.lat)]);
+
+    if (t.highway === "pedestrian" || (t.highway === "footway" && t.area === "yes")) {
+      const first = g[0];
+      const last = g[g.length - 1];
+      if (g.length > 3 && first[0] === last[0] && first[1] === last[1]) pedRings.push(g.slice(0, -1));
+      else pedLines.push(g);
+      continue;
+    }
+    drivable.push({ el, t, g });
+  }
+
+  const proj = makeProj((BBOX[0] + BBOX[2]) / 2);
+  const polys = pedRings.map((r) => {
+    const ring = r.map(([lon, lat]) => proj(lon, lat));
+    return { ring, ...bboxOf(ring) };
+  });
+  const lines = pedLines.map((l) => l.map(([lon, lat]) => proj(lon, lat)));
+
+  // Demi-largeur d'une rue pietonne, la meme que celle utilisee au rendu.
+  const PED_HALF = 4.5;
+
+  function pedestrianFraction(g) {
+    const pts = g.map(([lon, lat]) => proj(lon, lat));
+    let hit = 0;
+    let total = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 8));
+      for (let s = 0; s < steps; s++) {
+        const x = a.x + ((b.x - a.x) * s) / steps;
+        const y = a.y + ((b.y - a.y) * s) / steps;
+        total++;
+        let inside = false;
+        for (const p of polys) {
+          if (x < p.minx || x > p.maxx || y < p.miny || y > p.maxy) continue;
+          if (pointInRing(x, y, p.ring)) { inside = true; break; }
+        }
+        if (!inside) {
+          for (const l of lines) {
+            for (let k = 0; k < l.length - 1 && !inside; k++)
+              if (ptSegDist(x, y, l[k].x, l[k].y, l[k + 1].x, l[k + 1].y) < PED_HALF) inside = true;
+            if (inside) break;
+          }
+        }
+        if (inside) hit++;
+      }
+    }
+    return total ? hit / total : 0;
+  }
+
+  const features = [];
+  const dropped = { pedestrian: 0, access: 0 };
+  for (const { el, t, g } of drivable) {
+    if (NON_DRIVABLE_ACCESS.test(t.access ?? "") || NON_DRIVABLE_ACCESS.test(t.motor_vehicle ?? "")) {
+      dropped.access++;
+      continue;
+    }
+    if (pedestrianFraction(g) > 0.5) {
+      dropped.pedestrian++;
+      continue;
+    }
     const props = { highway: t.highway };
     if (t.name) props.name = t.name;
     if (t.oneway) props.oneway = t.oneway;
@@ -206,14 +290,16 @@ function roadsToGeoJSON(json) {
       type: "Feature",
       id: el.id,
       properties: props,
-      geometry: { type: "LineString", coordinates: el.geometry.map((g) => [r6(g.lon), r6(g.lat)]) },
+      geometry: { type: "LineString", coordinates: g },
     });
   }
+
   return {
     type: "FeatureCollection",
     attribution: ATTRIBUTION,
     bbox: [BBOX[1], BBOX[0], BBOX[3], BBOX[2]],
     features,
+    dropped,
   };
 }
 
@@ -780,6 +866,9 @@ if (doRoads) {
   const pts = gj.features.reduce((a, f) => a + f.geometry.coordinates.length, 0);
   console.log(
     `  ecrit sainte.geojson : ${gj.features.length} ways, ${pts} points, ${(body.length / 1e6).toFixed(2)} Mo`,
+  );
+  console.log(
+    `  voies ecartees : ${gj.dropped.pedestrian} en zone pietonne, ${gj.dropped.access} interdites par tag`,
   );
 }
 

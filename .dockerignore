@@ -18,3 +18,9 @@ tsconfig.tsbuildinfo
 DEPLOY.md
 README.md
 sainte-reseau.html
+
+# Outils de dev : la planche de comparaison des facades et l'export Overpass
+# curate. export.geojson ne sert qu'a regenerer src/lib/notable.ts, qui est
+# committe : rien de tout ca n'entre dans le bundle.
+reference
+export.geojson

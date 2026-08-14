@@ -18,7 +18,9 @@
 // hauteurs sont inchangees au chiffre pres.
 
 import type { Projector } from "./project";
-import { archetypeFor, hasShopFront, isUnlit, LANDMARKS, type Archetype, type Landmark } from "./archetypes";
+import { archetypeFor, hasShopFront, isUnlit, LANDMARKS, Archetype, type Landmark } from "./archetypes";
+import { Family, culteHeight, familyOf } from "./families";
+import { frameOf, type Frame } from "./frame";
 
 export type Building = {
   id: number;
@@ -53,6 +55,10 @@ export type FlatBuilding = {
   unlit: boolean;
   /** Reglage bespoke si le batiment est un repere pose a la main. */
   landmark?: Landmark;
+  /** Famille de kit posee sur l'emprise (clocher, sheds, marquise, edicules). */
+  family: Family;
+  /** Repere local de l'emprise, calcule seulement si une famille s'y pose. */
+  frame?: Frame;
 };
 
 export const FLOOR = 3.1; // hauteur d'etage retenue
@@ -354,8 +360,11 @@ export function prepareBuildings(raw: Building[], proj: Projector): FlatBuilding
     cy /= ring.length;
 
     const dist = Math.hypot(cx - centre.x, cy - centre.y);
-    const height =
-      b.height ?? (b.levels ?? inferLevels(b.id, area, dist)) * FLOOR;
+    const landmark = LANDMARKS.get(b.id);
+    // La hauteur mesuree d'un monument prime sur l'inference : la table
+    // inferLevels est calee sur du logement et ecraserait une cathedrale.
+    let height =
+      landmark?.height ?? b.height ?? (b.levels ?? inferLevels(b.id, area, dist)) * FLOOR;
 
     // Les niveaux rendus servent a la cascade d'archetypes. Un batiment tague
     // "height" sans "levels" doit quand meme peser dans la decision, on le
@@ -373,15 +382,41 @@ export function prepareBuildings(raw: Building[], proj: Projector): FlatBuilding
       shop: b.shop,
     };
 
-    const landmark = LANDMARKS.get(b.id);
     const archetype = landmark ? landmark.archetype : archetypeFor(input);
 
+    // Famille de kit. Un repere pose a la main garde son traitement bespoke :
+    // la cathedrale a deja sa lanterne et sa rosace dans landmarks.ts, lui
+    // ajouter le clocher generique de la famille culte la defigurerait.
+    let frame: Frame | undefined;
+    const lazyFrame = () => (frame ??= frameOf(ring, 0));
+    const family = landmark
+      ? Family.None
+      : familyOf(
+          { id: b.id, kind: b.kind, area, height, zone: b.zone, isBarre: archetype === Archetype.Barre },
+          lazyFrame,
+        );
+
+    // Une nef n'est pas un immeuble : sans cette correction, les 56 lieux de
+    // culte sortaient a la hauteur que la table inferLevels donne a du logement
+    // de meme emprise, soit 9 m pour une eglise de 1 500 m2. Un "height" tague
+    // en metres reste prioritaire, il est mesure.
+    if (family === Family.Culte && landmark?.height === undefined && b.height === undefined) {
+      height = culteHeight(area);
+    }
+    if (family !== Family.None) lazyFrame().height = height;
+
     // roof:shape est tague sur 206 batiments seulement, mais quand il est la il
-    // prime sur la silhouette deduite de l'archetype.
+    // prime sur la silhouette deduite de l'archetype. Les familles qui posent
+    // leur propre couverture (nef a deux pentes, sheds) coupent la coiffe
+    // generique, sinon deux toits se superposent.
     const rs = b.roofShape;
-    const sloped = rs
-      ? !/^(flat|skillion)$/.test(rs)
-      : archetype === 0 /* Pierre */ || archetype === 4 /* Faubourg */;
+    const covered = family === Family.Culte || family === Family.Halle;
+    const sloped =
+      covered
+        ? false
+        : rs
+          ? !/^(flat|skillion)$/.test(rs)
+          : archetype === Archetype.Pierre || archetype === Archetype.Faubourg;
 
     out.push({
       id: b.id,
@@ -394,8 +429,13 @@ export function prepareBuildings(raw: Building[], proj: Projector): FlatBuilding
       shopFront: hasShopFront(input),
       colour: b.colour,
       sloped,
-      unlit: isUnlit(b.kind, landmark),
+      // Un lieu de culte tague building=yes (mosquees, temples) n'est pas vu
+      // par isUnlit, qui ne connait que le tag de batiment. La famille, elle,
+      // le sait.
+      unlit: isUnlit(b.kind, landmark) || family === Family.Culte,
       landmark,
+      family,
+      frame,
     });
   }
 

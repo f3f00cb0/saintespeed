@@ -21,6 +21,9 @@
 // 3. "landuse=residential" couvre 89 % des batiments. C'est la ville entiere,
 //    donc zero pouvoir discriminant : la branche residentielle de la zone est
 //    volontairement absente de la cascade.
+// 4. Les palettes de mur et de vitres sont calees sur des photos du terrain
+//    (reference/NOTES.md, calage du 2026-08-07) : pierre beige-gris et non
+//    creme, beton froid et non gris chaud, vitres eteintes bleu-gris partout.
 //
 // Une entorse assumee, chiffree, sur l'archetype BARRE. La spec le decrit a
 // 8-16 niveaux, mais seuls 95 batiments portent "building:levels >= 8" et ils
@@ -82,13 +85,14 @@ export type ArchetypeStyle = {
 // pour que les fenetres chaudes ressortent.
 export const STYLES: Record<Archetype, ArchetypeStyle> = {
   // Le centre autour de l'Hotel de Ville, place Dorian, rue de la Republique.
-  // Pierre de taille creme, rythme de fenetres regulier, toit zinc sombre.
+  // Pierre de taille beige-gris, rythme de fenetres regulier, toit zinc sombre.
   [Archetype.Pierre]: {
-    // Creme plus froid. Avec l'ancienne valeur (0xd8cdb4), pierre et faubourg
-    // convergeaient sous la lumiere de nuit au lieu de diverger : les deux
-    // teintes se rejoignaient dans le meme beige une fois le fog applique.
-    wall: [0xddd6c2, 0xcbc5b2, 0xe8e1cc],
-    roof: 0x3a3d42, // zinc
+    // La pierre stephanoise mesuree sur photos est un beige-gris neutre, pas un
+    // creme : clusters dominants #918f8c / #73706f sur l'Hotel de Ville et les
+    // Nouvelles Galeries (reference/NOTES.md). Le jaune en moins, elle reste
+    // distincte du faubourg, maintenant lui aussi rabattu vers le gris.
+    wall: [0xd6d3ca, 0xc2bfb6, 0xe0ddd4],
+    roof: 0x3a3d42, // zinc, mesure a #2e2e2d sur les photos
     sloped: true,
     litRatio: 0.35,
     warm: [
@@ -96,7 +100,7 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
       ["#ffdaa6", "#f5a63c"],
       ["#f7e3c0", "#e8c07a"],
     ],
-    dark: "#2b2d24",
+    dark: "#262b33", // vitrage eteint bleu-gris, reflexion mesuree #353a47
     bays: 6,
     win: [0.34, 0.46],
     frame: "#6b6455",
@@ -106,7 +110,10 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
   // Heritage minier et manufacturier. Brique rouge-brun, bati bas et large,
   // grandes ouvertures d'atelier, linteaux pierre. Tres sombre la nuit.
   [Archetype.Brique]: {
-    wall: [0x8f4a3a, 0x7d4234, 0x9c5646],
+    // La brique de la Manufacture mesuree sur photos est plus sombre et plus
+    // brune que vive : clusters #4c3529 et #684d33. On garde un rouge soutenu
+    // pour la lisibilite de nuit, mais la variante brune ancre la palette.
+    wall: [0x8a4636, 0x6e3a2c, 0x9a5242],
     roof: 0x2e2a28,
     sloped: false,
     litRatio: 0.12,
@@ -114,7 +121,7 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
       ["#ffd9a0", "#e8a04a"],
       ["#ffcf8f", "#d4913f"],
     ],
-    dark: "#231d1a",
+    dark: "#222630", // vitrage eteint bleu-gris, reflexion mesuree #3565ad
     bays: 4, // trame industrielle large
     win: [0.52, 0.5],
     frame: "#d8cdb4", // linteaux et bandeaux, rappel pierre
@@ -125,7 +132,10 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
   // fenetres dense et uniforme. La nuit, un mur de points lumineux, et c'est
   // assume : c'est la signature de ces quartiers.
   [Archetype.Barre]: {
-    wall: [0x9a9488, 0x8f897d, 0xa5a094],
+    // Le beton mesure sur les panoramas est un gris froid (#b4b4b5, #babcc2),
+    // pas le gris chaud d'avant : sous la lumiere bleue de nuit, le chaud
+    // convergeait vers le faubourg et les deux quartiers n'en faisaient qu'un.
+    wall: [0x9a9ca0, 0x8e9094, 0xa6a8ac],
     roof: 0x2b2c2e,
     sloped: false,
     litRatio: 0.5, // residentiel tres habite
@@ -134,7 +144,7 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
       ["#ffc98a", "#f59b3c"],
       ["#f7e3c0", "#e8c07a"],
     ],
-    dark: "#26282a",
+    dark: "#24272e",
     bays: 8, // trame serree
     win: [0.42, 0.44],
     frame: "#6a7a6a", // bandes balcon desaturees
@@ -162,8 +172,11 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
   // Le tissu ordinaire hors centre et hors barres : enduit beige melange,
   // souvent un commerce en rez.
   [Archetype.Faubourg]: {
-    // Ocre plus chaud et plus sombre, pour s'ecarter franchement de la pierre.
-    wall: [0xc4ac82, 0xb49d76, 0xd2ba91],
+    // Les enduits mesures (Montreynaud, lignes de trolley) sont neutres a
+    // peine chauds (#908676, #8e8e8e), loin de l'ocre sature d'avant. On garde
+    // une pointe de chaleur et on reste plus sombre que la pierre : c'est cet
+    // ecart la qui les separe maintenant, plus la saturation.
+    wall: [0xbcae92, 0xaa9d84, 0xc8bb9f],
     roof: 0x4a3f38, // tuile assombrie
     sloped: true,
     litRatio: 0.3,
@@ -171,7 +184,7 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
       ["#ffcf8f", "#ffb257"],
       ["#f7e3c0", "#e8c07a"],
     ],
-    dark: "#2b2d24",
+    dark: "#262b33", // vitrage eteint bleu-gris, comme la pierre
     bays: 6,
     win: [0.36, 0.44],
     frame: "#5d5546",
@@ -340,6 +353,23 @@ export type Landmark = {
    * d'un clocher ou d'un chevalement.
    */
   unlit?: boolean;
+  /**
+   * Hauteur totale mesuree (metres), prioritaire sur l'inference. Indispensable
+   * aux monuments : la table inferLevels est calee sur du logement, pas sur une
+   * cathedrale de 40 m. Sert aussi de base aux kits (voir src/lib/landmarks.ts).
+   */
+  height?: number;
+  /**
+   * Le kit decale l'extrusion generique : Buildings.tsx ne dessine pas ce
+   * batiment, src/scene/Landmarks.tsx le rend entierement (Zenith, chevalement).
+   */
+  replaceBase?: boolean;
+  /**
+   * Orientation imposee du repere local (radians, depuis l'est), quand l'axe
+   * principal ne suffit pas (batiment quasi carre dont la facade a un sens
+   * precis). L'axe x local suit la facade, -y pointe vers le parvis.
+   */
+  rot?: number;
   label: string;
 };
 
@@ -355,22 +385,24 @@ export const LANDMARKS = new Map<number, Landmark>([
   // multipolygone (rel 5201020) et que l'import ne prenait que les ways : il
   // n'existait tout simplement pas. Les contours issus de relations portent
   // l'id OSM en negatif, d'ou la clef.
-  [-5201020, { archetype: Archetype.Pierre, wall: 0xe2d8c1, label: "Hotel de Ville" }],
+  [-5201020, { archetype: Archetype.Pierre, wall: 0xe2d8c1, height: 16, rot: 0.414, label: "Hotel de Ville" }],
   // Cite du Design : long volume clair perfore, la signature moderne de la
   // ville. Elle etait hors de l'ancienne bbox batiments.
   [63303051, { archetype: Archetype.Moderne, wall: 0xd6dade, label: "La Platine" }],
-  // Zenith : grande coque claire isolee, repere de loin sur l'est.
-  [49047886, { archetype: Archetype.Moderne, wall: 0xcfd4d9, label: "Zenith" }],
+  // Zenith : grande coque claire isolee, repere de loin sur l'est. Le kit
+  // remplace l'extrusion : murs vitres + voute aluminium (Foster, >25 m).
+  [49047886, { archetype: Archetype.Moderne, wall: 0xcfd4d9, roof: 0xb4b8bc, height: 25, replaceBase: true, label: "Zenith" }],
   // Manufacture d'Armes : le bati manufacturier de reference, brique et pierre.
   [63261991, { archetype: Archetype.Brique, wall: 0x9c5646, label: "Ancienne Manufacture d'Armes" }],
-  // Cathedrale Saint-Charles : silhouette verticale sombre, pierre, non eclairee.
-  [63322493, { archetype: Archetype.Pierre, wall: 0xbfb69f, unlit: true, label: "Cathedrale Saint-Charles" }],
+  // Cathedrale Saint-Charles : croix latine 80 x 30 m, 40 m de haut, sans tour.
+  [63322493, { archetype: Archetype.Pierre, wall: 0xbfb69f, height: 40, unlit: true, label: "Cathedrale Saint-Charles" }],
   // Opera : grande masse claire du centre, eclairee proprement.
   [63305534, { archetype: Archetype.Pierre, wall: 0xe2d8c1, label: "Opera" }],
   // Musee d'Art et d'Industrie : pierre monumentale du centre.
   [63340891, { archetype: Archetype.Pierre, wall: 0xded3ba, label: "Musee d'Art et d'Industrie" }],
-  // Puits Couriot : le chevalement, memoire miniere, sombre et haut.
-  [63308936, { archetype: Archetype.Brique, wall: 0x6f4034, label: "Chevalement du Puits Couriot" }],
+  // Puits Couriot : le chevalement (35 m, metal), memoire miniere. Le kit
+  // remplace l'extrusion : treillis pyramidal + molettes + salle des machines.
+  [63308936, { archetype: Archetype.Brique, wall: 0x6f6f76, roof: 0x55555c, replaceBase: true, label: "Chevalement du Puits Couriot" }],
   // Centrale energie de Manufrance : brique manufacturiere.
   [63330900, { archetype: Archetype.Brique, wall: 0x8f4a3a, label: "Centrale Manufrance" }],
   // Gare de Saint-Etienne Carnot : l'ancre batie de la place Carnot. Les trois
@@ -378,7 +410,7 @@ export const LANDMARKS = new Map<number, Landmark>([
   // ids en dur. La troisieme n'existe que depuis la reparation des relations
   // multipolygones, ce qui confirme la crainte posee dans la spec : c'etait
   // bien la gare Carnot qui manquait, pas la cathedrale ni Chateaucreux.
-  [63272393, { archetype: Archetype.Pierre, wall: 0xd2c7ae, label: "Gare Carnot" }],
+  [63272393, { archetype: Archetype.Pierre, wall: 0xd2c7ae, height: 13, label: "Gare Carnot" }],
   [63275816, { archetype: Archetype.Pierre, wall: 0xd2c7ae, label: "Gare Carnot" }],
   [-1000824, { archetype: Archetype.Pierre, wall: 0xd2c7ae, label: "Gare Carnot" }],
 ]);

@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "fetch-osm": "node scripts/fetch-osm.mjs"
+    "fetch-osm": "node scripts/fetch-osm.mjs",
+    "build-notable": "node scripts/build-notable.mjs",
+    "fetch-reference": "node scripts/fetch-reference.mjs",
+    "palette-reference": "node scripts/palette-reference.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",
@@ -26,6 +29,7 @@
     "@types/react-dom": "^18.3.1",
     "@types/three": "^0.169.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "jpeg-js": "^0.4.4",
     "typescript": "^5.7.2",
     "vite": "^6.0.5"
   }

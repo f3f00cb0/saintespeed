@@ -422,6 +422,59 @@ des ancres des trois places : la **cathédrale Saint-Charles** (way 63322493) et
 la **gare de Châteaucreux** (way 63322681) sont de simples ways, présentes depuis
 le début.
 
+## Les familles de silhouettes
+
+Les six repères de `src/lib/landmarks.ts` sont bespoke, un kit par monument. Ça
+ne passe pas à l'échelle, et surtout le déficit était ailleurs. Un export
+Overpass curaté du patrimoine stéphanois (`export.geojson`, 642 features) le
+chiffre : **197 emprises notables, dont 87 de patrimoine ou de culte, et quatre
+seulement étaient traitées**. Les 55 lieux de culte de la ville sortaient en
+boîtes de pierre sombres, sans clocher ni flèche, alors que c'est exactement ce
+qui se lit de loin sur une ville de collines.
+
+Premier constat en ouvrant l'export : **il n'apporte aucune donnée
+géométrique**. Ses 54 `building:levels` et ses 8 `roof:shape` sont déjà dans
+`public/sainte-buildings.json`, au champ près. Ce qu'il apporte est un signal de
+**notabilité** : lieu de culte, monument historique, nom. `npm run build-notable`
+le fige en `src/lib/notable.ts` (197 entrées, 196 retrouvées dans le cache),
+versionné comme le reste des données dérivées pour ne pas dépendre d'Overpass au
+build.
+
+Ce signal décide d'une **famille de kit**, posée sur n'importe quelle emprise du
+type. Comptes relevés par le harnais headless sur les 55 049 emprises, pas
+estimés :
+
+| Famille | Emprises | Ce que le kit pose |
+| --- | --- | --- |
+| culte | 55 | nef à deux pentes, clocher, flèche octogonale, abside, beffroi éclairé, rosace ; dôme et minaret pour les mosquées |
+| halle | 286 | toiture en sheds, la couverture manufacturière stéphanoise, cheminée de brique sur les sites classés |
+| gare | 2 | marquise, verrière de hall, horloge sur les deux pignons |
+| grand ensemble | 1 533 | cage d'ascenseur, édicules techniques, antenne, feu de balisage rouge au-delà de 35 m |
+
+Les kits **s'ajoutent** à l'extrusion de l'emprise, qui reste la vérité du plan,
+au lieu de la remplacer : ils n'écrivent que dans les tampons pleins et lumineux,
+jamais dans les murs texturés. Une seule exception, assumée : la **hauteur des
+nefs**. La table `inferLevels` est calée sur du logement et donnait 9 m à une
+église de 1 500 m² ; une règle d'emprise bornée la remplace, ce qui donne des
+murs gouttereaux de 7 à 18 m (médiane 15,3).
+
+Deux détails qui ne sont pas des choix de style. Le **clocher va à l'ouest** :
+une église est orientée, chœur à l'est, et le signe de `cos(rot)` de l'axe
+principal suffit à savoir de quel côté poser la tour. Et la hauteur du clocher se
+dimensionne sur la racine de la surface, pas sur la hauteur de nef : celle-ci
+sature à 18 m dès 900 m², et toutes les grandes églises sortaient alors avec
+exactement le même clocher de 36 m. Avec un tirage de ±8 % seedé sur l'id, les
+flèches se répartissent de 17 à 51 m, médiane 37.
+
+À 1 876 emprises, pas question de construire ces kits une fois pour toutes comme
+les six monuments : ils passent par les **tuiles**, donc par le streaming, et
+suivent le niveau de détail. Au-delà de 700 m la masse est conservée (une flèche
+sur la ligne d'horizon est précisément ce qui fait reconnaître la ville) mais les
+lumières sont abandonnées, et les verrières de sheds basculent en volume plein
+pour ne pas laisser la toiture ajourée. Le coût mesuré est de **64 000 triangles
+sur la ville entière, 520 au pire dans une tuile de 240 m**, contre 2,00 M pour
+les emprises seules.
+
 ## Le décor
 
 Avant d'écrire une ligne de rendu, les couches ont été **comptées** sur la bbox
@@ -467,6 +520,7 @@ visiblement étroite et c'est juste.
 ```
 scripts/fetch-osm.mjs   Overpass -> public/sainte.geojson + sainte-buildings.json
                         + sainte-features.json
+scripts/build-notable.mjs  export.geojson -> src/lib/notable.ts (notabilité)
 src/lib/project.ts      lat/lon <-> mètres (équirectangulaire locale)
 src/lib/osm.ts          chargement, parsing, palette et largeurs par classe
 src/lib/graph.ts        graphe routier + index spatial + nearestEdge
@@ -477,6 +531,11 @@ src/lib/buildings.ts    emprises OSM, déduction des hauteurs, retrait de toit
 src/lib/archetypes.ts   cascade d'archétypes de façade et palettes
 src/lib/features.ts     décor OSM : sols triangulés, arbres, tram, mobilier
 src/lib/places.ts       caractère des espaces ouverts : minéral / jardin / parc
+src/lib/frame.ts        repère local d'une emprise (axe principal, bbox locale)
+src/lib/notable.ts      GÉNÉRÉ : patrimoine, culte et noms depuis export.geojson
+src/lib/families.ts     affectation d'une famille de silhouette à une emprise
+src/lib/familyKits.ts   géométrie des familles : clocher, sheds, marquise, édicules
+src/lib/landmarks.ts    kits bespoke des six monuments (prime sur les familles)
 src/lib/streaming.ts    politique de streaming : tuiles, anneaux, hystérésis
 src/scene/              rendu three.js (routes, sols, bâtiments, arbres, tram,
                         voiture, portiques, caméra)
