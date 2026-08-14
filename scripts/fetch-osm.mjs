@@ -4,6 +4,7 @@
 //   npm run fetch-osm -- roads   routes seules
 //   npm run fetch-osm -- buildings
 //   npm run fetch-osm -- features surfaces au sol, arbres, tram, mobilier
+//   npm run fetch-osm -- rail     voies ferrees, dont les viaducs
 // Donnees OpenStreetMap sous ODbL.
 
 import { writeFile, mkdir } from "node:fs/promises";
@@ -132,6 +133,44 @@ const r6 = (v) => Math.round(v * 1e6) / 1e6;
 
 // Overpass renvoie 406 si le User-Agent n'identifie pas le client.
 const UA = "saintespeed/0.1 (jeu de course sur reseau OSM; contact via github)";
+
+// Les voies ferrees etaient la grande absente du fetch. Elles ne servent pas a
+// rouler, mais l'une d'elles porte un objet urbain majeur : la gare Carnot est
+// AERIENNE, posee sur le viaduc de la ligne de Saint-Georges-d'Aurac. Sans la
+// geometrie de ce viaduc, on ne pouvait que deviner un tablier a la main, et il
+// s'arretait dans le vide contre un batiment.
+//
+// Mesure sur la seule emprise du centre : 97 troncons, dont 25 en pont pour
+// 1 683 m cumules. C'est peu de donnees pour un objet qui traverse la ville.
+//
+// On garde "bridge" et "layer" : c'est ce qui distingue le remblai du viaduc.
+const RAIL_QUERY =
+  `[out:json][timeout:180];(` +
+  `way["railway"~"^(rail|light_rail|narrow_gauge)$"]${bb(BBOX)};` +
+  `);out geom;`;
+
+/** Compacte les voies ferrees : polyligne + ce qui dit si elle est en l'air. */
+function railToCompact(json) {
+  const lines = [];
+  for (const el of json.elements ?? []) {
+    if (el.type !== "way" || !Array.isArray(el.geometry)) continue;
+    const g = el.geometry.filter((p) => p && Number.isFinite(p.lon));
+    if (g.length < 2) continue;
+    const t = el.tags ?? {};
+    const bridge = t.bridge && t.bridge !== "no";
+    const tunnel = t.tunnel && t.tunnel !== "no";
+    if (tunnel) continue; // rien a montrer d'un souterrain
+    lines.push({
+      i: el.id,
+      g: g.map((p) => [Number(p.lon.toFixed(6)), Number(p.lat.toFixed(6))]),
+      b: bridge ? 1 : 0,
+      l: t.layer ? Number(t.layer) : 0,
+      n: t.name || undefined,
+      s: t.service || undefined,
+    });
+  }
+  return { attribution: "(c) contributeurs OpenStreetMap, ODbL", lines };
+}
 
 async function hit(url, query) {
   const res = await fetch(url, {
@@ -854,6 +893,7 @@ const arg = process.argv[2];
 const doRoads = !arg || arg === "roads";
 const doBuildings = !arg || arg === "buildings";
 const doFeatures = !arg || arg === "features";
+const doRail = !arg || arg === "rail";
 
 await mkdir(PUBLIC, { recursive: true });
 
@@ -946,5 +986,33 @@ if (doFeatures) {
       `  espaces ouverts avec cloture : ${data.areas.filter((a) => a.fl).length} · ` +
       `avec arbres : ${data.areas.filter((a) => a.nt).length} · ` +
       `avec surface taguee : ${data.areas.filter((a) => a.s).length}`,
+  );
+}
+
+if (doRail) {
+  console.log("voies ferrees ->", BBOX.join(", "));
+  const json = await fetchWithRetry(RAIL_QUERY, "rail");
+  const data = railToCompact(json);
+  const body = JSON.stringify(data);
+  await writeFile(resolve(PUBLIC, "sainte-rail.json"), body);
+
+  const proj = makeProj((BBOX[0] + BBOX[2]) / 2);
+  const lengthOf = (l) => {
+    let m = 0;
+    for (let i = 1; i < l.g.length; i++) {
+      const a = proj(l.g[i - 1][0], l.g[i - 1][1]);
+      const b = proj(l.g[i][0], l.g[i][1]);
+      m += Math.hypot(b.x - a.x, b.y - a.y);
+    }
+    return m;
+  };
+  const bridges = data.lines.filter((l) => l.b || l.l > 0);
+  const total = data.lines.reduce((a, l) => a + lengthOf(l), 0);
+  const aerien = bridges.reduce((a, l) => a + lengthOf(l), 0);
+  console.log(
+    `  ecrit sainte-rail.json : ${data.lines.length} troncons, ` +
+      `${(body.length / 1e3).toFixed(0)} ko\n` +
+      `  ${Math.round(total)} m de voie, dont ${Math.round(aerien)} m EN L'AIR ` +
+      `(${bridges.length} troncons en pont ou en layer positif)`,
   );
 }

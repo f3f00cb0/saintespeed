@@ -6,6 +6,7 @@ import { buildGraph, type RoadGraph } from "./lib/graph";
 import { makeCheckpoints, spawnAt } from "./lib/race";
 import { loadBuildings, prepareBuildings, buildWallIndex } from "./lib/buildings";
 import { loadFeatures, prepareFeatures } from "./lib/features";
+import { loadRail, prepareRail, railLength } from "./lib/rail";
 import { useKeyboard } from "./lib/input";
 import { useStore } from "./state/store";
 import { Roads } from "./scene/Roads";
@@ -18,6 +19,7 @@ import { Trees } from "./scene/Trees";
 import { Tram } from "./scene/Tram";
 import { Fountains } from "./scene/Fountains";
 import { Fences } from "./scene/Fences";
+import { Viaduct } from "./scene/Viaduct";
 import { Perf } from "./scene/Perf";
 import { AutoQuality } from "./scene/Quality";
 import { Lamps } from "./scene/Lamps";
@@ -47,6 +49,7 @@ export default function App() {
   const buildings = useStore((s) => s.buildings);
   const walls = useStore((s) => s.walls);
   const features = useStore((s) => s.features);
+  const rail = useStore((s) => s.rail);
   const checkpoints = useStore((s) => s.checkpoints);
   // objet stable : sinon les lampadaires se reconstruiraient a chaque rendu
   const centre = useMemo(() => {
@@ -93,6 +96,18 @@ export default function App() {
               `${Math.round(performance.now() - t)} ms`,
           );
           useStore.getState().setFeatures(f);
+        });
+
+        // Les voies ferrees : 60 ko, elles arrivent tout de suite. Seuls les
+        // troncons aeriens sont gardes, ce sont eux qui portent la gare Carnot.
+        loadRail().then((lines) => {
+          if (dead) return;
+          const flatRail = prepareRail(lines, g.proj);
+          console.log(
+            `rail: ${lines.length} troncons charges, ${flatRail.length} aeriens, ` +
+              `${Math.round(railLength(flatRail))} m de viaduc`,
+          );
+          useStore.getState().setRail(flatRail);
         });
 
         // Les batiments arrivent apres, ils ne doivent pas retarder le depart.
@@ -158,6 +173,9 @@ export default function App() {
             {/* la ceinture d'un jardin est ce qui le separe d'un parc de loin */}
             {features && <Fences fences={features.fences} />}
             {centre && <Lamps ways={ways} proj={graph!.proj} centre={centre} graph={graph!} />}
+            {/* le viaduc avant les batiments : c'est un ouvrage, pas du relief,
+                et il doit exister meme si la couche batiments est coupee */}
+            {rail.length > 0 && <Viaduct rail={rail} buildings={buildings} />}
             {showBuildings && buildings.length > 0 && <Buildings buildings={buildings} />}
             {showBuildings && buildings.length > 0 && (
               <Landmarks buildings={buildings} proj={graph!.proj} />

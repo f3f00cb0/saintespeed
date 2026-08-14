@@ -423,7 +423,12 @@ export const LANDMARKS = new Map<number, Landmark>([
   // ajoutait a ete supprime pour la meme raison (voir src/lib/landmarks.ts).
   [63272393, { archetype: Archetype.Moderne, wall: 0xb2b4b6, roof: 0x3a3c3f, height: 13, label: "Gare Carnot" }],
   [63275816, { archetype: Archetype.Moderne, wall: 0xb2b4b6, roof: 0x3a3c3f, label: "Gare Carnot" }],
-  [-1000824, { archetype: Archetype.Moderne, wall: 0xb2b4b6, roof: 0x3a3c3f, label: "Gare Carnot" }],
+  // Celle-ci est SOUS le tablier : c'est la seule emprise de la ville que le
+  // viaduc traverse, mesure a l'appui (5 emprises survolees, une seule plus
+  // haute que le tablier). Sa hauteur de 15,5 m etait inferee, pas taguee, et
+  // l'inference est calee sur du logement : un hall de gare sous des quais
+  // aeriens s'arrete sous le tablier, a 8 m.
+  [-1000824, { archetype: Archetype.Moderne, wall: 0xb2b4b6, roof: 0x3a3c3f, height: 8, label: "Gare Carnot" }],
   // Les deux auvents de quai, cartographies en building=roof. Sans traitement
   // ils sortaient en murs pleins de 9,3 m de haut le long des quais, ce qui
   // ecrasait la gare au sol. replaceBase : c'est le kit qui les dessine, avec

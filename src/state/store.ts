@@ -3,6 +3,7 @@ import type { RoadGraph } from "../lib/graph";
 import type { Way } from "../lib/osm";
 import type { FlatBuilding, WallIndex } from "../lib/buildings";
 import type { FlatFeatures } from "../lib/features";
+import type { FlatRail } from "../lib/rail";
 
 export type Checkpoint = {
   id: number;
@@ -50,6 +51,8 @@ type Store = {
   walls: WallIndex | null;
   showBuildings: boolean;
   features: FlatFeatures | null;
+  /** Troncons ferroviaires aeriens : le viaduc que porte la gare Carnot. */
+  rail: FlatRail[];
 
   tele: Telemetry;
 
@@ -62,6 +65,7 @@ type Store = {
   setLoaded(graph: RoadGraph, ways: Way[], checkpoints: Checkpoint[], source: string): void;
   setBuildings(buildings: FlatBuilding[], walls: WallIndex): void;
   setFeatures(features: FlatFeatures): void;
+  setRail(rail: FlatRail[]): void;
   toggleBuildings(): void;
   setError(msg: string): void;
   setTele(t: Telemetry, lapTime: number): void;
@@ -81,6 +85,7 @@ export const useStore = create<Store>((set, get) => ({
   walls: null,
   showBuildings: true,
   features: null,
+  rail: [],
 
   tele: { fps: 0, speedKmh: 0, roadName: "", roadType: "", offroad: false, cpDist: 0, cpBearing: 0 },
 
@@ -96,6 +101,8 @@ export const useStore = create<Store>((set, get) => ({
   setBuildings: (buildings, walls) => set({ buildings, walls }),
 
   setFeatures: (features) => set({ features }),
+
+  setRail: (rail) => set({ rail }),
 
   toggleBuildings: () => set((s) => ({ showBuildings: !s.showBuildings })),
 

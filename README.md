@@ -667,6 +667,43 @@ dans le bâtiment voyageurs, ce qui est bien la manière dont une gare aérienne
 tient. Les quais réels font 150 m, OSM n'en cartographie que 63 : on ne couvre
 que ce qui est cartographié.
 
+### Le viaduc vient du tracé ferroviaire réel
+
+Le premier jet posait un tablier à la main sur un couloir mesuré dans le bâti. Il
+s'arrêtait donc dans le vide contre un bâtiment, et la question suivante est
+tombée : peut-on le faire continuer **sans ajouter de relief à la ville** ?
+
+Oui, parce qu'un viaduc n'est pas du relief mais un **ouvrage**, et parce que sa
+géométrie était dans OSM depuis le début. Le fetch ne tirait que les routes, les
+bâtiments et le décor : `npm run fetch-osm -- rail` ajoute les voies ferrées.
+
+| mesure | valeur |
+| --- | --- |
+| tronçons ferroviaires sur la ville | 244, soit 79 459 m |
+| dont **en l'air** (`bridge` ou `layer > 0`) | 43 tronçons, **2 175 m** |
+| voie aérienne à moins de 600 m de la gare Carnot | 1 418 m |
+| écart entre le tracé réel et le centre des quais | **1,8 m** |
+| azimut du tracé / des auvents cartographiés | 8,0° / 7,8° |
+
+Les deux sources se recoupent à 0,2° près, ce qui valide l'ensemble : le kit de
+la gare ne pose plus que ce qui lui est propre (élargissement du tablier, quais,
+abri orange), et le viaduc lui-même est construit sur le tracé réel par
+`src/scene/Viaduct.tsx`.
+
+Trois règles tiennent la crédibilité, toutes vérifiées par la mesure :
+
+- **Aucun pont ne s'arrête en l'air.** Un about qui n'est raccordé à aucun autre
+  tronçon aérien redescend en remblai sur 22 m. 82 abouts sont dans ce cas.
+- **Aucune pile dans un bâtiment.** 77 piles posées tous les 14 m, **9 évitées**
+  parce qu'elles tombaient dans une emprise.
+- **Rien ne traverse le tablier.** Le tracé survole 5 emprises ; une seule était
+  plus haute que le tablier, le hall de la gare Carnot, dont les 15,5 m étaient
+  **inférés et non tagués**. Un hall sous des quais aériens s'arrête sous le
+  tablier : 8 m.
+
+Le tout est construit une fois, hors streaming, pour quelques milliers de
+triangles : un ouvrage qui apparaîtrait par tuiles se verrait de loin.
+
 ## Le décor
 
 Avant d'écrire une ligne de rendu, les couches ont été **comptées** sur la bbox
@@ -714,6 +751,7 @@ scripts/fetch-osm.mjs   Overpass -> public/sainte.geojson + sainte-buildings.jso
                         + sainte-features.json
 scripts/build-notable.mjs  export.geojson -> src/lib/notable.ts (notabilité)
 scripts/elevation.mjs   élévation d'un repère en JPEG, sans GPU (+ .entry.ts)
+src/lib/rail.ts         voies ferrées, profil en long du viaduc et rampes
 src/lib/project.ts      lat/lon <-> mètres (équirectangulaire locale)
 src/lib/osm.ts          chargement, parsing, palette et largeurs par classe
 src/lib/graph.ts        graphe routier + index spatial + nearestEdge

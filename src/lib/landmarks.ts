@@ -75,6 +75,7 @@ import {
   addArchGlow, addStairs,
 } from "./landmarkGeometry";
 import type { Painted } from "./facadeTextures";
+import { DECK_HEIGHT } from "./rail";
 
 /**
  * Dimensions de l'emprise dans le repere local du repere : meme structure que
@@ -312,15 +313,19 @@ const cathedrale: KitBuilder = (e, a, _tex, tint, roofTint, dims) => {
 // l'impression de gare ecrasee au sol. Le kit les remplace (replaceBase) par la
 // vraie section : piles, tablier, quai eclaire, encadrement orange vitre.
 //
-// Deux valeurs ne sont PAS sourcees et sont assumees comme telles. La hauteur du
-// tablier d'abord : aucune source ne donne le tirant d'air du viaduc, 9,5 m est
-// la valeur courante d'un viaduc ferroviaire urbain et elle place le quai juste
-// au-dessus des toitures basses du quartier. La longueur du tablier ensuite : on
-// le fait courir de 72 m a l'ouest a 32 m a l'est du centre des quais, parce que
-// c'est le couloir libre mesure dans le bati (le premier obstacle est a 75 m a
-// l'ouest, et a l'est le tablier s'encastre dans le batiment voyageurs, ce qui
-// est bien la maniere dont une gare aerienne tient). Les quais reels font 150 m,
-// OSM n'en cartographie que 63 : on ne couvre que ce qui est cartographie.
+// Le VIADUC n'est plus invente ici. Il etait pose a la main sur un couloir
+// mesure dans le bati, et il s'arretait donc dans le vide contre un batiment. Il
+// vient maintenant du trace ferroviaire reel (npm run fetch-osm -- rail, rendu
+// par src/scene/Viaduct.tsx) : 2 175 m de voie aerienne sur la ville, dont
+// 1 418 m a moins de 600 m d'ici. Le trace passe a 1,8 m du centre des quais
+// avec un azimut de 8,0 degres, contre 7,8 mesures sur les auvents : les deux
+// sources se recoupent. Le kit ne pose plus que ce qui est propre a la gare,
+// l'elargissement du tablier, les quais et l'abri.
+//
+// Reste une valeur non sourcee, assumee : la hauteur du tablier (9,5 m, partagee
+// avec le viaduc via DECK_HEIGHT). Aucune source ne donne le tirant d'air.
+// Les quais reels font 150 m, OSM n'en cartographie que 63 : on ne couvre que ce
+// qui est cartographie.
 const CONCRETE: Tint = { r: 0.44, g: 0.45, b: 0.47 }; // piles et tablier
 const ORANGE: Tint = { r: 0.74, g: 0.31, b: 0.1 }; // l'encadrement metallique
 const PLATFORM: [number, number, number] = [1.5, 1.4, 1.15]; // quai eclaire
@@ -332,26 +337,19 @@ const GLAZING: [number, number, number] = [1.25, 1.05, 0.72]; // vitres de l'abr
  * decales vers le nord de la moitie de l'ecart mesure entre les deux auvents.
  */
 const quaiCarnot = (withDeck: boolean): KitBuilder => (e, a, _tex, _tint, _roofTint, dims) => {
-  const DECK = 9.5; // niveau du quai, non source, voir en-tete
+  const DECK = DECK_HEIGHT; // le meme niveau que le viaduc, par construction
   const GAP = 10.3; // ecart mesure entre les deux auvents
   const platW = Math.max(4.5, dims.d + 2.6); // largeur de quai autour de l'auvent
 
   if (withDeck) {
-    // Le tablier, centre entre les deux quais, et ses piles.
-    const y = GAP / 2;
-    const x0 = -72, x1 = 32;
-    const len = x1 - x0;
-    const mid = (x0 + x1) / 2;
+    // L'elargissement de gare : le tablier courant fait 11 m, il faut plus large
+    // pour porter deux quais. Les piles, elles, viennent du viaduc lui-meme
+    // (src/scene/Viaduct.tsx), construit sur le trace ferroviaire reel : le kit
+    // n'a plus a inventer d'ouvrage, il pose juste ce qui est propre a la gare.
     addBox(e, a, null, {
-      x: mid, y, w: len, d: GAP + platW, h: 1.1, base: DECK - 1.1,
+      x: 0, y: GAP / 2, w: dims.w * 1.04, d: GAP + platW, h: 0.6, base: DECK - 0.6,
       skin: "plain", tint: CONCRETE, roofTint: CONCRETE,
     });
-    for (let x = x0 + 6; x < x1; x += 13) {
-      addBox(e, a, null, {
-        x, y, w: 2.6, d: 3.4, h: DECK - 1.1, base: 0,
-        skin: "plain", tint: CONCRETE, roofTint: CONCRETE,
-      });
-    }
   }
 
   // Le quai lui-meme : une bande eclairee au niveau du tablier. C'est elle qui
