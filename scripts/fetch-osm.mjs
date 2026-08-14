@@ -118,6 +118,15 @@ const FEATURES_QUERY =
   // caractere des espaces ouverts : cloture et allees
   `way["barrier"~"^(fence|hedge|wall|railing)$"]${bb(DECOR_BBOX)};` +
   `way["highway"~"^(footway|path|steps)$"]${bb(DECOR_BBOX)};` +
+  // Les places du centre sont cartographiees en RELATION multipolygone, pas en
+  // way. Ne demander que les ways les faisait purement disparaitre du sol :
+  // Jean Jaures, le Peuple, Chavanelle, Neuve, Fourneyron, Waldeck Rousseau,
+  // Jules Guesde, Jean Moulin, et jusqu'a la place de l'Hotel de Ville, soit
+  // 16 places nommees sur 44 relations d'espace ouvert mesurees.
+  `relation["highway"="pedestrian"]${bb(BBOX)};` +
+  `relation["place"="square"]${bb(BBOX)};` +
+  `relation["leisure"~"park|garden|pitch|playground"]${bb(BBOX)};` +
+  `relation["landuse"~"grass|forest|meadow|cemetery"]${bb(BBOX)};` +
   `);out geom;`;
 
 const ENDPOINTS = [
@@ -704,6 +713,33 @@ function ptSegDist(px, py, ax, ay, bx, by) {
   return Math.hypot(px - (ax + vx * t), py - (ay + vy * t));
 }
 
+/**
+ * Deplie les relations multipolygones en contours, pour que la suite n'ait
+ * qu'un seul cas a traiter. C'est la meme reparation que pour les batiments,
+ * appliquee au sol : le contour recousu est referme, parce que la boucle des
+ * surfaces ne garde que les anneaux fermes.
+ */
+function expandOpenSpaceRelations(elements) {
+  const out = [];
+  let rings = 0;
+  for (const el of elements) {
+    if (el.type !== "relation" || !Array.isArray(el.members)) {
+      out.push(el);
+      continue;
+    }
+    for (const ring of stitchRings(el.members)) {
+      out.push({
+        type: "way",
+        id: -el.id, // id negatif : pas de collision avec les ids de way
+        tags: el.tags || {},
+        geometry: [...ring, ring[0]].map(([lon, lat]) => ({ lon, lat })),
+      });
+      rings++;
+    }
+  }
+  return { elements: out, rings };
+}
+
 function featuresToCompact(json) {
   const areas = [];
   const pedLines = []; // rues pietonnes : des lignes, pas des contours
@@ -715,7 +751,10 @@ function featuresToCompact(json) {
   const rawFences = [];
   const rawPaths = [];
 
-  for (const el of json.elements) {
+  const expanded = expandOpenSpaceRelations(json.elements);
+  const relRings = expanded.rings;
+
+  for (const el of expanded.elements) {
     const t = el.tags || {};
 
     if (el.type === "node") {
@@ -876,6 +915,7 @@ function featuresToCompact(json) {
   return {
     attribution: ATTRIBUTION,
     bbox: [BBOX[1], BBOX[0], BBOX[3], BBOX[2]],
+    relRings,
     areas,
     pedLines,
     trees,
@@ -977,6 +1017,8 @@ if (doFeatures) {
         .map(([k, v]) => `${k} ${v}`)
         .join(", ") +
       `)\n` +
+      `  contours issus de relations multipolygones : ${data.relRings} ` +
+      `(les places du centre en sont)\n` +
       `  rues pietonnes : ${data.pedLines.length} polylignes\n` +
       `  arbres : ${data.trees.length} isoles, ${data.treeRows.length} alignements\n` +
       `  tram : ${data.tram.length} troncons · fontaines : ${data.fountains.length} · ` +

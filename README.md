@@ -716,6 +716,38 @@ tablier sur piles, faute de relief pour les porter.
 Le tout est construit une fois, hors streaming, pour quelques milliers de
 triangles : un ouvrage qui apparaîtrait par tuiles se verrait de loin.
 
+### Les places du centre n'existaient pas dans la couche sol
+
+Même piège que l'Hôtel de Ville, et il frappait les lieux les plus emblématiques :
+`FEATURES_QUERY` ne demandait que des `way`, or **les places du centre sont
+cartographiées en relation multipolygone**. Mesuré sur la ville : **44 relations
+d'espace ouvert absentes**, dont **16 places nommées**.
+
+| place | ce qu'elle est dans OSM | dans le jeu avant |
+| --- | --- | --- |
+| Jean Jaurès | relation, 20 562 m², 110 arbres | absente du sol |
+| du Peuple | relation, 7 409 m², minérale | absente |
+| Chavanelle | relation, 7 727 m² | absente |
+| **de l'Hôtel de Ville** | relation, 6 724 m² | absente, alors que le perron donne dessus |
+| Neuve, Fourneyron, Waldeck Rousseau, Jean Moulin, Jules Guesde, Jean Cocteau | relations | absentes |
+| Dorian, Jacquard | `way` avec `area=yes` | présentes |
+
+Le correctif est le même que pour les bâtiments : demander aussi les relations et
+recoudre leurs anneaux (`stitchRings`, déjà écrit pour le bâti), en refermant le
+contour parce que la boucle des surfaces ne garde que les anneaux fermés. **52
+contours** arrivent par cette voie, et les surfaces piétonnes passent de 27 à
+**78**.
+
+Le gain n'est pas seulement qu'il y a du sol : `places.ts` classait déjà le
+caractère des espaces ouverts (minéral, jardin, parc) et documentait le
+découpage attendu, sans pouvoir l'appliquer faute de surfaces. Il tombe
+maintenant juste : **Jean Jaurès en jardin**, **le Peuple en minéral**, le parvis
+de l'Hôtel de Ville en minéral. Les 110 arbres relevés dans le contour de Jean
+Jaurès recoupent les 114 comptés à l'époque dans un rayon de 120 m.
+
+Note de terrain : Overpass a rendu 504 sur ses quatre miroirs au premier tour.
+Les retries du script ont fait le travail au second.
+
 ## Le décor
 
 Avant d'écrire une ligne de rendu, les couches ont été **comptées** sur la bbox
