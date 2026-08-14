@@ -546,6 +546,52 @@ proche d'un carrefour, en local (38, -19).
 Coût : 1 048 triangles pour les sept kits, et ils sont construits une fois pour
 toutes avec les autres repères, hors streaming.
 
+## Regarder un kit sans GPU
+
+```bash
+npm run elevation                        # l'Hôtel de Ville
+npm run elevation -- 63319547 --from=y+  # un autre repère, une autre façade
+npm run elevation -- --list              # les ids disponibles
+```
+
+On ne peut pas regarder un kit dans le jeu depuis un terminal : un onglet qui
+n'est pas au premier plan gèle `requestAnimationFrame`, le canvas reste noir, et
+même au premier plan il faut conduire jusqu'au monument. Les kits se relisaient
+donc dans le code au lieu de se regarder.
+
+`npm run elevation` dessine l'élévation d'un repère en vue orthographique de
+face, depuis le parvis, **sans three.js ni GPU** : un rastériseur de triangles et
+l'algorithme du peintre, dans un JPEG. Il ne montre ni les textures de façade ni
+le bloom, seulement la géométrie et les éléments lumineux, c'est-à-dire
+exactement ce qu'un kit décide. Le résultat se compare directement aux photos de
+`reference/photos`.
+
+Le premier usage a immédiatement payé : **l'orientation de l'Hôtel de Ville était
+fausse de 12,5°**. Son nu de façade coupait l'emprise en biais et n'en touchait
+qu'un coin, si bien que le perron, les arcades et les statues se posaient à côté
+du bâtiment. Personne ne l'avait vu tant que la façade n'avait pas été dessinée.
+
+### La reprise de l'Hôtel de Ville
+
+Le premier jet tenait sur les bons faits (Dalgabio, 1822-1830, plan carré à cour,
+perron au sud, sept arcades, La Métallurgie et La Rubanerie de Montagny en 1870
+et 1872) mais se trompait sur quatre points que les photos tranchent :
+
+| ce que faisait le kit | ce que montre la photo |
+| --- | --- |
+| un pavillon d'horloge à fronton surmonté d'un **campanile à dôme** | rien de tout ça. Le dôme de 51 m de Boisson, qui abritait l'horloge et sa cloche, a brûlé en 1952 et a été démoli en 1953 : le couronnement est **plat**, avec un simple cadran au centre de l'attique |
+| les deux statues plantées **10 m devant, sur le parvis** | sur de hauts socles **en haut du perron**, encadrant l'arcade |
+| un perron de 3,5 m en **sept marches**, soit des contremarches de 50 cm | seize marches larges et basses |
+| la travée centrale élargie | les sept arcades sont **égales** |
+
+L'infidélité du campanile était même assumée dans un commentaire du code (« on
+évoque un campanile modeste ») au lieu d'être vérifiée. La reprise ajoute ce que
+la photo montre et que le kit n'avait pas : la colonnade d'ordre colossal de
+l'étage noble et ses sept hautes fenêtres cintrées, le balcon continu, la frise,
+l'attique à panneaux, et les deux passages voûtés des ailes au niveau de la
+place. La hauteur de corniche passe de 16 à 18,5 m, mise à l'échelle sur la
+largeur de façade mesurée (49,3 m), pour 22,7 m au sommet du cadran.
+
 ## Le décor
 
 Avant d'écrire une ligne de rendu, les couches ont été **comptées** sur la bbox
@@ -592,6 +638,7 @@ visiblement étroite et c'est juste.
 scripts/fetch-osm.mjs   Overpass -> public/sainte.geojson + sainte-buildings.json
                         + sainte-features.json
 scripts/build-notable.mjs  export.geojson -> src/lib/notable.ts (notabilité)
+scripts/elevation.mjs   élévation d'un repère en JPEG, sans GPU (+ .entry.ts)
 src/lib/project.ts      lat/lon <-> mètres (équirectangulaire locale)
 src/lib/osm.ts          chargement, parsing, palette et largeurs par classe
 src/lib/graph.ts        graphe routier + index spatial + nearestEdge

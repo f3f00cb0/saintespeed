@@ -10,3 +10,6 @@ tsconfig.tsbuildinfo
 # `npm run fetch-reference` les retelecharge, la selection etant figee dans
 # scripts/fetch-reference.mjs. On versionne l'outil, pas les images.
 reference/photos
+
+# Elevations generees par `npm run elevation` : artefacts de verification.
+reference/elevation-*.jpg

@@ -385,7 +385,15 @@ export const LANDMARKS = new Map<number, Landmark>([
   // multipolygone (rel 5201020) et que l'import ne prenait que les ways : il
   // n'existait tout simplement pas. Les contours issus de relations portent
   // l'id OSM en negatif, d'ou la clef.
-  [-5201020, { archetype: Archetype.Pierre, wall: 0xe2d8c1, height: 16, rot: 0.414, label: "Hotel de Ville" }],
+  // rot et hauteur repris le 2026-08-14 sur mesure. L'ancien rot de 0,414 rad
+  // etait faux de 12,5 degres : le nu de facade coupait l'emprise en biais et
+  // n'en touchait qu'un coin, si bien que le perron, les arcades et les statues
+  // se posaient dans le vide. L'azimut de l'arete sud du contour donne 0,196 rad,
+  // et l'emprise devient alors un rectangle de 49,4 x 82,5 m dont la facade sud
+  // fait 49,3 m d'un seul tenant. La hauteur de corniche vient des photos de
+  // reference/photos, mise a l'echelle sur cette largeur de facade : 18,5 m,
+  // pour 22,7 m au sommet du cadran.
+  [-5201020, { archetype: Archetype.Pierre, wall: 0xe2d8c1, height: 18.5, rot: 0.196, label: "Hotel de Ville" }],
   // Cite du Design : long volume clair perfore, la signature moderne de la
   // ville. Elle etait hors de l'ancienne bbox batiments.
   [63303051, { archetype: Archetype.Moderne, wall: 0xd6dade, label: "La Platine" }],

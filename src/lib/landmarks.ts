@@ -10,8 +10,13 @@
 // le bespoke prime.
 //
 // Dimensions sources :
-//   Hotel de Ville    : neoclassique, plan carre a cour, dome de 51 m DETRUIT
-//                       en 1952 -> on evoque un campanile modeste, pas le dome.
+//   Hotel de Ville    : Dalgabio, 1822-1830, plan carre a cour. Perron au sud,
+//                       SEPT arcades egales, colonnade d'ordre colossal a
+//                       l'etage noble, attique, et un simple cadran au centre :
+//                       le dome de 51 m de Boisson a brule en 1952 et a ete
+//                       demoli en 1953, le couronnement est PLAT depuis. Les
+//                       deux statues sont La Metallurgie et La Rubanerie
+//                       (Etienne Montagny, 1870 et 1872), en haut du perron.
 //   Cathedrale        : croix latine 80 x 30 m, hauteur 40 m, AUCUNE tour.
 //   Stade G.-Guichard : terrain 105 x 68 m, 4 tribunes, 192 projecteurs en
 //                       toiture (pas de mats), vert/blanc (ASSE).
@@ -62,7 +67,9 @@
 
 import type { Emit, Anchor, Tint, Dims } from "./landmarkGeometry";
 import {
-  addBox, addGable, addCylinder, addDome, addVault, addDisc, addGlowBox, addCross,
+  // addDome a disparu avec le campanile de l'Hotel de Ville, qui n'existe pas :
+  // le seul dome de la ville etait celui de Boisson, demoli en 1953.
+  addBox, addGable, addCylinder, addVault, addDisc, addGlowBox, addCross,
   addArchGlow, addStairs,
 } from "./landmarkGeometry";
 import type { Painted } from "./facadeTextures";
@@ -95,75 +102,151 @@ const FOYER: [number, number, number] = [1.75, 1.6, 1.3]; // hall de theatre ecl
 // l'interieur. Volontairement moins violent qu'un projecteur, c'est une
 // lanterne diffuse, pas une source ponctuelle.
 const LANTERN: [number, number, number] = [1.45, 1.5, 1.6];
+// Fenetre eclairee d'un etage noble : plus froide et plus sage qu'une arcade,
+// c'est de la lumiere de bureau derriere un rideau, pas une baie de porche.
+const WINDOW: [number, number, number] = [1.55, 1.42, 1.05];
 const STAGE: Tint = { r: 0.28, g: 0.29, b: 0.32 }; // sa base mate
 
 // --- Hotel de Ville ---------------------------------------------------------
-// Corps principal garde (emprise reelle en anneau a cour, orientee par le
-// champ rot : x local le long de la facade sud, -y vers le parvis). Le kit
-// ajoute ce qui la rend reconnaissable : le grand perron, les sept arcades en
-// plein cintre du rez-de-chaussee suréleve, les deux statues allegoriques qui
-// encadrent la montee, le pavillon d'horloge a fronton au-dessus de l'entree,
-// et le campanile du carillon. L'axe x suit la facade, donc tout se pose en
-// fonction de dims.miny (le nu de la facade sud).
+//
+// Repris le 2026-08-14 sur les deux photos de reference/photos (Wikimedia
+// Commons, dont une de juin 2025), et non plus de memoire. Le premier jet
+// tenait sur les bons faits (Dalgabio, 1822-1830, plan carre a cour, perron au
+// sud, SEPT arcades, La Metallurgie et La Rubanerie de Montagny 1870-1872) mais
+// se trompait sur quatre points que la photo tranche :
+//
+//   1. Il coiffait le batiment d'un PAVILLON D'HORLOGE A FRONTON surmonte d'un
+//      CAMPANILE A DOME. Rien de tout ca n'existe. Le dome de 51 m de Boisson,
+//      qui abritait l'horloge et sa cloche, a brule en 1952 et a ete demoli
+//      l'annee suivante : depuis, le couronnement est PLAT. L'horloge est un
+//      simple cadran pose au centre de l'attique. C'etait la plus grosse
+//      infidelite du kit, et elle etait assumee dans un commentaire ("on evoque
+//      un campanile modeste") au lieu d'etre verifiee.
+//   2. Les deux statues ne sont pas plantees a dix metres sur le parvis mais
+//      sur de HAUTS SOCLES EN HAUT DU PERRON, encadrant l'arcade.
+//   3. Le perron montait 3,5 m en sept marches, soit des contremarches de 50 cm
+//      qu'on ne peut pas gravir. Il en fait seize, larges et basses.
+//   4. Les sept arcades sont EGALES ; la travee centrale n'est pas elargie.
+//
+// Ce que la photo ajoute, et qui manquait : la colonnade d'ordre colossal de
+// l'etage noble avec ses sept hautes fenetres cintrees, le balcon continu, la
+// frise ("LIBERTE EGALITE FRATERNITE", illisible a cette echelle mais c'est le
+// bandeau qui compte), l'attique a panneaux, et les deux passages voutes au
+// niveau de la place sous les ailes.
+//
+// Repere local : x le long de la facade sud, -y vers le parvis, via le champ
+// rot de LANDMARKS, corrige en meme temps que ce kit. L'emprise est alors un
+// rectangle de 49,4 x 82,5 m dont la facade sud fait 49,3 m d'un seul tenant,
+// ce qui permet enfin de caler l'arcade en proportion : 56 % de la largeur
+// batie, mesures sur la photo frontale.
 const hotelDeVille: KitBuilder = (e, a, tex, tint, roofTint, dims) => {
-  const H = dims.height; // corps principal (16 m)
-  const facadeY = dims.miny; // facade sud, cote parvis
+  const H = dims.height; // corniche principale, 18,5 m mesures sur photo
+  const facadeY = dims.miny; // nu de la facade sud, cote parvis
   const STONE: Tint = { r: 0.52, g: 0.49, b: 0.43 };
 
-  // Largeur de l'arcade : les sept travees occupent le coeur de la facade.
-  const arcadeW = Math.min(dims.w * 0.8, 7 * 6.6);
+  // Le corps central occupe un peu plus de la moitie de la facade : mesure sur
+  // la photo frontale, l'arcade couvre 56 % de la largeur batie.
+  const arcadeW = dims.w * 0.56;
   const pitch = arcadeW / 7;
 
-  // 1) Le grand perron : monte du parvis jusqu'au rez-de-chaussee suréleve,
-  //    presque aussi large que l'arcade qu'il dessert.
-  const stairRise = 3.5;
-  const stairW = arcadeW * 0.85;
+  // 1) Le grand perron. Seize marches basses et profondes, plus large que
+  //    l'arcade qu'il dessert, comme sur la photo ou il deborde sous les deux
+  //    statues.
+  const stairRise = 3.4;
+  const stairW = dims.w * 0.8;
   addStairs(e, a, {
-    x: 0, yFacade: facadeY, w: stairW, depth: 12, height: stairRise, steps: 7, tint: STONE,
+    x: 0, yFacade: facadeY, w: stairW, depth: 8, height: stairRise, steps: 16, tint: STONE,
   });
 
-  // 2) Les sept arcades en plein cintre, au nu de la facade sud. La travee du
-  //    milieu (entree principale) est un peu plus large.
+  // 2) Le leger avant-corps du corps central, qui detache l'arcade des ailes.
+  addBox(e, a, tex, {
+    x: 0, y: facadeY + 0.3, w: arcadeW + 2.4, d: 0.6, h: H, base: 0,
+    skin: "facade", tint, roofTint,
+  });
+
+  // 3) Les sept arcades en plein cintre du rez-de-chaussee sureleve, egales.
   for (let i = 0; i < 7; i++) {
-    const x = -arcadeW / 2 + pitch * (i + 0.5);
-    const main = i === 3;
     addArchGlow(e, a, {
-      x, y: facadeY, base: stairRise, w: pitch * (main ? 0.8 : 0.6),
-      hRect: main ? 4 : 3.4, color: ARCADE, axis: "y", sign: -1,
+      x: -arcadeW / 2 + pitch * (i + 0.5), y: facadeY, base: stairRise,
+      w: pitch * 0.66, hRect: 3.6, color: ARCADE, axis: "y", sign: -1, offset: 0.6,
     });
   }
 
-  // 3) Les deux statues (La Rubanerie, La Metallurgie) au bas du perron.
-  for (const s of [-1, 1]) {
-    const px = s * (stairW / 2 + 2.6);
-    const py = facadeY - 10;
-    addBox(e, a, null, { x: px, y: py, w: 2, d: 2, h: 2.4, base: 0, skin: "plain", tint: STONE, roofTint: STONE });
-    addCylinder(e, a, { x: px, y: py, r: 0.55, rTop: 0.42, h: 2.7, base: 2.4, segments: 8, tint: STATUE, cap: true });
+  // 4) La frise et le balcon continu, au-dessus des arcades. C'est le bandeau
+  //    qui porte LIBERTE EGALITE FRATERNITE.
+  const friezeZ = stairRise + 5.2;
+  addBox(e, a, null, {
+    x: 0, y: facadeY - 0.2, w: arcadeW + 2.4, d: 1.2, h: 1.6, base: friezeZ,
+    skin: "plain", tint, roofTint: tint,
+  });
+
+  // 5) L'etage noble : sept hautes fenetres cintrees eclairees, et la colonnade
+  //    d'ordre colossal qui les separe. C'est ce qui fait la facade de nuit.
+  const nobleZ = friezeZ + 1.6;
+  const nobleH = 6.2; // jusqu'a 16,4 m, la corniche couvrant les 2 m restants
+  for (let i = 0; i < 7; i++) {
+    addArchGlow(e, a, {
+      x: -arcadeW / 2 + pitch * (i + 0.5), y: facadeY, base: nobleZ + 0.4,
+      w: pitch * 0.44, hRect: 3.4, color: WINDOW, axis: "y", sign: -1, offset: 0.55,
+    });
+  }
+  for (let i = 0; i <= 7; i++) {
+    addCylinder(e, a, {
+      x: -arcadeW / 2 + pitch * i, y: facadeY - 0.5, r: 0.52, h: nobleH,
+      base: nobleZ, segments: 8, tint, cap: true,
+    });
   }
 
-  // 4) Arcades laterales sur les facades est et ouest.
+  // 6) L'attique a panneaux, plus haut sur le corps central, et le cadran au
+  //    milieu. Pas de dome, pas de campanile : le couronnement est plat depuis
+  //    la demolition de 1953.
+  addBox(e, a, null, {
+    x: (dims.minx + dims.maxx) / 2, y: (dims.miny + dims.maxy) / 2,
+    w: dims.w * 0.99, d: dims.d * 0.99, h: 2.2, base: H,
+    skin: "plain", tint, roofTint,
+  });
+  addBox(e, a, null, {
+    x: 0, y: facadeY + 4, w: arcadeW + 2.4, d: 8, h: 3, base: H,
+    skin: "plain", tint, roofTint,
+  });
+  addBox(e, a, null, {
+    x: 0, y: facadeY + 2, w: 7, d: 4, h: 1.2, base: H + 3,
+    skin: "plain", tint, roofTint,
+  });
+  addDisc(e, a, { x: 0, y: facadeY - 0.1, z: H + 3.5, r: 1.7, facing: "y-", color: CLOCK });
+
+  // 7) Les deux statues allegoriques, en haut du perron, sur leurs socles :
+  //    La Metallurgie et La Rubanerie, Etienne Montagny, 1870 et 1872.
+  for (const s of [-1, 1]) {
+    const px = s * (arcadeW / 2 + 3.6);
+    const py = facadeY - 2.4;
+    addBox(e, a, null, {
+      x: px, y: py, w: 2.4, d: 2.4, h: 3.8, base: stairRise, skin: "plain", tint: STONE, roofTint: STONE,
+    });
+    addCylinder(e, a, {
+      x: px, y: py, r: 0.78, rTop: 0.55, h: 3.2, base: stairRise + 3.8,
+      segments: 8, tint: STATUE, cap: true,
+    });
+  }
+
+  // 8) Les deux passages voutes des ailes, au niveau de la place.
+  for (const s of [-1, 1]) {
+    addArchGlow(e, a, {
+      x: s * dims.w * 0.44, y: facadeY, base: 0, w: 3.4, hRect: 2.6,
+      color: ARCADE, axis: "y", sign: -1,
+    });
+  }
+
+  // 9) Arcades laterales sur les facades est et ouest, cote cour.
   for (const s of [-1, 1]) {
     const fx = s > 0 ? dims.maxx : dims.minx;
     for (let i = 1; i <= 3; i++) {
-      const yy = dims.miny + (dims.d * i) / 4;
       addArchGlow(e, a, {
-        x: fx, y: yy, base: 1.4, w: 4.2, hRect: 3.2, color: ARCADE,
-        axis: "x", sign: s as -1 | 1,
+        x: fx, y: dims.miny + (dims.d * i) / 4, base: 1.4, w: 4.2, hRect: 3.2,
+        color: ARCADE, axis: "x", sign: s as -1 | 1,
       });
     }
   }
-
-  // 5) Le pavillon d'horloge au-dessus de l'entree, fronton + cadran.
-  const pavW = 15, pavD = 12, pavH = 5;
-  const pavY = facadeY + pavD / 2;
-  addBox(e, a, tex, { x: 0, y: pavY, w: pavW, d: pavD, h: pavH, base: H, skin: "facade", tint, roofTint });
-  addGable(e, a, null, { x: 0, y: pavY, w: pavW, d: pavD, wallH: 0, ridgeH: 2.6, base: H + pavH, tint: roofTint, wallSkin: "plain" });
-  addDisc(e, a, { x: 0, y: pavY - pavD / 2, z: H + 3.1, r: 1.9, facing: "y-", color: CLOCK });
-
-  // 6) Le campanile du carillon, au sommet du pavillon.
-  const campBase = H + pavH + 2.6;
-  addCylinder(e, a, { x: 0, y: pavY, r: 2.1, rTop: 1.9, h: 4.2, base: campBase, segments: 10, tint, cap: true });
-  addDome(e, a, { x: 0, y: pavY, r: 2.0, base: campBase + 4.2, tint: roofTint, bands: 4 });
 };
 
 // --- Cathedrale Saint-Charles ----------------------------------------------
