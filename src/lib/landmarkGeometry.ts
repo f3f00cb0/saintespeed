@@ -578,6 +578,65 @@ export function addStairs(e: Emit, a: Anchor, o: StairsOpts) {
   }
 }
 
+export type HippedOpts = {
+  x: number; y: number;
+  w: number; // longueur, le long de l'axe x local
+  d: number; // portee transversale
+  rise: number; // hauteur du faite au-dessus de la base
+  base: number;
+  tint: Tint;
+  /** Debord de toiture, en metres. */
+  eaves?: number;
+};
+
+/**
+ * Toiture a croupes : deux longs pans trapezoidaux et deux croupes
+ * triangulaires. C'est la couverture des batiments industriels stephanois et de
+ * bon nombre d'emprises taguees roof:shape=hipped, que le rendu courant ne sait
+ * pas distinguer d'un toit a deux pentes.
+ *
+ * Le faite est raccourci de la demi-portee a chaque bout, ce qui donne des
+ * croupes a 45 degres en plan, la regle courante.
+ */
+export function addHipped(e: Emit, a: Anchor, o: HippedOpts) {
+  const eaves = o.eaves ?? 0.4;
+  const hw = o.w / 2 + eaves;
+  const hd = o.d / 2 + eaves;
+  const ridgeHalf = Math.max(0.5, hw - hd); // croupes a 45 degres
+  const z0 = o.base;
+  const z1 = o.base + o.rise;
+  const uv0: [number, number] = [0, 0];
+  const uvs: [number, number][] = [uv0, uv0, uv0, uv0];
+
+  const P = (lx: number, ly: number, z: number) => {
+    const w = toWorld(a, o.x + lx, o.y + ly);
+    return [w[0], z, -w[1]];
+  };
+  const A = P(-hw, -hd, z0), B = P(hw, -hd, z0), C = P(hw, hd, z0), D = P(-hw, hd, z0);
+  const R0 = P(-ridgeHalf, 0, z1), R1 = P(ridgeHalf, 0, z1);
+
+  const slant = Math.hypot(hd, o.rise) || 1;
+  for (const sy of [-1, 1] as const) {
+    const [nx, ny] = rotDir(a, 0, sy);
+    const n = [nx * (o.rise / slant), hd / slant, -ny * (o.rise / slant)];
+    if (sy < 0) quad(e.roofs, A, B, R1, R0, n, uvs, o.tint);
+    else quad(e.roofs, C, D, R0, R1, n, uvs, o.tint);
+  }
+  const slantX = Math.hypot(hw - ridgeHalf, o.rise) || 1;
+  for (const sx of [-1, 1] as const) {
+    const [nx, ny] = rotDir(a, sx, 0);
+    const n = [nx * (o.rise / slantX), (hw - ridgeHalf) / slantX, -ny * (o.rise / slantX)];
+    const tri = (p0: number[], p1: number[], p2: number[]) => {
+      e.roofs.pos.push(...p0, ...p1, ...p2);
+      for (let k = 0; k < 3; k++) e.roofs.norm.push(...n);
+      e.roofs.uv.push(0, 0, 0, 0, 0, 0);
+      for (let k = 0; k < 3; k++) e.roofs.col.push(o.tint.r, o.tint.g, o.tint.b);
+    };
+    if (sx < 0) tri(D, A, R0);
+    else tri(B, C, R1);
+  }
+}
+
 export type SawtoothOpts = {
   x: number; y: number;
   w: number; // longueur sur laquelle les travees se repetent (axe x local)

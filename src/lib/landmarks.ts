@@ -72,7 +72,7 @@ import {
   // addDome a disparu avec le campanile de l'Hotel de Ville, qui n'existe pas :
   // le seul dome de la ville etait celui de Boisson, demoli en 1953.
   addBox, addGable, addCylinder, addVault, addDisc, addGlowBox, addCross,
-  addArchGlow, addStairs,
+  addArchGlow, addStairs, addHipped,
 } from "./landmarkGeometry";
 import type { Painted } from "./facadeTextures";
 import { DECK_HEIGHT } from "./rail";
@@ -113,6 +113,10 @@ const LANTERN: [number, number, number] = [1.45, 1.5, 1.6];
 const HDV_ARCADE: [number, number, number] = [1.32, 1.0, 0.58];
 const HDV_WINDOW: [number, number, number] = [1.2, 1.1, 0.86];
 const STAGE: Tint = { r: 0.28, g: 0.29, b: 0.32 }; // sa base mate
+// Panneaux translucides de La Platine : une paroi diffuse, pas une vitrine.
+const PANEL: [number, number, number] = [0.95, 1.0, 1.08];
+const BELVEDERE: [number, number, number] = [1.3, 1.28, 1.15]; // couronnement vitre
+const TILE_ROOF: Tint = { r: 0.36, g: 0.2, b: 0.15 }; // tuile mecanique
 
 // --- Hotel de Ville ---------------------------------------------------------
 //
@@ -763,6 +767,82 @@ const palaisMimard: KitBuilder = (e, a, tex, tint, roofTint, dims) => {
   });
 };
 
+// --- Cite du Design : La Platine et sa tour observatoire ---------------------
+//
+// La Platine, Finn Geipel et Giulia Andi (agence LIN), prix special du jury de
+// l'Equerre d'argent 2009, sur le site historique de la Manufacture nationale
+// d'armes. La source donne 193,2 m de long sur 31 m de large, un seul grand
+// espace ; l'emprise OSM mesure 193,7 x 31,2 m avec un remplissage de 0,99. Les
+// deux se recoupent au decimetre, ce qui vaut validation croisee.
+//
+// Ce qui la rend reconnaissable n'est pas un volume, c'est sa PEAU : une
+// enveloppe de triangles equilateraux, dix types de panneaux, opaques,
+// translucides, photovoltaiques ou ventilants. La photo de reference
+// (reference/photos, Cite du Design Platine) le montre sans ambiguite : AUCUNE
+// trame de fenetres, une surface claire et mate d'un seul tenant.
+//
+// Le kit ne peint donc pas de triangles, ce qui demanderait une texture : il
+// enleve la trame (unlit dans LANDMARKS) et pose ce qui reste vrai de nuit, la
+// lueur diffuse des panneaux translucides, plus l'acrotere qui termine le
+// volume. La hauteur reste celle de l'inference (9,3 m), aucune source ne la
+// donne, et elle est coherente avec les trois rangs de panneaux de la photo.
+const platine: KitBuilder = (e, a, _tex, tint, roofTint, dims) => {
+  const H = dims.height;
+  addBox(e, a, null, {
+    x: 0, y: 0, w: dims.w * 1.005, d: dims.d * 1.005, h: 0.55, base: H - 0.2,
+    skin: "plain", tint: roofTint, roofTint,
+  });
+  // La lueur des panneaux translucides, sur les deux longues facades. Basse en
+  // valeur : c'est une paroi diffuse, pas une vitrine.
+  for (const s of [-1, 1] as const) {
+    addGlowBox(e, a, {
+      x: 0, y: s > 0 ? dims.maxy - 0.15 : dims.miny + 0.15,
+      w: dims.w * 0.985, d: 0.3, h: H * 0.42, base: H * 0.3, color: PANEL,
+    });
+  }
+  void tint;
+};
+
+// Tour observatoire : 32 m selon la source, 31 m tagues dans OSM, sur une
+// emprise de 12 x 10 m. Elle offre un panorama a 360 degres, donc un couronnement
+// vitre : c'est lui qu'on pose, avec la plateforme qui deborde.
+const tourObservatoire: KitBuilder = (e, a, _tex, _tint, roofTint, dims) => {
+  const H = dims.height;
+  addBox(e, a, null, {
+    x: 0, y: 0, w: dims.w + 1.6, d: dims.d + 1.6, h: 0.5, base: H - 3.6,
+    skin: "plain", tint: roofTint, roofTint,
+  });
+  addGlowBox(e, a, {
+    x: 0, y: 0, w: dims.w + 1.4, d: dims.d + 1.4, h: 2.4, base: H - 3.1, color: BELVEDERE,
+  });
+  addBox(e, a, null, {
+    x: 0, y: 0, w: dims.w + 1.8, d: dims.d + 1.8, h: 0.45, base: H - 0.7,
+    skin: "plain", tint: roofTint, roofTint,
+  });
+};
+
+// --- Ancienne Manufacture d'Armes -------------------------------------------
+//
+// Batiment de la Manufacture nationale d'armes, sur le site devenu la Cite du
+// Design. OSM : building=college, trois niveaux, emprise de 79,5 x 13,8 m.
+//
+// La photo de reference (reference/photos, Batiment Horloge) donne le reste :
+// ossature de pierre hourdee de brique, grandes baies cintrees a l'etage haut,
+// corniche a modillons, et une TOITURE A CROUPES en tuile. Ce sont des niveaux
+// industriels hauts : mis a l'echelle sur la largeur de 13,8 m relevee dans
+// OSM, la corniche tombe vers 15 m, contre 9,3 m inferes. L'inference est calee
+// sur du logement, elle rate d'un tiers sur un batiment de manufacture.
+const manufactureArmes: KitBuilder = (e, a, _tex, _tint, roofTint, dims) => {
+  const H = dims.height;
+  addBox(e, a, null, {
+    x: 0, y: 0, w: dims.w * 1.01, d: dims.d * 1.01, h: 0.7, base: H - 0.7,
+    skin: "plain", tint: roofTint, roofTint,
+  });
+  addHipped(e, a, {
+    x: 0, y: 0, w: dims.w, d: dims.d, rise: 3.6, base: H, tint: TILE_ROOF, eaves: 0.5,
+  });
+};
+
 /** Reperes poses sur une emprise OSM existante (clef = id OSM). */
 export const LANDMARK_KITS = new Map<number, KitBuilder>([
   [-5201020, hotelDeVille],
@@ -772,6 +852,9 @@ export const LANDMARK_KITS = new Map<number, KitBuilder>([
   [1365990293, quaiCarnot(true)],
   [1365990292, quaiCarnot(false)],
   [161467265, kiosqueMarengo],
+  [63303051, platine],
+  [172156092, tourObservatoire],
+  [63261991, manufactureArmes],
   [49047886, zenith],
   [63308936, chevalement],
   [63319547, bourseDuTravail],

@@ -828,6 +828,37 @@ triangles.
 
 `npm run elevation -- type:croix` dessine une typologie seule, à l'échelle.
 
+### La Cité du Design : La Platine, sa tour, la Manufacture
+
+**Ce que dit la source.** La Platine est de **Finn Geipel et Giulia Andi**
+(agence LIN), prix spécial du jury de l'Équerre d'argent 2009, sur le site
+historique de la Manufacture nationale d'armes. Elle mesure **193,2 m sur 31 m**,
+un seul grand espace, sous une enveloppe de **triangles équilatéraux à dix types
+de panneaux** (opaques, translucides, photovoltaïques, ventilants). La **tour
+observatoire monte à 32 m** pour un panorama à 360°.
+
+**Ce que dit la donnée.** L'emprise OSM de la Platine mesure **193,7 × 31,2 m**
+avec un remplissage de 0,99. La source et le cadastre se recoupent **au
+décimètre**, ce qui vaut validation croisée. Et la tour est là aussi, id
+172156092, 12 × 10 m, **hauteur 31 m taguée** : on garde le tag, c'est une mesure
+locale.
+
+**Ce que ça corrige.** Les deux sortaient avec une trame de fenêtres peinte. Or
+la photo de référence est sans ambiguïté : la Platine n'a **aucune fenêtre**,
+c'est une surface claire et mate d'un seul tenant. Le kit ne peint pas de
+triangles, ce qui demanderait une texture ; il enlève la trame (`unlit`) et pose
+ce qui reste vrai de nuit, **la lueur diffuse des panneaux translucides**, plus
+l'acrotère. La tour reçoit son **belvédère vitré**, qui est la raison d'être d'un
+observatoire.
+
+**La Manufacture d'Armes**, elle, sortait à 9,3 m. OSM la donne à trois niveaux,
+mais ce sont des niveaux **industriels**, hauts : mise à l'échelle sur la largeur
+de 13,8 m relevée dans OSM, la corniche de la photo tombe vers **15 m**. La table
+`inferLevels` est calée sur du logement et rate d'un tiers ici. Le kit ajoute sa
+**toiture à croupes en tuile**, ce qui a demandé une primitive de plus
+(`addHipped`) : deux longs pans trapézoïdaux et deux croupes à 45°, utile aussi
+aux 17 emprises taguées `roof:shape=hipped`.
+
 ## Le décor
 
 Avant d'écrire une ligne de rendu, les couches ont été **comptées** sur la bbox

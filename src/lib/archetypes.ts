@@ -396,12 +396,24 @@ export const LANDMARKS = new Map<number, Landmark>([
   [-5201020, { archetype: Archetype.Pierre, wall: 0xe2d8c1, height: 18.5, rot: 0.196, label: "Hotel de Ville" }],
   // Cite du Design : long volume clair perfore, la signature moderne de la
   // ville. Elle etait hors de l'ancienne bbox batiments.
-  [63303051, { archetype: Archetype.Moderne, wall: 0xd6dade, label: "La Platine" }],
+  // La Platine : sa peau est une enveloppe de triangles equilateraux, sans
+  // AUCUNE trame de fenetres (photo de reference a l'appui). unlit envoie donc
+  // ses murs sur le carre de mur nu de la texture, ce qui donne la surface
+  // claire et mate qu'on voit en vrai. Emprise OSM 193,7 x 31,2 m contre
+  // 193,2 x 31 m dans la source : les deux se recoupent au decimetre.
+  [63303051, { archetype: Archetype.Moderne, wall: 0xd8dce0, roof: 0xb9bec3, unlit: true, label: "La Platine" }],
+  // Tour observatoire de la Cite du Design : 32 m selon la source, 31 tagues
+  // dans OSM. On garde le tague, c'est une mesure locale.
+  [172156092, { archetype: Archetype.Moderne, wall: 0xc9ced3, roof: 0x9aa0a6, height: 31, unlit: true, label: "Tour observatoire" }],
   // Zenith : grande coque claire isolee, repere de loin sur l'est. Le kit
   // remplace l'extrusion : murs vitres + voute aluminium (Foster, >25 m).
   [49047886, { archetype: Archetype.Moderne, wall: 0xcfd4d9, roof: 0xb4b8bc, height: 25, replaceBase: true, label: "Zenith" }],
   // Manufacture d'Armes : le bati manufacturier de reference, brique et pierre.
-  [63261991, { archetype: Archetype.Brique, wall: 0x9c5646, label: "Ancienne Manufacture d'Armes" }],
+  // Manufacture d'Armes : trois niveaux INDUSTRIELS, donc hauts. Mis a l'echelle
+  // sur la largeur de 13,8 m relevee dans OSM, la corniche de la photo de
+  // reference tombe vers 15 m, contre 9,3 m inferes : la table inferLevels est
+  // calee sur du logement et rate d'un tiers ici.
+  [63261991, { archetype: Archetype.Brique, wall: 0x9c5646, roof: 0x4a3128, height: 15, label: "Ancienne Manufacture d'Armes" }],
   // Cathedrale Saint-Charles : croix latine 80 x 30 m, 40 m de haut, sans tour.
   [63322493, { archetype: Archetype.Pierre, wall: 0xbfb69f, height: 40, unlit: true, label: "Cathedrale Saint-Charles" }],
   // Opera : grande masse claire du centre, eclairee proprement.
