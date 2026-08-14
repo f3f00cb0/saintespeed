@@ -19,12 +19,13 @@ import { Tram } from "./scene/Tram";
 import { Fountains } from "./scene/Fountains";
 import { Fences } from "./scene/Fences";
 import { Perf } from "./scene/Perf";
+import { AutoQuality } from "./scene/Quality";
 import { Lamps } from "./scene/Lamps";
 import { Sky, HORIZON } from "./scene/Sky";
 import { ChaseCamera } from "./scene/Camera";
 import { Hud } from "./ui/Hud";
-import { EffectComposer, Bloom, ToneMapping, Vignette, Noise } from "@react-three/postprocessing";
-import { ToneMappingMode } from "postprocessing";
+import { Post } from "./scene/Post";
+import { LEVELS, Quality } from "./lib/quality";
 
 const SKY = 0x0e1526; // fond et brouillard partagent la meme couleur
 
@@ -57,6 +58,12 @@ export default function App() {
   }, [checkpoints]);
   const showBuildings = useStore((s) => s.showBuildings);
   const [stats, setStats] = useState("");
+  // Qualite de rendu : part au maximum et ne descend que sur mesure, voir
+  // src/lib/quality.ts. Mesure a l'origine de ce reglage : un Intel Iris Xe
+  // tenait 36 fps en 1389x945 alors que la geometrie residente ne pese que
+  // 200 draw calls, c'est le MSAA 4x du composer qui plafonnait.
+  const [quality, setQuality] = useState<Quality>(Quality.High);
+  const level = LEVELS[quality];
 
   useEffect(() => {
     let dead = false;
@@ -122,7 +129,7 @@ export default function App() {
     <>
       <Canvas
         style={{ position: "fixed", inset: 0 }}
-        dpr={[1, 2]}
+        dpr={[1, level.dprMax]}
         // Pas de tone mapping ici : il est fait en dernier effet du composer,
         // sinon le bloom travaille sur une image deja ecrasee et bave a peine.
         gl={{ toneMapping: THREE.NoToneMapping }}
@@ -156,25 +163,11 @@ export default function App() {
               <Landmarks buildings={buildings} proj={graph!.proj} />
             )}
             <Perf />
+            <AutoQuality quality={quality} onDrop={setQuality} />
             <Checkpoints />
             <Car graph={graph!} />
             <ChaseCamera walls={walls} />
-            <EffectComposer multisampling={4}>
-              <Bloom
-                intensity={0.8}
-                luminanceThreshold={0.38}
-                luminanceSmoothing={0.9}
-                mipmapBlur
-              />
-              <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-              {/* vignette et grain apres le tone mapping : ils travaillent en
-                  LDR, c'est la ou ils ont le rendu photographique attendu.
-                  Grain sans premultiply, sinon il s'annule dans les noirs et la
-                  scene est majoritairement noire ; il trame aussi le degrade du
-                  ciel, qui bandait legerement. */}
-              <Vignette offset={0.3} darkness={0.62} />
-              <Noise opacity={0.045} />
-            </EffectComposer>
+            <Post level={level} />
           </>
         )}
       </Canvas>

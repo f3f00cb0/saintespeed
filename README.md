@@ -160,6 +160,40 @@ supprimerait en plus le coût du cache JSON parsé en mémoire (les 9,9 Mo de
 `sainte-buildings.json` restent résidents pour pouvoir générer à la demande).
 C'est un choix à faire pour cette raison-là, pas pour débloquer le navigateur.
 
+## Qualité de rendu : descente mesurée, pas devinée
+
+La scène de nuit tient son aspect de quatre passes plein écran (bloom à flou
+mipmap, tone mapping ACES, vignette, grain) posées sur une cible HDR en
+**MSAA 4x**. Sur un GPU dédié ça passe. Sur un GPU intégré c'est la bande
+passante qui plafonne, et pas du tout la géométrie : mesuré sur un **Intel
+Iris Xe en 1389x945 à dpr 1, 36 fps**, alors que la géométrie résidente ne pèse
+que 200 draw calls et 76 k triangles.
+
+Le niveau n'est donc pas choisi sur le matériel, qu'on ne peut pas interroger de
+façon fiable depuis le navigateur, mais sur la **frame médiane mesurée** sur une
+fenêtre de 90 frames. Si elle dépasse 21 ms (47 fps), on descend d'un cran.
+
+| niveau | MSAA | dpr max | grain |
+| --- | --- | --- | --- |
+| haute | 4 | 2 | oui |
+| moyenne | 0 | 1,5 | oui |
+| basse | 0 | 1 | non |
+
+L'ordre des renoncements suit le coût, pas le goût. **Le MSAA d'abord** : le plus
+cher, et le moins identitaire sur une scène sombre déjà grainée. **La densité de
+pixels ensuite**, qui divise le remplissage sans toucher à la composition. **Le
+grain en dernier**, parce qu'il ne coûte qu'une passe et fait beaucoup pour
+l'aspect photographique. Le bloom n'est jamais coupé : sans lui les fenêtres
+allumées, les beffrois et les feux de balisage ne sont plus que des taches
+plates.
+
+La descente est **à sens unique**. Remonter dès qu'on repasse sous le budget
+ferait osciller le MSAA au gré du trafic de tuiles, et une bascule visible
+toutes les deux secondes est pire qu'un cran de qualité en moins. Le niveau se
+réévalue au rechargement. La politique est pure (`src/lib/quality.ts`) et
+vérifiée dans Node : descente sur régime lent, aucune descente sur un hoquet de
+streaming isolé (la médiane l'absorbe), jamais de remontée.
+
 ## Les archétypes de façade
 
 Cinq strates architecturales stéphanoises, assignées par une cascade de tags OSM
@@ -537,6 +571,7 @@ src/lib/families.ts     affectation d'une famille de silhouette à une emprise
 src/lib/familyKits.ts   géométrie des familles : clocher, sheds, marquise, édicules
 src/lib/landmarks.ts    kits bespoke des six monuments (prime sur les familles)
 src/lib/streaming.ts    politique de streaming : tuiles, anneaux, hystérésis
+src/lib/quality.ts      niveaux de rendu et descente sur frame médiane mesurée
 src/scene/              rendu three.js (routes, sols, bâtiments, arbres, tram,
                         voiture, portiques, caméra)
 src/state/store.ts      zustand
