@@ -6,7 +6,7 @@ import { buildGraph, type RoadGraph } from "./lib/graph";
 import { makeCheckpoints, spawnAt } from "./lib/race";
 import { loadBuildings, prepareBuildings, buildWallIndex } from "./lib/buildings";
 import { loadFeatures, prepareFeatures } from "./lib/features";
-import { loadRail, prepareRail, railLength } from "./lib/rail";
+import { loadRail, prepareRail, railLength, makeRoadProbe } from "./lib/rail";
 import { useKeyboard } from "./lib/input";
 import { useStore } from "./state/store";
 import { Roads } from "./scene/Roads";
@@ -50,6 +50,7 @@ export default function App() {
   const walls = useStore((s) => s.walls);
   const features = useStore((s) => s.features);
   const rail = useStore((s) => s.rail);
+  const roadProbe = useStore((s) => s.roadProbe);
   const checkpoints = useStore((s) => s.checkpoints);
   // objet stable : sinon les lampadaires se reconstruiraient a chaque rendu
   const centre = useMemo(() => {
@@ -102,7 +103,11 @@ export default function App() {
         // troncons aeriens sont gardes, ce sont eux qui portent la gare Carnot.
         loadRail().then((lines) => {
           if (dead) return;
-          const flatRail = prepareRail(lines, g.proj);
+          // La sonde de chaussee sert au profil du tablier ET aux piles : le
+          // viaduc doit passer AU-DESSUS des rues, pas dessus.
+          const onRoad = makeRoadProbe(ways, g.proj);
+          const flatRail = prepareRail(lines, g.proj, onRoad);
+          useStore.getState().setRoadProbe(onRoad);
           console.log(
             `rail: ${lines.length} troncons charges, ${flatRail.length} aeriens, ` +
               `${Math.round(railLength(flatRail))} m de viaduc`,
@@ -175,7 +180,7 @@ export default function App() {
             {centre && <Lamps ways={ways} proj={graph!.proj} centre={centre} graph={graph!} />}
             {/* le viaduc avant les batiments : c'est un ouvrage, pas du relief,
                 et il doit exister meme si la couche batiments est coupee */}
-            {rail.length > 0 && <Viaduct rail={rail} buildings={buildings} />}
+            {rail.length > 0 && <Viaduct rail={rail} buildings={buildings} onRoad={roadProbe} />}
             {showBuildings && buildings.length > 0 && <Buildings buildings={buildings} />}
             {showBuildings && buildings.length > 0 && (
               <Landmarks buildings={buildings} proj={graph!.proj} />

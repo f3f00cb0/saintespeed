@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import * as THREE from "three";
-import { DECK_HEIGHT, DECK_THICKNESS, DECK_WIDTH, railLength, type FlatRail } from "../lib/rail";
+import { DECK_HEIGHT, DECK_THICKNESS, DECK_WIDTH, railLength, type FlatRail, type RoadProbe } from "../lib/rail";
 import type { FlatBuilding } from "../lib/buildings";
 
 // Le viaduc : tablier continu le long du trace ferroviaire reel, sur ses piles.
@@ -9,9 +9,14 @@ import type { FlatBuilding } from "../lib/buildings";
 // aerienne sur toute la ville ne pesent que quelques milliers de triangles, et
 // un ouvrage qui apparait par tuiles se verrait de loin.
 //
-// Deux regles tiennent la credibilite, et elles sont mesurees, pas devinees :
+// Trois regles tiennent la credibilite, et elles sont mesurees, pas devinees :
 //   - aucune pile DANS un batiment. Le trace passe au-dessus de quelques
 //     emprises ; y planter un poteau donnerait un pilier qui traverse un toit.
+//   - aucune pile SUR une chaussee. Signale depuis le jeu, boulevard Alfred de
+//     Musset et rue Rouget de Lisle : les piles se plantaient au milieu de la
+//     route. Un viaduc franchit une rue, ses appuis sont sur les cotes. Quand
+//     l'appui theorique tombe sur la chaussee, on le decale le long de
+//     l'ouvrage jusqu'a trouver un sol libre, et a defaut on saute la travee.
 //   - pas de pile sous une rampe d'about : en dessous de 4 m le tablier est un
 //     remblai, il ne repose plus sur des poteaux.
 
@@ -82,13 +87,23 @@ function box(b: Buf, cx: number, cy: number, w: number, d: number, z0: number, z
   quad(b, P(A, z1), P(B, z1), P(C, z1), P(D, z1), c);
 }
 
-export function Viaduct({ rail, buildings }: { rail: FlatRail[]; buildings: FlatBuilding[] }) {
+export function Viaduct({
+  rail,
+  buildings,
+  onRoad,
+}: {
+  rail: FlatRail[];
+  buildings: FlatBuilding[];
+  onRoad: RoadProbe | null;
+}) {
   const geometry = useMemo(() => {
     const t0 = performance.now();
     const buf: Buf = { pos: [], col: [] };
     const inBuilding = buildingGrid(buildings);
+    const blocked = (x: number, y: number) => inBuilding(x, y) || (onRoad ? onRoad(x, y) : false);
     let piers = 0;
     let skipped = 0;
+    let shifted = 0;
 
     for (const line of rail) {
       const pts = line.points;
@@ -135,8 +150,21 @@ export function Viaduct({ rail, buildings }: { rail: FlatRail[]; buildings: Flat
           const py = a.y + dy * t;
           const pz = a.z + (b.z - a.z) * t;
           if (pz - DECK_THICKNESS < PIER_MIN_HEIGHT) continue; // remblai, pas de pile
-          if (inBuilding(px, py)) { skipped++; continue; }
-          box(buf, px, py, PIER_W, PIER_D, 0, pz - DECK_THICKNESS, PIER);
+          // On cherche un sol libre en glissant le long de l'ouvrage, de part
+          // et d'autre de l'appui theorique.
+          let ox = px, oy = py, ok = !blocked(px, py), moved = 0;
+          if (!ok) {
+            for (const d of [2, -2, 4, -4, 6, -6]) {
+              const t2 = t + d / len;
+              if (t2 < 0 || t2 > 1) continue;
+              const cx = a.x + dx * t2, cy = a.y + dy * t2;
+              if (!blocked(cx, cy)) { ox = cx; oy = cy; ok = true; moved = d; break; }
+            }
+          }
+          if (!ok) { skipped++; continue; }
+          if (moved) shifted++;
+          const oz = a.z + (b.z - a.z) * (t + moved / len);
+          box(buf, ox, oy, PIER_W, PIER_D, 0, oz - DECK_THICKNESS, PIER);
           piers++;
         }
       }
@@ -149,11 +177,11 @@ export function Viaduct({ rail, buildings }: { rail: FlatRail[]; buildings: Flat
     g.computeBoundingSphere();
     console.log(
       `viaduc: ${rail.length} troncons aeriens, ${Math.round(railLength(rail))} m, ` +
-        `${piers} piles (${skipped} evitees dans un batiment), ` +
+        `${piers} piles (${shifted} decalees, ${skipped} sautees : batiment ou chaussee), ` +
         `${Math.round(buf.pos.length / 9)} tris, ${Math.round(performance.now() - t0)} ms`,
     );
     return g;
-  }, [rail, buildings]);
+  }, [rail, buildings, onRoad]);
 
   if (!rail.length) return null;
   return (

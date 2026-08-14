@@ -421,8 +421,12 @@ export const LANDMARKS = new Map<number, Landmark>([
   // Elles etaient en PIERRE, ce qui etait faux : la gare est de 1980, oeuvre de
   // M. Beynet, moderniste et en beton. Le campanile a horloge que le kit leur
   // ajoutait a ete supprime pour la meme raison (voir src/lib/landmarks.ts).
-  [63272393, { archetype: Archetype.Moderne, wall: 0xb2b4b6, roof: 0x3a3c3f, height: 13, label: "Gare Carnot" }],
-  [63275816, { archetype: Archetype.Moderne, wall: 0xb2b4b6, roof: 0x3a3c3f, label: "Gare Carnot" }],
+  // Les trois emprises SNCF sont SOUS les quais, pas a cote : mesure en plan,
+  // elles recouvrent l'emprise des quais, et a 12,4 et 13 m elles traversaient
+  // le tablier et l'abri. Leurs niveaux OSM (4) decrivent un immeuble ordinaire,
+  // pas un hall sous des quais aeriens. Elles s'arretent donc sous le tablier.
+  [63272393, { archetype: Archetype.Moderne, wall: 0xb2b4b6, roof: 0x3a3c3f, height: 8, label: "Gare Carnot" }],
+  [63275816, { archetype: Archetype.Moderne, wall: 0xb2b4b6, roof: 0x3a3c3f, height: 8, label: "Gare Carnot" }],
   // Celle-ci est SOUS le tablier : c'est la seule emprise de la ville que le
   // viaduc traverse, mesure a l'appui (5 emprises survolees, une seule plus
   // haute que le tablier). Sa hauteur de 15,5 m etait inferee, pas taguee, et

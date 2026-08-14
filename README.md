@@ -690,16 +690,28 @@ la gare ne pose plus que ce qui lui est propre (élargissement du tablier, quais
 abri orange), et le viaduc lui-même est construit sur le tracé réel par
 `src/scene/Viaduct.tsx`.
 
-Trois règles tiennent la crédibilité, toutes vérifiées par la mesure :
+Quatre règles tiennent la crédibilité, toutes imposées par une mesure, et trois
+d'entre elles viennent de signalements de terrain sur la version précédente :
 
-- **Aucun pont ne s'arrête en l'air.** Un about qui n'est raccordé à aucun autre
-  tronçon aérien redescend en remblai sur 22 m. 82 abouts sont dans ce cas.
-- **Aucune pile dans un bâtiment.** 77 piles posées tous les 14 m, **9 évitées**
-  parce qu'elles tombaient dans une emprise.
-- **Rien ne traverse le tablier.** Le tracé survole 5 emprises ; une seule était
-  plus haute que le tablier, le hall de la gare Carnot, dont les 15,5 m étaient
-  **inférés et non tagués**. Un hall sous des quais aériens s'arrête sous le
-  tablier : 8 m.
+- **Le tablier ne se pose jamais sur la route.** Il garde 5,6 m de tirant d'air
+  au-dessus de toute chaussée, et la contrainte se propage à la pente de rampe :
+  il remonte avant une rue et ne redescend qu'après. Avant cette règle,
+  **171 points de tablier passaient sous 5,5 m**, dont beaucoup à 1,1 m.
+- **Aucune pile sur une chaussée ni dans un bâtiment.** Un appui qui tombe mal
+  glisse le long de l'ouvrage jusqu'à 6 m pour trouver un sol libre, et à défaut
+  la travée est sautée. Sur 193 appuis théoriques, **66 tombaient sur une route
+  ou dans une emprise**.
+- **Les remblais courts sont avalés.** Un tronçon non tagué `bridge` qui relie
+  deux travées et fait moins de 150 m fait partie de l'ouvrage : dans une ville
+  sans relief, le viaduc ne peut pas s'interrompre là où le terrain montait.
+  Ça allonge le viaduc de 2 174 à **2 767 m** et supprime des ruptures là où, sur
+  le terrain, il y a un pont.
+- **Un about ne redescend que si la ligne s'arrête vraiment.** La première
+  version comparait les abouts aériens entre eux et se trompait : les 82 abouts
+  en rampe avaient tous une voie ferrée à moins de 12 m. Il en reste **2**.
+
+Reste une simplification assumée : les sections de remblai sont rendues comme du
+tablier sur piles, faute de relief pour les porter.
 
 Le tout est construit une fois, hors streaming, pour quelques milliers de
 triangles : un ouvrage qui apparaîtrait par tuiles se verrait de loin.
