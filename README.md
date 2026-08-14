@@ -748,6 +748,47 @@ Jaurès recoupent les 114 comptés à l'époque dans un rayon de 120 m.
 Note de terrain : Overpass a rendu 504 sur ses quatre miroirs au premier tour.
 Les retries du script ont fait le travail au second.
 
+### La place Jean-Jaurès, objet par objet
+
+Premier lieu traité au niveau exigé : pas une couche de statues instanciées, mais
+huit objets nommés, chacun avec sa source à côté de sa géométrie
+(`src/lib/monuments.ts`).
+
+**Ce que dit la source.** La place, ancienne **place Marengo** (nommée le 14 mars
+1801, devenue Jean-Jaurès le 30 décembre 1919), est aménagée dès l'origine en
+jardin public avec bassin, végétation et kiosque. C'est l'une des seules places
+stéphanoises qui possède encore des bassins. Le **kiosque à musique de Marengo**
+(MH, PA00117602) est construit en **1870 par Mazerat**, architecte de la ville,
+puis **entièrement reconstruit en 1914** en réemployant toute la **fonte**
+d'origine. Sur **chaque face**, un cartouche porte le nom d'un compositeur :
+Ravel, Bizet, Debussy, Saint-Saëns, Massenet, Gounod, Fauré, Berlioz, Lalo,
+Chabrier. **Dix noms, donc dix pans** : la géométrie sort de la source, elle n'est
+pas choisie. **Vénus** (Paul Belmondo) et **Apollon**, deux statues monumentales
+posées en **1951**, qui ont fait scandale.
+
+**Ce que la mesure a corrigé.** Le kiosque avait été parti sur un diamètre deviné
+de 9 m. Le harnais a trouvé une **emprise OSM à 0,7 m** du point patrimoine :
+way 161467265, `leisure=bandstand`, `roof:shape=conical`, MH inscrit le 2 février
+1987, **99 m² pour 5,62 m de rayon équivalent**, contour de 20 sommets tracé au
+cercle. Le kit est donc posé sur l'emprise (`replaceBase`) et son rayon en sort ;
+seul le nombre de pans reste celui de la source. Sans ça, le kiosque sortait en
+**boîte générique de 3,1 m avec une trame de fenêtres**, au milieu du jardin.
+
+Autre chose que seule la mesure donnait : **Daphné est à 1,4 m du centre du
+bassin de 8,8 m**. Ce n'est pas une statue posée à côté d'un bassin, c'est une
+statue **de** bassin, et elle se pose dans l'eau.
+
+**Ce qui n'est pas sourcé est écrit comme tel** : hauteur des colonnes de fonte,
+cotes des socles, silhouettes des figures. Les statues sont des silhouettes à
+hauteur de voiture, pas des portraits. Ce qui est fidèle, c'est leur position,
+leur type (buste sur colonne contre statue en pied), leur matière quand OSM la
+donne, et le fait qu'elles diffèrent entre elles. L'éclairage des bassins et du
+kiosque est un choix assumé : de nuit, une vasque non éclairée est un trou noir.
+
+`npm run elevation -- kiosque-marengo` (ou n'importe quelle clef d'objet sans
+emprise) dessine l'objet seul, à l'échelle, avec une silhouette de 1,70 m comme
+étalon.
+
 ## Le décor
 
 Avant d'écrire une ligne de rendu, les couches ont été **comptées** sur la bbox

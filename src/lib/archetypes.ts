@@ -439,6 +439,12 @@ export const LANDMARKS = new Map<number, Landmark>([
   // les piles, le tablier et l'encadrement orange vitre.
   [1365990293, { archetype: Archetype.Moderne, wall: 0xc4581c, roof: 0xb04e18, height: 14, replaceBase: true, label: "Quai sud de la gare Carnot" }],
   [1365990292, { archetype: Archetype.Moderne, wall: 0xc4581c, roof: 0xb04e18, height: 14, replaceBase: true, label: "Quai nord de la gare Carnot" }],
+  // Kiosque a musique de Marengo, way 161467265 : building=roof,
+  // leisure=bandstand, roof:shape=conical, MH inscrit le 2 fevrier 1987. OSM le
+  // decrit donc entierement, et le jeu en faisait une boite de 3,1 m avec une
+  // trame de fenetres au milieu du jardin public. replaceBase : le kit le
+  // dessine, et il tire son rayon de l'emprise (99 m2).
+  [161467265, { archetype: Archetype.Pierre, wall: 0x8a8880, roof: 0x4c4f52, height: 9.5, replaceBase: true, label: "Kiosque a musique de Marengo" }],
 
   // --- silhouettes majeures, relevees le 2026-08-14 -------------------------
   // Les hauteurs viennent des niveaux reels quand la source les donne, jamais

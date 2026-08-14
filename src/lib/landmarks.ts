@@ -76,6 +76,7 @@ import {
 } from "./landmarkGeometry";
 import type { Painted } from "./facadeTextures";
 import { DECK_HEIGHT } from "./rail";
+import { PLACE_MONUMENTS, kiosqueMarengo } from "./monuments";
 
 /**
  * Dimensions de l'emprise dans le repere local du repere : meme structure que
@@ -770,6 +771,7 @@ export const LANDMARK_KITS = new Map<number, KitBuilder>([
   // section reelle de gare aerienne. Le sud porte en plus le tablier commun.
   [1365990293, quaiCarnot(true)],
   [1365990292, quaiCarnot(false)],
+  [161467265, kiosqueMarengo],
   [49047886, zenith],
   [63308936, chevalement],
   [63319547, bourseDuTravail],
@@ -782,7 +784,7 @@ export const LANDMARK_KITS = new Map<number, KitBuilder>([
 ]);
 
 /** Repere sans emprise OSM : position + orientation reelles. */
-export const SYNTHETIC_LANDMARKS: {
+const SYNTHETIC: {
   key: string;
   lon: number;
   lat: number;
@@ -792,4 +794,14 @@ export const SYNTHETIC_LANDMARKS: {
   // Geoffroy-Guichard : la pelouse est orientee nord-sud, donc l'axe principal
   // du kit (x local) pointe vers le nord.
   { key: "stade-geoffroy-guichard", lon: 4.390344, lat: 45.460856, rot: Math.PI / 2, build: stade },
+];
+
+/**
+ * Reperes sans emprise OSM. Au stade s'ajoutent les objets de place : kiosque,
+ * bassins et sculptures, qui n'existent dans OSM que par un point nomme. Voir
+ * src/lib/monuments.ts, ou chaque objet garde sa source a cote de sa geometrie.
+ */
+export const SYNTHETIC_LANDMARKS = [
+  ...SYNTHETIC,
+  ...PLACE_MONUMENTS.map(({ key, lon, lat, rot, build }) => ({ key, lon, lat, rot, build })),
 ];

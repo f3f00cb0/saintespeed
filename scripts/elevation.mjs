@@ -5,7 +5,8 @@
 //   npm run elevation                 # l'Hotel de Ville
 //   npm run elevation -- 63319547     # un autre repere, par id OSM
 //   npm run elevation -- 63319547 --from=y+   # depuis une autre facade
-//   npm run elevation -- --list       # les ids disponibles
+//   npm run elevation -- kiosque-marengo      # un objet sans emprise, par clef
+//   npm run elevation -- --list       # les ids et clefs disponibles
 //
 // La facade principale n'est pas du meme cote pour tous les reperes : elle est
 // mesuree emprise par emprise (src/lib/landmarks.ts). Par defaut on regarde
@@ -42,7 +43,7 @@ const CACHE = resolve(ROOT, "public/sainte-buildings.json");
 const ENTRY = resolve(HERE, "elevation.entry.ts");
 
 const args = process.argv.slice(2);
-const ids = args.filter((a) => !a.startsWith("--")).map(Number);
+const targets = args.filter((a) => !a.startsWith("--"));
 const fromArg = args.find((a) => a.startsWith("--from="));
 const side = fromArg ? fromArg.slice("--from=".length) : "y-";
 if (!["y-", "y+", "x-", "x+"].includes(side)) {
@@ -69,11 +70,18 @@ try {
     for (const { id, label } of mod.list()) console.log(`  ${String(id).padStart(10)}  ${label}`);
     console.log("\nnpm run elevation -- <id>");
   } else {
-    for (const id of ids.length ? ids : [-5201020]) {
-      // Les contours issus de relations portent un id negatif : on le nomme
-      // "rel" plutot que de laisser deux tirets dans le nom de fichier.
-      const slug = id < 0 ? `rel${-id}` : `way${id}`;
-      console.log(mod.render(id, CACHE, resolve(ROOT, `reference/elevation-${slug}.jpg`), side));
+    for (const t of targets.length ? targets : ["-5201020"]) {
+      // Un repere sans emprise se designe par sa clef (kiosque-marengo), un
+      // repere pose sur une emprise par son id OSM. Les contours issus de
+      // relations portent un id negatif : on le nomme "rel" plutot que de
+      // laisser deux tirets dans le nom de fichier.
+      const id = Number(t);
+      if (Number.isNaN(id)) {
+        console.log(mod.renderSynthetic(t, resolve(ROOT, `reference/elevation-${t}.jpg`)));
+      } else {
+        const slug = id < 0 ? `rel${-id}` : `way${id}`;
+        console.log(mod.render(id, CACHE, resolve(ROOT, `reference/elevation-${slug}.jpg`), side));
+      }
     }
   }
 } finally {

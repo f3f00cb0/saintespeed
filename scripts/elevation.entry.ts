@@ -13,7 +13,7 @@ import { makeProjector } from "../src/lib/project";
 import { prepareBuildings, CITY_CENTRE, type Building } from "../src/lib/buildings";
 import { frameOf } from "../src/lib/frame";
 import { newEmit, type Buf } from "../src/lib/landmarkGeometry";
-import { LANDMARK_KITS } from "../src/lib/landmarks";
+import { LANDMARK_KITS, SYNTHETIC_LANDMARKS } from "../src/lib/landmarks";
 import { LANDMARKS } from "../src/lib/archetypes";
 
 const W = 1280;
@@ -26,8 +26,25 @@ const hexTint = (h: number) => ({
 });
 
 /** Les reperes qui ont un kit bespoke, pour `npm run elevation -- --list`. */
-export function list(): { id: number; label: string }[] {
-  return [...LANDMARK_KITS.keys()].map((id) => ({ id, label: LANDMARKS.get(id)?.label ?? "?" }));
+export function list(): { id: string; label: string }[] {
+  return [
+    ...[...LANDMARK_KITS.keys()].map((id) => ({ id: String(id), label: LANDMARKS.get(id)?.label ?? "?" })),
+    ...SYNTHETIC_LANDMARKS.map((s) => ({ id: s.key, label: `${s.key} (sans emprise)` })),
+  ];
+}
+
+/**
+ * Elevation d'un repere SANS emprise : kiosque, bassin, sculpture, stade. Il n'y
+ * a pas de contour a extruder ni d'orientation a lire, seulement le kit. Le
+ * cadrage se prend donc sur la geometrie produite.
+ */
+export function renderSynthetic(key: string, outPath: string): string {
+  const syn = SYNTHETIC_LANDMARKS.find((s) => s.key === key);
+  if (!syn) throw new Error(`repere synthetique inconnu : ${key}`);
+  const f = { x: 0, y: 0, rot: syn.rot, w: 0, d: 0, area: 0, height: 0, minx: 0, maxx: 0, miny: 0, maxy: 0 };
+  const e = newEmit();
+  syn.build(e, f, { tileU: 18.6, patch: [0.5, 0.5] } as any, { r: 1, g: 1, b: 1 }, { r: 1, g: 1, b: 1 }, f);
+  return rasterize({ kit: e, base: newEmit(), f, view: syn.rot, outPath, label: key, hull: null });
 }
 
 /**
@@ -92,20 +109,44 @@ export function render(id: number, cachePath: string, outPath: string, side: Sid
     }
   }
 
+  return rasterize({ kit: e, base, f, view, outPath, label: lm.label ?? String(id), hull: b.ring });
+}
+
+type RasterArgs = {
+  kit: ReturnType<typeof newEmit>;
+  base: ReturnType<typeof newEmit>;
+  f: { x: number; y: number; rot: number; w: number; d: number; height: number };
+  view: number;
+  outPath: string;
+  label: string;
+  /** Contour, quand il y en a un : il donne le cadrage. Sinon on cadre sur la
+   *  geometrie produite, ce qui est le cas des objets sans emprise. */
+  hull: { x: number; y: number }[] | null;
+};
+
+function rasterize({ kit: e, base, f, view, outPath, label, hull }: RasterArgs): string {
   // --- rasterisation --------------------------------------------------------
   type Tri = { x: number[]; y: number[]; depth: number; col: [number, number, number]; shade: number };
   const tris: Tri[] = [];
   const pad = 6;
-  // Etendue horizontale vue depuis ce cote : on la mesure sur le contour dans
-  // le repere de vue, pas sur la bbox du repere du kit, qui n'est la bonne que
-  // pour la facade par defaut.
+  // Etendue horizontale vue depuis ce cote : sur le contour quand il existe,
+  // sinon sur la geometrie elle-meme (objets sans emprise : kiosque, bassin,
+  // sculpture, stade).
   const cv = Math.cos(view), sv = Math.sin(view);
   let vmin = Infinity, vmax = -Infinity;
-  for (const p of b.ring) {
+  const seen = hull
+    ? hull.map((p) => ({ x: p.x, y: p.y }))
+    : [e.walls, e.roofs, e.glow].flatMap((buf) => {
+        const pts: { x: number; y: number }[] = [];
+        for (let i = 0; i < buf.pos.length; i += 3) pts.push({ x: buf.pos[i], y: -buf.pos[i + 2] });
+        return pts;
+      });
+  for (const p of seen) {
     const u = (p.x - f.x) * cv + (p.y - f.y) * sv;
     if (u < vmin) vmin = u;
     if (u > vmax) vmax = u;
   }
+  if (!Number.isFinite(vmin) || vmax - vmin < 2) { vmin = -8; vmax = 8; }
   const x0 = vmin - pad;
   const scale = W / (vmax + pad - x0);
   const sx = (lx: number) => (lx - x0) * scale;
@@ -190,8 +231,8 @@ export function render(id: number, cachePath: string, outPath: string, side: Sid
 
   writeFileSync(outPath, encode({ data: Buffer.from(img), width: W, height: HPX }, 88).data);
   return (
-    `${lm.label} (vu depuis ${side}) : ${outPath}\n` +
-    `  emprise ${f.w.toFixed(1)} x ${f.d.toFixed(1)} m, mur ${b.height.toFixed(1)} m, ` +
+    `${label} : ${outPath}\n` +
+    `  largeur vue ${(vmax - vmin).toFixed(1)} m, ` +
     `${Math.round(tris.length)} triangles, echelle ${scale.toFixed(1)} px/m`
   );
 }
