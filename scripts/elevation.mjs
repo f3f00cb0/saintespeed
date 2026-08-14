@@ -6,6 +6,7 @@
 //   npm run elevation -- 63319547     # un autre repere, par id OSM
 //   npm run elevation -- 63319547 --from=y+   # depuis une autre facade
 //   npm run elevation -- kiosque-marengo      # un objet sans emprise, par clef
+//   npm run elevation -- type:croix           # une typologie d'objet, seule
 //   npm run elevation -- --list       # les ids et clefs disponibles
 //
 // La facade principale n'est pas du meme cote pour tous les reperes : elle est
@@ -76,7 +77,10 @@ try {
       // relations portent un id negatif : on le nomme "rel" plutot que de
       // laisser deux tirets dans le nom de fichier.
       const id = Number(t);
-      if (Number.isNaN(id)) {
+      if (t.startsWith("type:")) {
+        const n = t.slice(5);
+        console.log(mod.renderKind(n, resolve(ROOT, `reference/elevation-type-${n}.jpg`)));
+      } else if (Number.isNaN(id)) {
         console.log(mod.renderSynthetic(t, resolve(ROOT, `reference/elevation-${t}.jpg`)));
       } else {
         const slug = id < 0 ? `rel${-id}` : `way${id}`;

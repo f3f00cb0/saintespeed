@@ -20,6 +20,7 @@ import { Tram } from "./scene/Tram";
 import { Fountains } from "./scene/Fountains";
 import { Fences } from "./scene/Fences";
 import { Viaduct } from "./scene/Viaduct";
+import { Monuments } from "./scene/Monuments";
 import { Perf } from "./scene/Perf";
 import { AutoQuality } from "./scene/Quality";
 import { Lamps } from "./scene/Lamps";
@@ -181,6 +182,9 @@ export default function App() {
             {/* le viaduc avant les batiments : c'est un ouvrage, pas du relief,
                 et il doit exister meme si la couche batiments est coupee */}
             {rail.length > 0 && <Viaduct rail={rail} buildings={buildings} onRoad={roadProbe} />}
+            {/* croix de chemin, monuments aux morts, steles, bustes, statues :
+                deux draw calls pour toute la ville */}
+            <Monuments proj={graph!.proj} />
             {showBuildings && buildings.length > 0 && <Buildings buildings={buildings} />}
             {showBuildings && buildings.length > 0 && (
               <Landmarks buildings={buildings} proj={graph!.proj} />

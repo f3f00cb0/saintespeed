@@ -14,6 +14,8 @@ import { prepareBuildings, CITY_CENTRE, type Building } from "../src/lib/buildin
 import { frameOf } from "../src/lib/frame";
 import { newEmit, type Buf } from "../src/lib/landmarkGeometry";
 import { LANDMARK_KITS, SYNTHETIC_LANDMARKS } from "../src/lib/landmarks";
+import { kitForPointKind } from "../src/lib/monuments";
+import { POINT_KIND_NAMES } from "../src/lib/monumentPoints";
 import { LANDMARKS } from "../src/lib/archetypes";
 
 const W = 1280;
@@ -30,7 +32,24 @@ export function list(): { id: string; label: string }[] {
   return [
     ...[...LANDMARK_KITS.keys()].map((id) => ({ id: String(id), label: LANDMARKS.get(id)?.label ?? "?" })),
     ...SYNTHETIC_LANDMARKS.map((s) => ({ id: s.key, label: `${s.key} (sans emprise)` })),
+    ...POINT_KIND_NAMES.map((n) => ({ id: `type:${n}`, label: `typologie ${n}` })),
   ];
+}
+
+/**
+ * Elevation d'une TYPOLOGIE seule (type:croix, type:guerre...). Ces objets sont
+ * poses par dizaines et fusionnes au rendu : les regarder un par un est le seul
+ * moyen de verifier leur silhouette.
+ */
+export function renderKind(name: string, outPath: string): string {
+  const kind = POINT_KIND_NAMES.indexOf(name);
+  if (kind < 0) throw new Error(`typologie inconnue : ${name} (attendu ${POINT_KIND_NAMES.join(", ")})`);
+  const kit = kitForPointKind(kind, 1);
+  if (!kit) throw new Error(`pas de kit pour ${name}`);
+  const f = { x: 0, y: 0, rot: 0, w: 0, d: 0, area: 0, height: 0, minx: 0, maxx: 0, miny: 0, maxy: 0 };
+  const e = newEmit();
+  kit(e, f, {} as any, { r: 1, g: 1, b: 1 }, { r: 1, g: 1, b: 1 }, f);
+  return rasterize({ kit: e, base: newEmit(), f, view: 0, outPath, label: `typologie ${name}`, hull: null });
 }
 
 /**
@@ -128,7 +147,6 @@ function rasterize({ kit: e, base, f, view, outPath, label, hull }: RasterArgs):
   // --- rasterisation --------------------------------------------------------
   type Tri = { x: number[]; y: number[]; depth: number; col: [number, number, number]; shade: number };
   const tris: Tri[] = [];
-  const pad = 6;
   // Etendue horizontale vue depuis ce cote : sur le contour quand il existe,
   // sinon sur la geometrie elle-meme (objets sans emprise : kiosque, bassin,
   // sculpture, stade).
@@ -146,9 +164,18 @@ function rasterize({ kit: e, base, f, view, outPath, label, hull }: RasterArgs):
     if (u < vmin) vmin = u;
     if (u > vmax) vmax = u;
   }
-  if (!Number.isFinite(vmin) || vmax - vmin < 2) { vmin = -8; vmax = 8; }
-  const x0 = vmin - pad;
-  const scale = W / (vmax + pad - x0);
+  if (!Number.isFinite(vmin) || vmax - vmin < 0.5) { vmin = -2; vmax = 2; }
+  // La marge suit la taille de l'objet : un cadrage fixe de 6 m noyait une
+  // croix de chemin de 1,5 m dans le vide.
+  const pad = Math.max(1.2, (vmax - vmin) * 0.3);
+  // L'echelle doit tenir la LARGEUR et la HAUTEUR : cadrer sur la seule largeur
+  // coupait la croix de chemin, haute et etroite.
+  let zmax = 0;
+  for (const buf of [base.walls, e.walls, e.roofs, e.glow]) {
+    for (let i = 1; i < buf.pos.length; i += 3) if (buf.pos[i] > zmax) zmax = buf.pos[i];
+  }
+  const scale = Math.min(W / (vmax - vmin + 2 * pad), (HPX - 90) / Math.max(zmax * 1.1, 1));
+  const x0 = (vmin + vmax) / 2 - W / (2 * scale);
   const sx = (lx: number) => (lx - x0) * scale;
   const sy = (z: number) => HPX - 40 - z * scale;
   const c = cv;
@@ -226,8 +253,12 @@ function rasterize({ kit: e, base, f, view, outPath, label, hull }: RasterArgs):
       }
     }
   };
-  mark(vmin - 4, 0, 10, 0.25, [220, 180, 90]);
-  mark(vmin - 2.4, 0, 0.5, 1.7, [230, 230, 235]);
+  // Barre d'echelle : 10 m sur un batiment, 1 m sur un objet de trottoir, sinon
+  // elle sort du cadre ou elle devient invisible.
+  const bar = vmax - vmin > 20 ? 10 : 1;
+  const left = x0 + 1 / scale;
+  mark(left, 0, bar, 0.12 * (bar === 1 ? 0.3 : 1), [220, 180, 90]);
+  mark(left + bar + 0.4, 0, bar === 1 ? 0.12 : 0.5, 1.7, [230, 230, 235]);
 
   writeFileSync(outPath, encode({ data: Buffer.from(img), width: W, height: HPX }, 88).data);
   return (

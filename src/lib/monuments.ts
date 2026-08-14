@@ -51,6 +51,7 @@
 import type { Tint } from "./landmarkGeometry";
 import { addBox, addCylinder, addDome, addDisc, addGlowBox } from "./landmarkGeometry";
 import type { KitBuilder } from "./landmarks";
+import { hash01 } from "./archetypes";
 
 const STONE: Tint = { r: 0.5, g: 0.48, b: 0.43 }; // socles et margelles
 const CAST_IRON: Tint = { r: 0.24, g: 0.26, b: 0.27 }; // la fonte du kiosque
@@ -144,6 +145,61 @@ const statue = (socle: number, corps: number): KitBuilder => (e, a) => {
   addCylinder(e, a, { x: 0, y: 0, r: 0.3, rTop: 0.22, h: corps * 0.28, base: z + corps * 0.62, segments: 8, tint: BRONZE, cap: true });
   addDome(e, a, { x: 0, y: 0, r: 0.19, base: z + corps * 0.9, tint: BRONZE, bands: 3 });
 };
+
+// --- typologies de l'espace public -----------------------------------------
+//
+// Les 55 objets ponctuels de src/lib/monumentPoints.ts. On ne pose que les
+// types ou la FORME DECOULE DU TYPE : une croix de chemin est un fut sur un
+// emmarchement avec une croix au sommet, un monument aux morts est un obelisque
+// sur un socle, une stele est une dalle dressee. Ce sont des typologies, pas des
+// portraits, et c'est justement ce qui les rend defendables : le tag OSM porte
+// la forme.
+//
+// Les sculptures contemporaines ne sont PAS ici, et c'est un choix : leur forme
+// est ce qu'aucune etiquette ne determine. Voir l'en-tete du fichier genere.
+
+/** Croix de chemin : emmarchement, fut, croix. Tres present dans le Forez. */
+const croixDeChemin = (h: number): KitBuilder => (e, a) => {
+  addBox(e, a, null, { x: 0, y: 0, w: 1.5, d: 1.5, h: 0.28, base: 0, skin: "plain", tint: STONE, roofTint: STONE });
+  addBox(e, a, null, { x: 0, y: 0, w: 1.1, d: 1.1, h: 0.26, base: 0.28, skin: "plain", tint: STONE, roofTint: STONE });
+  addCylinder(e, a, { x: 0, y: 0, r: 0.22, rTop: 0.16, h, base: 0.54, segments: 6, tint: STONE, cap: true });
+  const z = 0.54 + h;
+  addBox(e, a, null, { x: 0, y: 0, w: 0.16, d: 0.16, h: 0.95, base: z, skin: "plain", tint: CAST_IRON, roofTint: CAST_IRON });
+  addBox(e, a, null, { x: 0, y: 0, w: 0.62, d: 0.14, h: 0.15, base: z + 0.5, skin: "plain", tint: CAST_IRON, roofTint: CAST_IRON });
+};
+
+/** Monument aux morts : socle a deux ressauts et obelisque. */
+const monumentAuxMorts = (h: number): KitBuilder => (e, a) => {
+  addBox(e, a, null, { x: 0, y: 0, w: 3.2, d: 2.2, h: 0.3, base: 0, skin: "plain", tint: STONE, roofTint: STONE });
+  addBox(e, a, null, { x: 0, y: 0, w: 2.4, d: 1.6, h: 0.55, base: 0.3, skin: "plain", tint: STONE, roofTint: STONE });
+  addBox(e, a, null, { x: 0, y: 0, w: 1.5, d: 1.1, h: 0.9, base: 0.85, skin: "plain", tint: STONE, roofTint: STONE });
+  addCylinder(e, a, { x: 0, y: 0, r: 0.62, rTop: 0.3, h, base: 1.75, segments: 4, tint: STONE, cap: true });
+  addCylinder(e, a, { x: 0, y: 0, r: 0.3, rTop: 0.02, h: 0.7, base: 1.75 + h, segments: 4, tint: STONE, cap: false });
+};
+
+/** Stele : dalle dressee sur un socle bas. */
+const stele = (h: number): KitBuilder => (e, a) => {
+  addBox(e, a, null, { x: 0, y: 0, w: 1.6, d: 1.1, h: 0.25, base: 0, skin: "plain", tint: STONE, roofTint: STONE });
+  addBox(e, a, null, { x: 0, y: 0, w: 1.15, d: 0.42, h, base: 0.25, skin: "plain", tint: STONE, roofTint: STONE });
+  addDome(e, a, { x: 0, y: 0, r: 0.575, base: 0.25 + h, tint: STONE, bands: 3 });
+};
+
+/**
+ * Kit d'une typologie. `seed` fait varier les hauteurs de plus ou moins 10 % :
+ * ces objets sont poses par dizaines, et deux croix de chemin identiques au
+ * centimetre trahissent le procedural plus surement qu'une forme approximative.
+ */
+export function kitForPointKind(kind: number, seed: number): KitBuilder | null {
+  const v = 0.9 + hash01(seed, 7) * 0.2;
+  switch (kind) {
+    case 0: return croixDeChemin(2.1 * v);
+    case 1: return monumentAuxMorts(2.6 * v);
+    case 2: return stele(1.7 * v);
+    case 3: return buste(2.3 * v);
+    case 4: return statue(1.2 * v, 2.2 * v);
+    default: return null;
+  }
+}
 
 export type PlaceMonument = {
   key: string;

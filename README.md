@@ -789,6 +789,45 @@ kiosque est un choix assumé : de nuit, une vasque non éclairée est un trou no
 emprise) dessine l'objet seul, à l'échelle, avec une silhouette de 1,70 m comme
 étalon.
 
+### Les objets ponctuels : 55 posés, 206 écartés avec une raison
+
+L'export patrimoine contient **261 points isolés**. Les poser tous en props
+instanciés aurait été exactement ce qu'on refuse. Le tri est donc mesuré, et ce
+qui est écarté l'est pour une raison écrite dans le fichier généré :
+
+| écarté | pourquoi |
+| --- | --- |
+| 23 musées et galeries, dont **20 à l'intérieur d'un bâtiment** | ce sont des points d'intérêt, il n'y a rien à poser dans la rue |
+| 18 points de vue | ce n'est pas un objet |
+| 17 tombes | dans les cimetières |
+| 11 lieux de culte en point, dont 10 dans un bâtiment | doublon des emprises déjà traitées par la famille culte |
+| 6 plaques, 5 peintures murales | c'est sur un mur, pas dans l'espace |
+| 32 points « autres » | ce sont des noms de gare et de place |
+| **40 sculptures contemporaines** | **leur forme est ce qu'aucune étiquette ne détermine** |
+
+Ce dernier point est le plus important. « Les Femmes Noires » de Ndary Lo, « Pouet »
+de Rémy Jacquier ou « Une Île Suffisante » d'Ervin Patkaï ne se déduisent pas d'un
+tag `artwork_type=sculpture`. Les inventer serait précisément la faute qu'on
+évite ailleurs. Elles méritent un traitement individuel sur source, comme les
+monuments, et attendront.
+
+Restent **57 objets de typologies où la forme découle du type** : croix de chemin
+(14), monument aux morts (10), stèle (6), buste (6), statue (21). Une croix de
+chemin est un fût sur un emmarchement avec sa croix, un monument aux morts un
+obélisque sur socle à ressauts, une stèle une dalle dressée. Le tag OSM porte la
+forme, et les hauteurs varient de ±10 % sur une graine tirée des coordonnées.
+
+Deux détails de méthode. **Un objet de bord de route peut tomber dans la chaussée
+du jeu**, dont la largeur est une convention de dessin : il est poussé
+perpendiculairement du minimum nécessaire plutôt que jeté, parce que c'est sa
+position qui est juste. Un seul cas, une croix à 2,4 m de l'axe d'un chemin dont
+la demi-chaussée fait 2,5 m. Et **tout est fusionné en deux maillages** : passés
+par le mécanisme des repères, ces 55 objets auraient coûté jusqu'à 150 draw
+calls, contre 194 pour la ville entière. Ils en coûtent deux, pour 5 640
+triangles.
+
+`npm run elevation -- type:croix` dessine une typologie seule, à l'échelle.
+
 ## Le décor
 
 Avant d'écrire une ligne de rendu, les couches ont été **comptées** sur la bbox
@@ -837,6 +876,8 @@ scripts/fetch-osm.mjs   Overpass -> public/sainte.geojson + sainte-buildings.jso
 scripts/build-notable.mjs  export.geojson -> src/lib/notable.ts (notabilité)
 scripts/elevation.mjs   élévation d'un repère en JPEG, sans GPU (+ .entry.ts)
 src/lib/rail.ts         voies ferrées, profil en long du viaduc et rampes
+src/lib/monuments.ts    objets de place et typologies de l'espace public
+src/lib/monumentPoints.ts  GÉNÉRÉ : les 57 objets ponctuels retenus
 src/lib/project.ts      lat/lon <-> mètres (équirectangulaire locale)
 src/lib/osm.ts          chargement, parsing, palette et largeurs par classe
 src/lib/graph.ts        graphe routier + index spatial + nearestEdge
