@@ -102,9 +102,12 @@ const FOYER: [number, number, number] = [1.75, 1.6, 1.3]; // hall de theatre ecl
 // l'interieur. Volontairement moins violent qu'un projecteur, c'est une
 // lanterne diffuse, pas une source ponctuelle.
 const LANTERN: [number, number, number] = [1.45, 1.5, 1.6];
-// Fenetre eclairee d'un etage noble : plus froide et plus sage qu'une arcade,
-// c'est de la lumiere de bureau derriere un rideau, pas une baie de porche.
-const WINDOW: [number, number, number] = [1.55, 1.42, 1.05];
+// Hotel de Ville : quatorze grandes baies sur une seule facade, c'est deux fois
+// plus de surface lumineuse que sur n'importe quel autre repere. Aux valeurs
+// communes le rez-de-chaussee fusionnait en un bandeau blanc sans forme sous le
+// bloom. On reste au-dessus du seuil, mais de peu.
+const HDV_ARCADE: [number, number, number] = [1.32, 1.0, 0.58];
+const HDV_WINDOW: [number, number, number] = [1.2, 1.1, 0.86];
 const STAGE: Tint = { r: 0.28, g: 0.29, b: 0.32 }; // sa base mate
 
 // --- Hotel de Ville ---------------------------------------------------------
@@ -139,7 +142,7 @@ const STAGE: Tint = { r: 0.28, g: 0.29, b: 0.32 }; // sa base mate
 // rectangle de 49,4 x 82,5 m dont la facade sud fait 49,3 m d'un seul tenant,
 // ce qui permet enfin de caler l'arcade en proportion : 56 % de la largeur
 // batie, mesures sur la photo frontale.
-const hotelDeVille: KitBuilder = (e, a, tex, tint, roofTint, dims) => {
+const hotelDeVille: KitBuilder = (e, a, _tex, tint, roofTint, dims) => {
   const H = dims.height; // corniche principale, 18,5 m mesures sur photo
   const facadeY = dims.miny; // nu de la facade sud, cote parvis
   const STONE: Tint = { r: 0.52, g: 0.49, b: 0.43 };
@@ -159,16 +162,28 @@ const hotelDeVille: KitBuilder = (e, a, tex, tint, roofTint, dims) => {
   });
 
   // 2) Le leger avant-corps du corps central, qui detache l'arcade des ailes.
-  addBox(e, a, tex, {
+  //    En PIERRE PLEINE, surtout pas avec le skin texture : la texture de facade
+  //    porte la trame de fenetres courantes de l'archetype, et un avant-corps
+  //    texture de 18,5 m repeignait donc des rangees de petites fenetres carrees
+  //    par-dessus l'arcade et l'etage noble. On voyait litteralement deux
+  //    facades superposees, une ordinaire sous la monumentale. Le corps central
+  //    d'un edifice neoclassique n'a pas de trame courante : il a ses arcades,
+  //    ses grandes baies cintrees et son attique, tous poses par ce kit.
+  addBox(e, a, null, {
     x: 0, y: facadeY + 0.3, w: arcadeW + 2.4, d: 0.6, h: H, base: 0,
-    skin: "facade", tint, roofTint,
+    skin: "plain", tint, roofTint: tint,
   });
 
   // 3) Les sept arcades en plein cintre du rez-de-chaussee sureleve, egales.
+  //    Elles sont volontairement moins lumineuses que la valeur commune ARCADE :
+  //    sept baies de 2,3 m cote a cote, plus sept baies a l'etage, ca fait
+  //    beaucoup de surface au-dessus du seuil de bloom, et sur la capture le
+  //    rez-de-chaussee virait au bandeau blanc sans forme. Assez chaud pour
+  //    bloomer, assez sage pour qu'on lise les arcs et les trumeaux.
   for (let i = 0; i < 7; i++) {
     addArchGlow(e, a, {
       x: -arcadeW / 2 + pitch * (i + 0.5), y: facadeY, base: stairRise,
-      w: pitch * 0.66, hRect: 3.6, color: ARCADE, axis: "y", sign: -1, offset: 0.6,
+      w: pitch * 0.58, hRect: 3.6, color: HDV_ARCADE, axis: "y", sign: -1, offset: 0.6,
     });
   }
 
@@ -187,7 +202,7 @@ const hotelDeVille: KitBuilder = (e, a, tex, tint, roofTint, dims) => {
   for (let i = 0; i < 7; i++) {
     addArchGlow(e, a, {
       x: -arcadeW / 2 + pitch * (i + 0.5), y: facadeY, base: nobleZ + 0.4,
-      w: pitch * 0.44, hRect: 3.4, color: WINDOW, axis: "y", sign: -1, offset: 0.55,
+      w: pitch * 0.44, hRect: 3.4, color: HDV_WINDOW, axis: "y", sign: -1, offset: 0.55,
     });
   }
   for (let i = 0; i <= 7; i++) {
@@ -233,7 +248,7 @@ const hotelDeVille: KitBuilder = (e, a, tex, tint, roofTint, dims) => {
   for (const s of [-1, 1]) {
     addArchGlow(e, a, {
       x: s * dims.w * 0.44, y: facadeY, base: 0, w: 3.4, hRect: 2.6,
-      color: ARCADE, axis: "y", sign: -1,
+      color: HDV_ARCADE, axis: "y", sign: -1,
     });
   }
 

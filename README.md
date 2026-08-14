@@ -610,6 +610,32 @@ et `maxx` vaut `+w/2`, donc écrire `x = 0` dans un kit, c'est écrire « sur
 l'axe ». Un seul endroit corrigé, douze kits redressés, plus les 1 876 emprises
 à famille qui utilisent le même repère.
 
+### Une façade générique ne doit jamais couvrir une composition monumentale
+
+Repéré sur une capture en jeu : au-dessus des grandes baies cintrées de l'Hôtel
+de Ville apparaissait **une rangée de petites fenêtres carrées**, et la trame
+continuait derrière l'arcade. Deux façades superposées, une ordinaire sous la
+monumentale.
+
+La cause : l'avant-corps du corps central était posé avec le **skin texturé**.
+Or cette texture porte la trame de fenêtres courantes de l'archétype, celle qui
+convient à un immeuble de rapport et pas à un édifice néoclassique, dont le corps
+central n'a que ses arcades, ses baies cintrées et son attique. Une boîte
+texturée de 18,5 m de haut repeignait donc la trame par-dessus tout le kit.
+
+L'avant-corps est maintenant en pierre pleine, et le kit ne contient plus **aucun
+triangle texturé**. Vérifié sur les douze repères : les seules surfaces texturées
+restantes sont au-dessus des corniches (pavillons d'angle, attiques, lucarnes),
+là où une trame de fenêtres est juste. Les deux exceptions qui descendent au sol,
+le Zénith et le chevalement, sont en `replaceBase` : leurs murs *sont* le
+bâtiment, il n'y a rien dessous.
+
+Réglage fait en même temps : quatorze grandes baies sur une seule façade, c'est
+deux fois plus de surface lumineuse que sur n'importe quel autre repère, et sous
+le bloom le rez-de-chaussée fusionnait en un bandeau blanc sans forme. Les baies
+de l'Hôtel de Ville ont leur propre valeur, juste au-dessus du seuil, et les
+arcades sont un peu plus étroites : on lit les arcs et les trumeaux.
+
 ## Le décor
 
 Avant d'écrire une ligne de rendu, les couches ont été **comptées** sur la bbox
