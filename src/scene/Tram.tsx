@@ -27,6 +27,34 @@ const POLE_H = 6.4;
 const POLE_OFFSET = 2.6; // du milieu de voie au poteau
 const POLE_COLOR = 0x2e2f28;
 
+function fitInstancedBounds(mesh: THREE.InstancedMesh, baseRadius: number) {
+  const m = new THREE.Matrix4();
+  const pos = new THREE.Vector3();
+  const min = new THREE.Vector3(Infinity, Infinity, Infinity);
+  const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+
+  for (let i = 0; i < mesh.count; i++) {
+    mesh.getMatrixAt(i, m);
+    pos.setFromMatrixPosition(m);
+    const r = baseRadius * m.getMaxScaleOnAxis();
+    min.x = Math.min(min.x, pos.x - r);
+    min.y = Math.min(min.y, pos.y - r);
+    min.z = Math.min(min.z, pos.z - r);
+    max.x = Math.max(max.x, pos.x + r);
+    max.y = Math.max(max.y, pos.y + r);
+    max.z = Math.max(max.z, pos.z + r);
+  }
+
+  const center = new THREE.Vector3(
+    (min.x + max.x) / 2,
+    (min.y + max.y) / 2,
+    (min.z + max.z) / 2,
+  );
+  const radius = center.distanceTo(max);
+  // sur le mesh : c'est mesh.boundingSphere que le frustum culling consulte
+  mesh.boundingSphere = new THREE.Sphere(center, radius);
+}
+
 // Ruban plat le long d'une polyligne, a une demi-largeur et un decalage
 // lateral donnes. Sert aux rails comme a la plateforme.
 function ribbon(
@@ -123,6 +151,12 @@ export function Tram({ lines }: { lines: { x: number; y: number }[][] }) {
     return { bed, railL, railR, poles };
   }, [lines]);
 
+  const poleGeo = useMemo(() => new THREE.BoxGeometry(0.18, POLE_H, 0.18), []);
+  const poleRadius = useMemo(() => {
+    poleGeo.computeBoundingSphere();
+    return poleGeo.boundingSphere!.radius;
+  }, [poleGeo]);
+
   const poles = useRef<THREE.InstancedMesh>(null);
 
   useLayoutEffect(() => {
@@ -132,7 +166,8 @@ export function Tram({ lines }: { lines: { x: number; y: number }[][] }) {
       poles.current!.setMatrixAt(i, m.makeTranslation(p.x, POLE_H / 2, -p.y));
     });
     poles.current.instanceMatrix.needsUpdate = true;
-  }, [built]);
+    fitInstancedBounds(poles.current, poleRadius);
+  }, [built, poleRadius]);
 
   if (!built) return null;
 
@@ -150,10 +185,9 @@ export function Tram({ lines }: { lines: { x: number; y: number }[][] }) {
 
       <instancedMesh
         ref={poles}
-        args={[undefined, undefined, built.poles.length]}
-        frustumCulled={false}
+        args={[poleGeo, undefined, built.poles.length]}
+        frustumCulled
       >
-        <boxGeometry args={[0.18, POLE_H, 0.18]} />
         <meshLambertMaterial color={POLE_COLOR} />
       </instancedMesh>
     </group>

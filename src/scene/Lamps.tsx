@@ -25,6 +25,53 @@ const WARM = 0xd49a52;
 
 // on n'eclaire que la zone jouable, inutile de meubler toute la ville
 const AREA = 2600;
+// assez large pour limiter le nombre de draw calls (chaque secteur visible
+// en coute un par geometrie), assez fin pour culler ce qui est hors champ
+const SECTOR_SIZE = 500;
+
+function sectorKey(x: number, y: number): string {
+  return `${Math.floor(x / SECTOR_SIZE)}:${Math.floor(y / SECTOR_SIZE)}`;
+}
+
+function partitionIndices(items: { x: number; y: number }[]): Map<string, number[]> {
+  const map = new Map<string, number[]>();
+  for (let i = 0; i < items.length; i++) {
+    const key = sectorKey(items[i].x, items[i].y);
+    let arr = map.get(key);
+    if (!arr) map.set(key, (arr = []));
+    arr.push(i);
+  }
+  return map;
+}
+
+function fitInstancedBounds(mesh: THREE.InstancedMesh, baseRadius: number) {
+  const m = new THREE.Matrix4();
+  const pos = new THREE.Vector3();
+  const min = new THREE.Vector3(Infinity, Infinity, Infinity);
+  const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+
+  for (let i = 0; i < mesh.count; i++) {
+    mesh.getMatrixAt(i, m);
+    pos.setFromMatrixPosition(m);
+    const r = baseRadius * m.getMaxScaleOnAxis();
+    min.x = Math.min(min.x, pos.x - r);
+    min.y = Math.min(min.y, pos.y - r);
+    min.z = Math.min(min.z, pos.z - r);
+    max.x = Math.max(max.x, pos.x + r);
+    max.y = Math.max(max.y, pos.y + r);
+    max.z = Math.max(max.z, pos.z + r);
+  }
+
+  const center = new THREE.Vector3(
+    (min.x + max.x) / 2,
+    (min.y + max.y) / 2,
+    (min.z + max.z) / 2,
+  );
+  const radius = center.distanceTo(max);
+  // sur le mesh, pas sur la geometrie : elle est partagee entre secteurs et
+  // c'est mesh.boundingSphere que le frustum culling consulte en priorite
+  mesh.boundingSphere = new THREE.Sphere(center, radius);
+}
 
 function makeGlowTexture() {
   const size = 128;
@@ -108,6 +155,65 @@ function placeLamps(
   return lamps;
 }
 
+type LampGeo = {
+  post: THREE.BufferGeometry;
+  head: THREE.BufferGeometry;
+  pool: THREE.BufferGeometry;
+};
+
+type LampMats = {
+  post: THREE.MeshLambertMaterial;
+  head: THREE.MeshBasicMaterial;
+  pool: THREE.MeshBasicMaterial;
+};
+
+function LampSector({
+  indices,
+  lamps,
+  geo,
+  materials,
+  radii,
+}: {
+  indices: number[];
+  lamps: { x: number; y: number }[];
+  geo: LampGeo;
+  materials: LampMats;
+  radii: { post: number; head: number; pool: number };
+}) {
+  const posts = useRef<THREE.InstancedMesh>(null);
+  const heads = useRef<THREE.InstancedMesh>(null);
+  const pools = useRef<THREE.InstancedMesh>(null);
+
+  useLayoutEffect(() => {
+    const m = new THREE.Matrix4();
+    const flat = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
+    indices.forEach((lampIdx, instIdx) => {
+      const l = lamps[lampIdx];
+      posts.current?.setMatrixAt(instIdx, m.makeTranslation(l.x, POST_H / 2, -l.y));
+      heads.current?.setMatrixAt(instIdx, m.makeTranslation(l.x, POST_H, -l.y));
+      if (pools.current) {
+        m.copy(flat).setPosition(l.x, 0.45, -l.y);
+        pools.current.setMatrixAt(instIdx, m);
+      }
+    });
+    for (const r of [posts, heads, pools]) {
+      if (r.current) r.current.instanceMatrix.needsUpdate = true;
+    }
+    if (posts.current) fitInstancedBounds(posts.current, radii.post);
+    if (heads.current) fitInstancedBounds(heads.current, radii.head);
+    if (pools.current) fitInstancedBounds(pools.current, radii.pool);
+  }, [indices, lamps, radii]);
+
+  const count = indices.length;
+  return (
+    <>
+      <instancedMesh ref={posts} args={[geo.post, materials.post, count]} frustumCulled />
+      <instancedMesh ref={heads} args={[geo.head, materials.head, count]} frustumCulled />
+      <instancedMesh ref={pools} args={[geo.pool, materials.pool, count]} frustumCulled />
+    </>
+  );
+}
+
 export function Lamps({
   ways,
   proj,
@@ -121,51 +227,58 @@ export function Lamps({
 }) {
   const glowTex = useMemo(makeGlowTexture, []);
   const lamps = useMemo(() => placeLamps(ways, proj, centre, graph), [ways, proj, centre, graph]);
+  const sectors = useMemo(() => partitionIndices(lamps), [lamps]);
+  const sectorKeys = useMemo(() => Array.from(sectors.keys()), [sectors]);
 
-  const posts = useRef<THREE.InstancedMesh>(null);
-  const heads = useRef<THREE.InstancedMesh>(null);
-  const pools = useRef<THREE.InstancedMesh>(null);
+  const geo = useMemo(
+    () => ({
+      post: new THREE.BoxGeometry(0.22, POST_H, 0.22),
+      head: new THREE.BoxGeometry(0.8, 0.18, 0.3),
+      pool: new THREE.PlaneGeometry(GLOW_R, GLOW_R),
+    }),
+    [],
+  );
 
-  useLayoutEffect(() => {
-    const m = new THREE.Matrix4();
-    const flat = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
-    lamps.forEach((l, i) => {
-      posts.current?.setMatrixAt(i, m.makeTranslation(l.x, POST_H / 2, -l.y));
-      heads.current?.setMatrixAt(i, m.makeTranslation(l.x, POST_H, -l.y));
-      if (pools.current) {
-        m.copy(flat).setPosition(l.x, 0.45, -l.y);
-        pools.current.setMatrixAt(i, m);
-      }
-    });
-    for (const r of [posts, heads, pools]) {
-      if (r.current) r.current.instanceMatrix.needsUpdate = true;
-    }
-  }, [lamps]);
+  const materials = useMemo(
+    () => ({
+      post: new THREE.MeshLambertMaterial({ color: 0x33342b }),
+      head: new THREE.MeshBasicMaterial({ color: WARM }),
+      pool: new THREE.MeshBasicMaterial({
+        map: glowTex,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        fog: false,
+      }),
+    }),
+    [glowTex],
+  );
+
+  const radii = useMemo(() => {
+    geo.post.computeBoundingSphere();
+    geo.head.computeBoundingSphere();
+    geo.pool.computeBoundingSphere();
+    return {
+      post: geo.post.boundingSphere!.radius,
+      head: geo.head.boundingSphere!.radius,
+      pool: geo.pool.boundingSphere!.radius,
+    };
+  }, [geo]);
 
   if (!lamps.length) return null;
 
   return (
     <group>
-      <instancedMesh ref={posts} args={[undefined, undefined, lamps.length]} frustumCulled={false}>
-        <boxGeometry args={[0.22, POST_H, 0.22]} />
-        <meshLambertMaterial color={0x33342b} />
-      </instancedMesh>
-
-      <instancedMesh ref={heads} args={[undefined, undefined, lamps.length]} frustumCulled={false}>
-        <boxGeometry args={[0.8, 0.18, 0.3]} />
-        <meshBasicMaterial color={WARM} />
-      </instancedMesh>
-
-      <instancedMesh ref={pools} args={[undefined, undefined, lamps.length]} frustumCulled={false}>
-        <planeGeometry args={[GLOW_R, GLOW_R]} />
-        <meshBasicMaterial
-          map={glowTex}
-          transparent
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          fog={false}
+      {sectorKeys.map((key) => (
+        <LampSector
+          key={key}
+          indices={sectors.get(key)!}
+          lamps={lamps}
+          geo={geo}
+          materials={materials}
+          radii={radii}
         />
-      </instancedMesh>
+      ))}
     </group>
   );
 }

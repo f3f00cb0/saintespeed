@@ -18,6 +18,34 @@ const WATER_Y = BASIN_H * 0.82;
 const STONE = 0x3b3a32;
 const WATER = 0x2c4a63;
 
+function fitInstancedBounds(mesh: THREE.InstancedMesh, baseRadius: number) {
+  const m = new THREE.Matrix4();
+  const pos = new THREE.Vector3();
+  const min = new THREE.Vector3(Infinity, Infinity, Infinity);
+  const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+
+  for (let i = 0; i < mesh.count; i++) {
+    mesh.getMatrixAt(i, m);
+    pos.setFromMatrixPosition(m);
+    const r = baseRadius * m.getMaxScaleOnAxis();
+    min.x = Math.min(min.x, pos.x - r);
+    min.y = Math.min(min.y, pos.y - r);
+    min.z = Math.min(min.z, pos.z - r);
+    max.x = Math.max(max.x, pos.x + r);
+    max.y = Math.max(max.y, pos.y + r);
+    max.z = Math.max(max.z, pos.z + r);
+  }
+
+  const center = new THREE.Vector3(
+    (min.x + max.x) / 2,
+    (min.y + max.y) / 2,
+    (min.z + max.z) / 2,
+  );
+  const radius = center.distanceTo(max);
+  // sur le mesh : c'est mesh.boundingSphere que le frustum culling consulte
+  mesh.boundingSphere = new THREE.Sphere(center, radius);
+}
+
 export function Fountains({ points }: { points: { x: number; y: number; r: number }[] }) {
   const basins = useRef<THREE.InstancedMesh>(null);
   const water = useRef<THREE.InstancedMesh>(null);
@@ -34,29 +62,33 @@ export function Fountains({ points }: { points: { x: number; y: number; r: numbe
         i,
         m.makeTranslation(p.x, BASIN_H / 2, -p.y).scale(s),
       );
+      s.set(p.r * 0.82, p.r * 0.82, 1);
       water.current!.setMatrixAt(
         i,
-        m.copy(flat).setPosition(p.x, WATER_Y, -p.y).scale(new THREE.Vector3(p.r * 0.82, p.r * 0.82, 1)),
+        m.copy(flat).setPosition(p.x, WATER_Y, -p.y).scale(s),
       );
     });
     basins.current.instanceMatrix.needsUpdate = true;
     water.current.instanceMatrix.needsUpdate = true;
+
+    const basinGeo = basins.current.geometry;
+    const waterGeo = water.current.geometry;
+    basinGeo.computeBoundingSphere();
+    waterGeo.computeBoundingSphere();
+    fitInstancedBounds(basins.current, basinGeo.boundingSphere!.radius);
+    fitInstancedBounds(water.current, waterGeo.boundingSphere!.radius);
   }, [points]);
 
   if (!points.length) return null;
 
   return (
     <group>
-      <instancedMesh
-        ref={basins}
-        args={[undefined, undefined, points.length]}
-        frustumCulled={false}
-      >
+      <instancedMesh ref={basins} args={[undefined, undefined, points.length]} frustumCulled>
         <cylinderGeometry args={[BASIN_R, BASIN_R * 1.05, BASIN_H, 12]} />
         <meshLambertMaterial color={STONE} />
       </instancedMesh>
 
-      <instancedMesh ref={water} args={[undefined, undefined, points.length]} frustumCulled={false}>
+      <instancedMesh ref={water} args={[undefined, undefined, points.length]} frustumCulled>
         <circleGeometry args={[BASIN_R * 0.9, 12]} />
         <meshBasicMaterial color={WATER} />
       </instancedMesh>
