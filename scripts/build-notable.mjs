@@ -262,14 +262,40 @@ const inAnyBuilding = (x, y) => {
   return false;
 };
 
+// Une oeuvre CONTEMPORAINE ne se deduit d'aucune etiquette, meme quand elle
+// porte artwork_type=statue. Le filtre par type seul laissait passer « Les
+// Femmes Noires » de Ndary Lo (2005), que le README cite pourtant comme
+// l'exemple meme de ce qu'on refuse d'inventer : elle sortait en statue sur
+// socle du XIXe. Mesure : 21 des 57 points retenus sont tagues tourism=artwork,
+// dont 7 posterieurs a 1950.
+//
+// La date fait la coupure, et pas l'auteur : une statue academique d'avant
+// guerre suit une typologie (buste sur colonne, figure en pied) dont la forme
+// decoule vraiment du type ; une oeuvre d'apres 1950 n'en suit aucune.
+const CONTEMPORAIN = 1950;
+function contemporary(t) {
+  if (t.tourism !== "artwork") return false;
+  const y = Number(String(t.start_date ?? "").slice(0, 4));
+  return Number.isFinite(y) && y >= CONTEMPORAIN;
+}
+
+// Objets deja poses par un kit bespoke : les reposer en silhouette generique
+// les met en double. La Rubanerie est en haut du perron de l'Hotel de Ville,
+// posee par son kit avec La Metallurgie (Etienne Montagny, 1870 et 1872) ;
+// seule La Metallurgie echappait au doublon, et par accident, parce que son
+// point tombe dans l'emprise.
+const DEJA_POSES = new Set(["La Rubanerie", "La Métallurgie"]);
+
 const points = [];
-const rejected = { type: 0, bati: 0, cimetiere: 0, loin: 0, chaussee: 0 };
+const rejected = { type: 0, bati: 0, cimetiere: 0, loin: 0, chaussee: 0, contemporain: 0, bespoke: 0 };
 let nudged = 0;
 for (const f of geo.features) {
   if (f.geometry?.type !== "Point" || !String(f.id).startsWith("node/")) continue;
   const t = f.properties ?? {};
   const kind = pointKind(t);
   if (kind < 0) { rejected.type++; continue; }
+  if (contemporary(t)) { rejected.contemporain++; continue; }
+  if (DEJA_POSES.has(t.name)) { rejected.bespoke++; continue; }
   const [lon, lat] = f.geometry.coordinates;
   const p = pj(lon, lat);
   if (inAnyBuilding(p.x, p.y)) { rejected.bati++; continue; }
@@ -305,6 +331,9 @@ const outPoints = `// GENERE par scripts/build-notable.mjs depuis export.geojson
 // Objets ponctuels de l'espace public : ${points.length} points, ${counts}.
 //
 // Le filtre est mesure, pas suppose. Sur les 261 points de l'export :
+//   ${rejected.contemporain} sont des oeuvres CONTEMPORAINES (posterieures a ${CONTEMPORAIN}) : leur
+//      forme ne decoule d'aucune etiquette, meme quand OSM les tague "statue" ;
+//   ${rejected.bespoke} sont deja posees par un kit bespoke, les reposer les mettrait en double ;
 //   ${rejected.type} sont d'un type dont la forme ne decoule PAS du type (sculptures
 //      contemporaines, oeuvres, plaques, peintures murales), ou ne sont pas des
 //      objets du tout (points de vue, noms de gare et de place, musees) ;
@@ -340,7 +369,8 @@ ${bodyPoints}
 await writeFile(OUT_POINTS, outPoints);
 console.log(
   `points: ${points.length} objets ecrits dans src/lib/monumentPoints.ts (${counts})\n` +
-    `  ecartes : ${rejected.type} de type non dessinable, ${rejected.bati} dans un batiment, ` +
+    `  ecartes : ${rejected.type} de type non dessinable, ${rejected.contemporain} contemporains, ` +
+    `${rejected.bespoke} deja poses par un kit, ${rejected.bati} dans un batiment, ` +
     `${rejected.cimetiere} en cimetiere, ${rejected.loin} a plus de 30 m d'une rue, ` +
     `${rejected.chaussee} en pleine chaussee\n` +
     `  pousses hors chaussee : ${nudged}`,

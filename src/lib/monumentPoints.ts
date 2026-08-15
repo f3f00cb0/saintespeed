@@ -1,16 +1,19 @@
 // GENERE par scripts/build-notable.mjs depuis export.geojson. Ne pas editer a
 // la main : relancer `npm run build-notable`.
 //
-// Objets ponctuels de l'espace public : 57 points, croix 14, guerre 10, stele 6, buste 6, statue 21.
+// Objets ponctuels de l'espace public : 49 points, croix 14, guerre 10, stele 6, buste 6, statue 13.
 //
 // Le filtre est mesure, pas suppose. Sur les 261 points de l'export :
+//   8 sont des oeuvres CONTEMPORAINES (posterieures a 1950) : leur
+//      forme ne decoule d'aucune etiquette, meme quand OSM les tague "statue" ;
+//   2 sont deja posees par un kit bespoke, les reposer les mettrait en double ;
 //   181 sont d'un type dont la forme ne decoule PAS du type (sculptures
 //      contemporaines, oeuvres, plaques, peintures murales), ou ne sont pas des
 //      objets du tout (points de vue, noms de gare et de place, musees) ;
 //   6 tombent DANS un batiment : ce sont des points d'interet
 //      d'interieur, il n'y a rien a poser dans la rue ;
 //   2 sont dans un cimetiere ;
-//   15 sont a plus de 30 m de toute chaussee, donc invisibles depuis la
+//   13 sont a plus de 30 m de toute chaussee, donc invisibles depuis la
 //      voiture ;
 //   0 tombent en pleine chaussee et ne peuvent pas en etre sortis.
 //
@@ -40,7 +43,6 @@ export const MONUMENT_POINTS: [number, number, PointKind, string][] = [
   [4.366262, 45.403881, 4, "Statue de Michel Rondet"],
   [4.370667, 45.404913, 1, ""],
   [4.386874, 45.406186, 4, ""],
-  [4.394384, 45.415046, 4, "Les Femmes Noires"],
   [4.419994, 45.415855, 0, ""],
   [4.417416, 45.417981, 2, ""],
   [4.405758, 45.420175, 0, ""],
@@ -52,18 +54,13 @@ export const MONUMENT_POINTS: [number, number, PointKind, string][] = [
   [4.383615, 45.427611, 4, "Victoire de Samothrace"],
   [4.390566, 45.430715, 3, "Monument à la mémoire d'Antoine Durafour"],
   [4.387816, 45.431274, 4, "L'Égyptienne"],
-  [4.387818, 45.431285, 4, "Sphinx"],
-  [4.393881, 45.431385, 4, "Muse de l'artisanat"],
   [4.389191, 45.431595, 4, "Le Coq Gaulois"],
   [4.387261, 45.431814, 4, "Ouvrier terrassier"],
   [4.388311, 45.431859, 1, "Monument Au 102ème Territorial"],
   [4.390461, 45.432252, 2, ""],
-  [4.390454, 45.432253, 4, "Monument de la Guerre d'Arménie"],
-  [4.39834, 45.433267, 4, "À la mémoire de Francis Garnier"],
   [4.386162, 45.435346, 4, "Le Loup"],
   [4.436744, 45.435815, 1, ""],
   [4.385161, 45.436407, 4, "Jeanne d'Arc"],
-  [4.393771, 45.437048, 4, "La Dévideuse"],
   [4.386461, 45.437109, 4, "Allégorie à l'armurerie"],
   [4.390335, 45.437246, 4, "La Muse de Massenet"],
   [4.381817, 45.43728, 2, ""],
@@ -71,10 +68,8 @@ export const MONUMENT_POINTS: [number, number, PointKind, string][] = [
   [4.386347, 45.437409, 4, "Le Petit Buveur"],
   [4.392223, 45.437664, 3, "Buste de Jean Moulin"],
   [4.396089, 45.439779, 1, "Monument aux combattants d'Afrique du Nord"],
-  [4.387578, 45.439792, 4, "La Rubanerie"],
   [4.387083, 45.44087, 3, "Jean Jaurès"],
   [4.386808, 45.441852, 3, "José Frappa"],
-  [4.400476, 45.442715, 4, "Les chevaux bleus"],
   [4.331876, 45.444475, 0, ""],
   [4.337237, 45.444568, 0, ""],
   [4.363279, 45.444754, 1, "Monument aux Morts de Côte Chaude"],

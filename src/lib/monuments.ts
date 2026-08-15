@@ -148,7 +148,7 @@ const statue = (socle: number, corps: number): KitBuilder => (e, a) => {
 
 // --- typologies de l'espace public -----------------------------------------
 //
-// Les 55 objets ponctuels de src/lib/monumentPoints.ts. On ne pose que les
+// Les 49 objets ponctuels de src/lib/monumentPoints.ts. On ne pose que les
 // types ou la FORME DECOULE DU TYPE : une croix de chemin est un fut sur un
 // emmarchement avec une croix au sommet, un monument aux morts est un obelisque
 // sur un socle, une stele est une dalle dressee. Ce sont des typologies, pas des
