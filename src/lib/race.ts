@@ -1,39 +1,90 @@
-import type { RoadGraph } from "./graph";
-import { CIRCUIT, type Checkpoint } from "../state/store";
+import type { EdgeHit, RoadGraph } from "./graph";
+import type { Track } from "./track";
 import { resetCar } from "./car";
 
-// Les points du circuit sont donnes en lat/lon puis colles au reseau, ce qui
+export type Checkpoint = {
+  id: number;
+  label: string;
+  lon: number;
+  lat: number;
+  x: number;
+  y: number;
+  tx: number; // tangente de la route sur laquelle il est pose
+  ty: number;
+  width: number;
+  radius: number;
+  road: string;
+};
+
+export function checkpointFromHit(hit: EdgeHit, id: number, label?: string): Checkpoint {
+  return {
+    id,
+    label: label || hit.edge.name || hit.edge.type || `CP ${id + 1}`,
+    lon: 0,
+    lat: 0,
+    x: hit.x,
+    y: hit.y,
+    tx: hit.tx,
+    ty: hit.ty,
+    width: hit.edge.width,
+    radius: Math.max(20, hit.edge.halfWidth + 12),
+    road: hit.edge.name || hit.edge.type,
+  };
+}
+
+// Les points du tracé sont donnés en lat/lon puis collés au réseau, ce qui
 // garantit qu'un portique tombe toujours sur du vrai bitume.
-export function makeCheckpoints(g: RoadGraph): Checkpoint[] {
+export function makeCheckpoints(g: RoadGraph, track: Track): Checkpoint[] {
   const out: Checkpoint[] = [];
-  CIRCUIT.forEach((c, i) => {
+  track.checkpoints.forEach((c, i) => {
     const hit = g.snapLonLat(c.lon, c.lat);
     if (!hit) {
-      console.warn("checkpoint hors reseau:", c.label);
+      console.warn("checkpoint hors réseau:", c.label);
       return;
     }
-    out.push({
-      id: i,
-      label: c.label,
-      lon: c.lon,
-      lat: c.lat,
-      x: hit.x,
-      y: hit.y,
-      tx: hit.tx,
-      ty: hit.ty,
-      width: hit.edge.width,
-      radius: Math.max(20, hit.edge.halfWidth + 12),
-      road: hit.edge.name || hit.edge.type,
-    });
+    const cp = checkpointFromHit(hit, i, c.label);
+    const ll = g.proj.unproject(hit.x, hit.y);
+    cp.lon = ll.lon;
+    cp.lat = ll.lat;
+    out.push(cp);
   });
   return out;
+}
+
+export function snapCheckpoint(g: RoadGraph, x: number, y: number, radius = 80): Checkpoint | null {
+  const hit = g.nearestEdge(x, y, radius);
+  if (!hit) return null;
+  const cp = checkpointFromHit(hit, 0);
+  const ll = g.proj.unproject(hit.x, hit.y);
+  cp.lon = ll.lon;
+  cp.lat = ll.lat;
+  return cp;
+}
+
+export function trackFromCheckpoints(id: string, name: string, cps: Checkpoint[]): Track {
+  return {
+    id,
+    name,
+    checkpoints: cps.map((c) => ({ lon: c.lon, lat: c.lat, label: c.label })),
+  };
+}
+
+export function trackLength(cps: { x: number; y: number }[]): number {
+  if (cps.length < 2) return 0;
+  let d = 0;
+  for (let i = 0; i < cps.length; i++) {
+    const a = cps[i];
+    const b = cps[(i + 1) % cps.length];
+    d += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return d;
 }
 
 // Pose la voiture sur un checkpoint, nez dans la direction du suivant.
 export function spawnAt(g: RoadGraph, cps: Checkpoint[], index: number) {
   const cp = cps[index];
   if (!cp) return;
-  const next = cps[(index + 1) % cps.length];
+  const next = cps[(index + 1) % cps.length] ?? cp;
   const dx = next.x - cp.x;
   const dy = next.y - cp.y;
   // on garde l'axe de la route, oriente vers le checkpoint suivant

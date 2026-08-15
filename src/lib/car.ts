@@ -17,21 +17,33 @@ export type CarState = {
   roadType: string;
 };
 
-export const car: CarState = {
-  x: 0,
-  y: 0,
-  heading: 0,
-  speed: 0,
-  steer: 0,
-  edgeId: -1,
-  t: 0,
-  lateral: 0,
-  offroad: false,
-  roadName: "",
-  roadType: "",
+export type CarInput = {
+  throttle: number;
+  brake: number;
+  steer: number;
+  handbrake: boolean;
 };
 
-export const input = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+export function createCar(): CarState {
+  return {
+    x: 0,
+    y: 0,
+    heading: 0,
+    speed: 0,
+    steer: 0,
+    edgeId: -1,
+    t: 0,
+    lateral: 0,
+    offroad: false,
+    roadName: "",
+    roadType: "",
+  };
+}
+
+export const car: CarState = createCar();
+export const input: CarInput = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+
+const frozen: CarInput = { throttle: 0, brake: 0, steer: 0, handbrake: false };
 
 // --- reglages arcade -------------------------------------------------------
 const MAX_SPEED = 56; // ~200 km/h
@@ -51,53 +63,53 @@ const PULL_MAX = 25; // m/s max de rappel, evite le teleport
 const OFFROAD_DRAG = 3.2;
 const followHit: EdgeHit = { edge: null!, t: 0, x: 0, y: 0, dist: 0, tx: 0, ty: 0 };
 
-export function resetCar(x: number, y: number, heading: number, edgeId = -1) {
-  car.x = x;
-  car.y = y;
-  car.heading = heading;
-  car.speed = 0;
-  car.steer = 0;
-  car.edgeId = edgeId;
-  car.offroad = false;
-  car.lateral = 0;
+export function resetCar(x: number, y: number, heading: number, edgeId = -1, c: CarState = car) {
+  c.x = x;
+  c.y = y;
+  c.heading = heading;
+  c.speed = 0;
+  c.steer = 0;
+  c.edgeId = edgeId;
+  c.offroad = false;
+  c.lateral = 0;
 }
 
 // Suit le reseau : on reste sur l'edge courant tant qu'on est dessus, on
 // enchaine sur le plus aligne au carrefour, et on retombe sur la recherche
 // spatiale si on a vraiment decroche.
-function follow(g: RoadGraph): EdgeHit | null {
-  const hx = Math.cos(car.heading);
-  const hy = Math.sin(car.heading);
+function follow(g: RoadGraph, c: CarState): EdgeHit | null {
+  const hx = Math.cos(c.heading);
+  const hy = Math.sin(c.heading);
   // direction de deplacement reelle (inversee en marche arriere)
-  const s = car.speed < -0.1 ? -1 : 1;
+  const s = c.speed < -0.1 ? -1 : 1;
   const mx = hx * s;
   const my = hy * s;
 
-  if (car.edgeId >= 0) {
-    let e = g.edges[car.edgeId];
-    g.projectInto(e, car.x, car.y, followHit);
+  if (c.edgeId >= 0) {
+    let e = g.edges[c.edgeId];
+    g.projectInto(e, c.x, c.y, followHit);
 
     if (followHit.t <= 1e-4 || followHit.t >= 1 - 1e-4) {
       const nodeId = followHit.t >= 0.5 ? e.b : e.a;
       const next = g.nextEdgeAt(nodeId, mx, my, e.id);
       if (next) {
         e = next;
-        g.projectInto(e, car.x, car.y, followHit);
+        g.projectInto(e, c.x, c.y, followHit);
       }
     }
     // On ne garde l'edge courant que tant qu'on roule vraiment dessus. Une
     // tolerance large collait la voiture a une rue qu'elle avait quittee, et
     // le rappel la faisait tourner en rond autour.
     if (followHit.dist <= e.halfWidth + GRIP_MARGIN) {
-      car.edgeId = e.id;
+      c.edgeId = e.id;
       return followHit;
     }
   }
 
   const hit =
-    g.nearestAlignedInto(car.x, car.y, mx, my, followHit, 80) ??
-    g.nearestEdgeInto(car.x, car.y, followHit);
-  if (hit) car.edgeId = hit.edge.id;
+    g.nearestAlignedInto(c.x, c.y, mx, my, followHit, 80) ??
+    g.nearestEdgeInto(c.x, c.y, followHit);
+  if (hit) c.edgeId = hit.edge.id;
   return hit;
 }
 
@@ -107,67 +119,71 @@ function wrapAngle(a: number) {
   return a;
 }
 
-export function stepCar(g: RoadGraph, dt: number) {
+export function stepCar(g: RoadGraph, dt: number, c: CarState = car, inp: CarInput = input) {
   // --- moteur ------------------------------------------------------------
-  const fade = 1 - Math.max(0, car.speed) / MAX_SPEED; // l'accel se tasse en haut
-  car.speed += input.throttle * ACCEL * Math.max(0.05, fade) * dt;
-  car.speed -= input.brake * BRAKE * dt;
+  const fade = 1 - Math.max(0, c.speed) / MAX_SPEED; // l'accel se tasse en haut
+  c.speed += inp.throttle * ACCEL * Math.max(0.05, fade) * dt;
+  c.speed -= inp.brake * BRAKE * dt;
 
   // frein moteur / trainee
-  const drag = (ROLL_DRAG + Math.abs(car.speed) * AIR_DRAG * Math.abs(car.speed) * 0.5) * dt;
-  if (car.speed > 0) car.speed = Math.max(0, car.speed - drag);
-  else if (car.speed < 0) car.speed = Math.min(0, car.speed + drag);
+  const drag = (ROLL_DRAG + Math.abs(c.speed) * AIR_DRAG * Math.abs(c.speed) * 0.5) * dt;
+  if (c.speed > 0) c.speed = Math.max(0, c.speed - drag);
+  else if (c.speed < 0) c.speed = Math.min(0, c.speed + drag);
 
-  if (input.handbrake) car.speed *= Math.max(0, 1 - 2.6 * dt);
-  car.speed = Math.max(-MAX_REVERSE, Math.min(MAX_SPEED, car.speed));
+  if (inp.handbrake) c.speed *= Math.max(0, 1 - 2.6 * dt);
+  c.speed = Math.max(-MAX_REVERSE, Math.min(MAX_SPEED, c.speed));
 
   // --- direction ---------------------------------------------------------
   const k = 1 - Math.exp(-STEER_RATE * dt);
-  car.steer += (input.steer - car.steer) * k;
+  c.steer += (inp.steer - c.steer) * k;
 
-  const v = Math.abs(car.speed);
+  const v = Math.abs(c.speed);
   const authority = Math.min(1, v / 4); // a l'arret on ne pivote pas sur place
-  const yaw = (YAW_BASE / (1 + v * YAW_FALLOFF)) * authority * (input.handbrake ? 1.5 : 1);
-  car.heading += car.steer * yaw * dt * (car.speed < 0 ? -1 : 1);
+  const yaw = (YAW_BASE / (1 + v * YAW_FALLOFF)) * authority * (inp.handbrake ? 1.5 : 1);
+  c.heading += c.steer * yaw * dt * (c.speed < 0 ? -1 : 1);
 
   // --- deplacement -------------------------------------------------------
-  car.x += Math.cos(car.heading) * car.speed * dt;
-  car.y += Math.sin(car.heading) * car.speed * dt;
+  c.x += Math.cos(c.heading) * c.speed * dt;
+  c.y += Math.sin(c.heading) * c.speed * dt;
 
   // --- contrainte reseau : rappel doux vers la chaussee -------------------
-  const hit = follow(g);
+  const hit = follow(g, c);
   if (!hit) {
-    car.offroad = true;
+    c.offroad = true;
     return;
   }
 
-  car.t = hit.t;
-  car.lateral = hit.dist;
-  car.roadType = hit.edge.type;
-  car.roadName = hit.edge.name || "";
+  c.t = hit.t;
+  c.lateral = hit.dist;
+  c.roadType = hit.edge.type;
+  c.roadName = hit.edge.name || "";
 
   const limit = hit.edge.halfWidth + GRIP_MARGIN;
   if (hit.dist > limit) {
     const over = hit.dist - limit;
-    car.offroad = true;
+    c.offroad = true;
 
     const inv = 1 / Math.max(hit.dist, 1e-6);
-    const nx = (hit.x - car.x) * inv;
-    const ny = (hit.y - car.y) * inv;
+    const nx = (hit.x - c.x) * inv;
+    const ny = (hit.y - c.y) * inv;
     const pull = Math.min(over * PULL_GAIN, PULL_MAX) * dt;
-    car.x += nx * pull;
-    car.y += ny * pull;
+    c.x += nx * pull;
+    c.y += ny * pull;
 
     // bas-cote : ca freine
-    car.speed *= Math.max(0, 1 - Math.min(0.9, over * 0.06) * OFFROAD_DRAG * dt);
+    c.speed *= Math.max(0, 1 - Math.min(0.9, over * 0.06) * OFFROAD_DRAG * dt);
 
     // quand on part loin, on recale doucement le cap dans l'axe de la route
     if (over > 3) {
-      const sign = Math.cos(car.heading) * hit.tx + Math.sin(car.heading) * hit.ty >= 0 ? 1 : -1;
+      const sign = Math.cos(c.heading) * hit.tx + Math.sin(c.heading) * hit.ty >= 0 ? 1 : -1;
       const target = Math.atan2(hit.ty * sign, hit.tx * sign);
-      car.heading += wrapAngle(target - car.heading) * Math.min(1, over * 0.08) * 1.8 * dt;
+      c.heading += wrapAngle(target - c.heading) * Math.min(1, over * 0.08) * 1.8 * dt;
     }
   } else {
-    car.offroad = false;
+    c.offroad = false;
   }
+}
+
+export function stepCarFrozen(g: RoadGraph, dt: number, c: CarState = car) {
+  stepCar(g, dt, c, frozen);
 }

@@ -81,6 +81,11 @@ function readPad(): PadActions & {
   };
 }
 
+function typing(el: EventTarget | null) {
+  if (!(el instanceof HTMLElement)) return false;
+  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
+}
+
 function apply() {
   const kb = {
     throttle: held.has("up") ? 1 : 0,
@@ -98,17 +103,35 @@ function apply() {
   return pad;
 }
 
-export function useInput(onReset: () => void, onToggleBuildings: () => void) {
+export function useInput(
+  onReset: () => void,
+  onToggleBuildings: () => void,
+  onToggleEdit: () => void,
+  driving: boolean,
+) {
   useEffect(() => {
+    if (!driving) {
+      input.throttle = 0;
+      input.brake = 0;
+      input.steer = 0;
+      input.handbrake = false;
+      held.clear();
+    }
     const down = (e: KeyboardEvent) => {
+      if (typing(e.target)) return;
+      if (e.code === "KeyE") {
+        onToggleEdit();
+        return;
+      }
       if (e.code === "KeyR") {
-        onReset();
+        if (driving) onReset();
         return;
       }
       if (e.code === "KeyB") {
         onToggleBuildings();
         return;
       }
+      if (!driving) return;
       const k = KEYS[e.code];
       if (!k) return;
       e.preventDefault();
@@ -130,7 +153,7 @@ export function useInput(onReset: () => void, onToggleBuildings: () => void) {
     let raf = 0;
     const tick = () => {
       const pad = apply();
-      if (pad.reset) onReset();
+      if (driving && pad.reset) onReset();
       if (pad.toggleBuildings) onToggleBuildings();
       raf = requestAnimationFrame(tick);
     };
@@ -147,7 +170,7 @@ export function useInput(onReset: () => void, onToggleBuildings: () => void) {
       blur();
       prevBtn.clear();
     };
-  }, [onReset, onToggleBuildings]);
+  }, [onReset, onToggleBuildings, onToggleEdit, driving]);
 }
 
 /** @deprecated utiliser useInput */

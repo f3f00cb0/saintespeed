@@ -4,6 +4,8 @@ import * as THREE from "three";
 import { FLOOR, insetRing, type FlatBuilding } from "../lib/buildings";
 import { Archetype, STYLES, hash01, type ArchetypeStyle } from "../lib/archetypes";
 import { car } from "../lib/car";
+import { editView } from "../lib/editView";
+import { useStore } from "../state/store";
 import { Lod, TILE, planStreaming, tileKey, type TileRef } from "../lib/streaming";
 import { TILE_V, SHOP_TILE_U, FLOORS_PER_TILE } from "../lib/facades";
 import { getFacadeTextures, getShopTexture, type Painted } from "../lib/facadeTextures";
@@ -512,9 +514,12 @@ export function Buildings({ buildings }: { buildings: FlatBuilding[] }) {
     const cur = new Map<number, Lod>();
     for (const [k, t] of resident.current) cur.set(k, t.lod);
 
-    const vx = Math.cos(car.heading) * car.speed;
-    const vy = Math.sin(car.heading) * car.speed;
-    const plan = planStreaming(index.refs, car.x, car.y, vx, vy, cur);
+    const editing = useStore.getState().mode === "edit";
+    const px = editing ? editView.x : car.x;
+    const py = editing ? editView.y : car.y;
+    const vx = editing ? 0 : Math.cos(car.heading) * car.speed;
+    const vy = editing ? 0 : Math.sin(car.heading) * car.speed;
+    const plan = planStreaming(index.refs, px, py, vx, vy, cur);
 
     let changed = false;
 

@@ -3,7 +3,11 @@ import { Canvas } from "@react-three/fiber";
 import * as THREE from "three";
 import { loadNetwork } from "./lib/osm";
 import { buildGraph, type RoadGraph } from "./lib/graph";
-import { makeCheckpoints, spawnAt } from "./lib/race";
+import { makeCheckpoints, spawnAt, trackFromCheckpoints } from "./lib/race";
+import { DEFAULT_TRACK, loadCurrent, saveCurrent } from "./lib/track";
+import { framePoints, jumpEditView } from "./lib/editView";
+import { car, input } from "./lib/car";
+import { sendTrack } from "./lib/net";
 import { loadBuildings, prepareBuildings, buildWallIndex } from "./lib/buildings";
 import { loadFeatures, prepareFeatures } from "./lib/features";
 import { loadVoirie, prepareVoirie } from "./lib/voirie";
@@ -12,6 +16,8 @@ import { useInput } from "./lib/input";
 import { useStore } from "./state/store";
 import { Roads } from "./scene/Roads";
 import { Car } from "./scene/Car";
+import { RemoteCars } from "./scene/RemoteCars";
+import { NetSync } from "./scene/NetSync";
 import { Checkpoints } from "./scene/Checkpoints";
 import { Buildings } from "./scene/Buildings";
 import { Landmarks } from "./scene/Landmarks";
@@ -29,7 +35,10 @@ import { Sidewalks } from "./scene/Sidewalks";
 import { Crossings } from "./scene/Crossings";
 import { Sky, HORIZON } from "./scene/Sky";
 import { ChaseCamera } from "./scene/Camera";
+import { EditorCamera } from "./scene/EditorCamera";
+import { EditorTools } from "./scene/EditorTools";
 import { Hud } from "./ui/Hud";
+import { EditorHud } from "./ui/EditorHud";
 import { Post } from "./scene/Post";
 import { LEVELS, Quality } from "./lib/quality";
 
@@ -57,14 +66,22 @@ export default function App() {
   const rail = useStore((s) => s.rail);
   const roadProbe = useStore((s) => s.roadProbe);
   const checkpoints = useStore((s) => s.checkpoints);
+  const mode = useStore((s) => s.mode);
+  const editing = mode === "edit";
   // objet stable : sinon les lampadaires se reconstruiraient a chaque rendu
   const centre = useMemo(() => {
-    if (!checkpoints.length) return null;
-    return {
-      x: checkpoints.reduce((a, c) => a + c.x, 0) / checkpoints.length,
-      y: checkpoints.reduce((a, c) => a + c.y, 0) / checkpoints.length,
-    };
-  }, [checkpoints]);
+    if (checkpoints.length) {
+      return {
+        x: checkpoints.reduce((a, c) => a + c.x, 0) / checkpoints.length,
+        y: checkpoints.reduce((a, c) => a + c.y, 0) / checkpoints.length,
+      };
+    }
+    if (graph) {
+      const b = graph.bounds;
+      return { x: (b.minx + b.maxx) / 2, y: (b.miny + b.maxy) / 2 };
+    }
+    return null;
+  }, [checkpoints, graph]);
   const showBuildings = useStore((s) => s.showBuildings);
   const [stats, setStats] = useState("");
   // Qualite de rendu : part au maximum et ne descend que sur mesure, voir
@@ -82,11 +99,14 @@ export default function App() {
         const { ways, source } = await loadNetwork();
         if (dead) return;
         const g: RoadGraph = buildGraph(ways);
-        const cps = makeCheckpoints(g);
-        spawnAt(g, cps, 0);
+        const draft = loadCurrent() ?? DEFAULT_TRACK;
+        const cps = makeCheckpoints(g, draft);
+        const track = trackFromCheckpoints(draft.id, draft.name, cps);
+        saveCurrent(track);
+        if (cps.length) spawnAt(g, cps, 0);
         const ms = Math.round(performance.now() - t0);
         setStats(`${g.stats.nodes} noeuds · ${g.stats.edges} segments · ${ms} ms`);
-        useStore.getState().setLoaded(g, ways, cps, source);
+        useStore.getState().setLoaded(g, ways, cps, source, track);
 
         // Le decor est bien plus leger que les batiments (0,7 Mo contre 3) et
         // c'est lui qui bouche les trous noirs des places : on le charge en
@@ -160,7 +180,31 @@ export default function App() {
 
   const onToggleBuildings = useCallback(() => useStore.getState().toggleBuildings(), []);
 
-  useInput(onReset, onToggleBuildings);
+  const enterDrive = useCallback(() => {
+    const s = useStore.getState();
+    s.setMode("drive");
+    if (s.graph && s.checkpoints.length) spawnAt(s.graph, s.checkpoints, 0);
+    sendTrack(s.track);
+  }, []);
+
+  const enterEdit = useCallback(() => {
+    const s = useStore.getState();
+    s.setMode("edit");
+    input.throttle = 0;
+    input.brake = 0;
+    input.steer = 0;
+    input.handbrake = false;
+    car.speed = 0;
+    if (s.checkpoints.length) framePoints(s.checkpoints);
+    else jumpEditView(car.x, car.y, 280);
+  }, []);
+
+  const onToggleEdit = useCallback(() => {
+    if (useStore.getState().mode === "edit") enterDrive();
+    else enterEdit();
+  }, [enterDrive, enterEdit]);
+
+  useInput(onReset, onToggleBuildings, onToggleEdit, !editing);
 
   const ready = phase === "ready" && !!graph;
 
@@ -172,13 +216,13 @@ export default function App() {
         // Pas de tone mapping ici : il est fait en dernier effet du composer,
         // sinon le bloom travaille sur une image deja ecrasee et bave a peine.
         gl={{ toneMapping: THREE.NoToneMapping }}
-        camera={{ fov: 68, near: 0.5, far: 4000, position: [0, 40, 40] }}
+        camera={{ fov: 68, near: 0.5, far: 6000, position: [0, 40, 40] }}
         onCreated={({ scene, gl }) => {
           scene.background = new THREE.Color(SKY);
           gl.setClearColor(SKY);
         }}
       >
-        <fogExp2 attach="fog" args={[HORIZON, 0.0009]} />
+        <fogExp2 attach="fog" args={[HORIZON, editing ? 0.00032 : 0.0009]} />
         {/* Ciel froid en haut, sol chaud sombre en bas : les toitures prennent
             le bleu et les facades se detachent du fond. */}
         <hemisphereLight args={["#5c72a0", "#2e2410", 3.2]} />
@@ -227,8 +271,11 @@ export default function App() {
             <Perf />
             <AutoQuality quality={quality} onDrop={setQuality} />
             <Checkpoints />
-            <Car graph={graph!} />
-            <ChaseCamera walls={walls} />
+            {editing && <EditorTools graph={graph!} />}
+            <RemoteCars />
+            {!editing && <Car graph={graph!} />}
+            {editing ? <EditorCamera /> : <ChaseCamera walls={walls} />}
+            <NetSync />
             <Post level={level} />
           </>
         )}
@@ -236,7 +283,7 @@ export default function App() {
 
       {ready && (
         <>
-          <Hud />
+          {editing ? <EditorHud onPlay={enterDrive} /> : <Hud onEdit={enterEdit} />}
           <div className="hud stats">{stats}</div>
         </>
       )}
