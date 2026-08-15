@@ -4,6 +4,7 @@ import type { Way } from "../lib/osm";
 import type { FlatBuilding, WallIndex } from "../lib/buildings";
 import type { FlatFeatures } from "../lib/features";
 import type { FlatRail, RoadProbe } from "../lib/rail";
+import type { Voirie } from "../lib/voirie";
 
 export type Checkpoint = {
   id: number;
@@ -55,6 +56,8 @@ type Store = {
   rail: FlatRail[];
   /** Sonde de chaussee, partagee par le profil du viaduc et ses piles. */
   roadProbe: RoadProbe | null;
+  /** Cote du trottoir et passages pietons, quand OSM les porte. */
+  voirie: Voirie | null;
 
   tele: Telemetry;
 
@@ -68,6 +71,7 @@ type Store = {
   setBuildings(buildings: FlatBuilding[], walls: WallIndex): void;
   setFeatures(features: FlatFeatures): void;
   setRail(rail: FlatRail[]): void;
+  setVoirie(voirie: Voirie): void;
   setRoadProbe(probe: RoadProbe): void;
   toggleBuildings(): void;
   setError(msg: string): void;
@@ -90,6 +94,7 @@ export const useStore = create<Store>((set, get) => ({
   features: null,
   rail: [],
   roadProbe: null,
+  voirie: null,
 
   tele: { fps: 0, speedKmh: 0, roadName: "", roadType: "", offroad: false, cpDist: 0, cpBearing: 0 },
 
@@ -107,6 +112,8 @@ export const useStore = create<Store>((set, get) => ({
   setFeatures: (features) => set({ features }),
 
   setRail: (rail) => set({ rail }),
+
+  setVoirie: (voirie) => set({ voirie }),
 
   setRoadProbe: (roadProbe) => set({ roadProbe }),
 

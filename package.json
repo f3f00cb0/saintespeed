@@ -11,7 +11,8 @@
     "build-notable": "node scripts/build-notable.mjs",
     "fetch-reference": "node scripts/fetch-reference.mjs",
     "palette-reference": "node scripts/palette-reference.mjs",
-    "elevation": "node scripts/elevation.mjs"
+    "elevation": "node scripts/elevation.mjs",
+    "voirie": "node scripts/voirie.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",

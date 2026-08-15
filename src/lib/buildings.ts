@@ -276,6 +276,13 @@ export function buildWallIndex(buildings: FlatBuilding[]): WallIndex {
     }
   }
 
+  // Le marqueur de segments deja testes est reutilise d'un appel a l'autre : un
+  // Set neuf par appel coutait cher des que les appels se comptent en centaines
+  // de milliers. Les trottoirs lancent 130 000 rayons a la construction, et
+  // l'allocation pesait a elle seule pres d'une seconde.
+  const seen = new Int32Array(seg.length / 5);
+  let stamp = 0;
+
   return {
     count: seg.length / 5,
     clear(x0, y0, x1, y1, probeH) {
@@ -286,7 +293,7 @@ export function buildWallIndex(buildings: FlatBuilding[]): WallIndex {
 
       let best = 1;
       const steps = Math.max(1, Math.ceil(len / (WALL_CELL * 0.5)));
-      const seen = new Set<number>();
+      stamp++;
 
       for (let s = 0; s <= steps; s++) {
         const f = s / steps;
@@ -298,8 +305,9 @@ export function buildWallIndex(buildings: FlatBuilding[]): WallIndex {
             const bucket = grid.get(key(cx + i, cy + j));
             if (!bucket) continue;
             for (const idx of bucket) {
-              if (seen.has(idx)) continue;
-              seen.add(idx);
+              const slot = idx / 5;
+              if (seen[slot] === stamp) continue;
+              seen[slot] = stamp;
               if (seg[idx + 4] < probeH) continue; // mur plus bas que la camera
 
               const ax = seg[idx];
