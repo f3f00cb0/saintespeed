@@ -26,6 +26,7 @@ import { Perf } from "./scene/Perf";
 import { AutoQuality } from "./scene/Quality";
 import { Lamps } from "./scene/Lamps";
 import { Sidewalks } from "./scene/Sidewalks";
+import { Crossings } from "./scene/Crossings";
 import { Sky, HORIZON } from "./scene/Sky";
 import { ChaseCamera } from "./scene/Camera";
 import { Hud } from "./ui/Hud";
@@ -198,6 +199,11 @@ export default function App() {
             {centre && <Lamps ways={ways} proj={graph!.proj} centre={centre} graph={graph!} />}
             {/* le trottoir se pose une fois l'index des murs la : c'est lui qui
                 borne sa largeur sur la facade reelle */}
+            {/* les passages pietons se posent dans le trou que les trottoirs
+                laissent au carrefour : c'est la meme histoire, vue au sol */}
+            {centre && voirie && voirie.crossings.length > 0 && (
+              <Crossings crossings={voirie.crossings} graph={graph!} centre={centre} />
+            )}
             {centre && walls && (
               <Sidewalks
                 ways={ways}

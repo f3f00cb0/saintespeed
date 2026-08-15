@@ -22,6 +22,7 @@ import { prepareBuildings, buildWallIndex, type Building, type FlatBuilding } fr
 import { buildSidewalks } from "../src/lib/sidewalks";
 import { prepareVoirie, type Voirie } from "../src/lib/voirie";
 import { AREAS, type AreaKind } from "../src/lib/features";
+import { buildCrossings } from "../src/lib/crossings";
 
 type Charge = {
   ways: Way[];
@@ -135,6 +136,21 @@ export function verifier(c: Charge, area: number): string {
     nCoins++;
     if (aire > aireMax) aireMax = aire;
   }
+  // --- passages pietons ------------------------------------------------------
+  // Une bande qui deborde de la chaussee ne se voit pas sur un plan de loin,
+  // mais se voit tres bien en roulant.
+  const cross = buildCrossings(c.voirie.crossings, c.graph, c.centre, area);
+  const cs = cross.stats;
+  let bandeHors = 0;
+  let bandesPassage = 0;
+  for (let i = 0; i + 17 < cross.pos.length; i += 18) {
+    bandesPassage++;
+    const bx = (cross.pos[i] + cross.pos[i + 6]) / 2;
+    const by = -(cross.pos[i + 2] + cross.pos[i + 8]) / 2;
+    const hit = c.graph.nearestEdge(bx, by, 25);
+    if (!hit || hit.dist > hit.edge.halfWidth) bandeHors++;
+  }
+
   const L = s.runLengths.slice().sort((a, b) => a - b);
   const q = (f: number) => L[Math.floor(L.length * f)] ?? 0;
   const pct = (n: number) => `${((n / Math.max(1, bandes)) * 100).toFixed(2)} %`;
@@ -150,7 +166,12 @@ export function verifier(c: Charge, area: number): string {
     `  ${nCoins} raccords d'angle : aire moyenne ${(aireTot / Math.max(1, nCoins)).toFixed(1)} m2, ` +
     `la plus grande ${aireMax.toFixed(1)} m2\n` +
     `  VERIFICATION (bandes seules)  sur une chaussee : ${surChaussee} (${pct(surChaussee)}) · ` +
-    `dans une emprise : ${dansMur} (${pct(dansMur)})`
+    `dans une emprise : ${dansMur} (${pct(dansMur)})\n` +
+    `  passages pietons : ${cs.posed} poses sur ${cs.marked} marques ` +
+    `(${cs.outsideArea} hors boite, ${cs.offRoad} hors chaussee, ${cs.merged} doublons), ` +
+    `${cs.bands} bandes, ${Math.round(cs.triangles / 1000)}k triangles, ${cs.ms} ms\n` +
+    `  VERIFICATION passages  bandes hors chaussee : ${bandeHors} ` +
+    `(${((bandeHors / Math.max(1, bandesPassage)) * 100).toFixed(2)} %)`
   );
 }
 
@@ -206,15 +227,23 @@ export function plan(c: Charge, lon: number, lat: number, rayon: number, sortie:
       `<polygon points="${pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(" ")}" fill="${raccord ? "#6d6250" : "#5c6058"}" stroke="${raccord ? "#c2a978" : "#9aa094"}" stroke-width="0.7"/>`,
     );
   }
+  // passages pietons : les vraies bandes, pas un reperage
+  const cross = buildCrossings(c.voirie.crossings, c.graph, c.centre, Infinity);
   let nc = 0;
-  for (const cr of c.voirie.crossings) {
-    if (Math.abs(cr.x - o.x) > rayon || Math.abs(cr.y - o.y) > rayon) continue;
+  for (let i = 0; i + 17 < cross.pos.length; i += 18) {
+    const q = [
+      [cross.pos[i], -cross.pos[i + 2]],
+      [cross.pos[i + 3], -cross.pos[i + 5]],
+      [cross.pos[i + 6], -cross.pos[i + 8]],
+      [cross.pos[i + 15], -cross.pos[i + 17]],
+    ];
+    if (Math.abs(q[0][0] - o.x) > rayon || Math.abs(q[0][1] - o.y) > rayon) continue;
     nc++;
-    out.push(`<circle cx="${X(cr.x)}" cy="${Y(cr.y)}" r="${(1.2 * S).toFixed(1)}" fill="none" stroke="${cr.marked ? "#e8c46a" : "#7a6a3a"}" stroke-width="1.5"/>`);
+    out.push(`<polygon points="${q.map((p) => `${X(p[0])},${Y(p[1])}`).join(" ")}" fill="#b9b39f"/>`);
   }
   out.push(
-    `<text x="12" y="26" fill="#cfd6e6" font-family="monospace" font-size="15">${lon}, ${lat} · rayon ${rayon} m · ${nb} emprises, ${ns} bandes, ${nc} passages pietons, ${sols.length} sols</text>`,
-    `<text x="12" y="46" fill="#9aa094" font-family="monospace" font-size="12">gris clair = trottoir · ocre = raccord d'angle · cercle jaune = passage pieton OSM</text>`,
+    `<text x="12" y="26" fill="#cfd6e6" font-family="monospace" font-size="15">${lon}, ${lat} · rayon ${rayon} m · ${nb} emprises, ${ns} bandes, ${nc} bandes de passage pieton, ${sols.length} sols</text>`,
+    `<text x="12" y="46" fill="#9aa094" font-family="monospace" font-size="12">gris clair = trottoir · ocre = raccord d'angle · blanc = passage pieton releve dans OSM</text>`,
     `</svg>`,
   );
   writeFileSync(sortie, out.join("\n"));

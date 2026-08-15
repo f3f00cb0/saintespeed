@@ -789,7 +789,7 @@ kiosque est un choix assumé : de nuit, une vasque non éclairée est un trou no
 emprise) dessine l'objet seul, à l'échelle, avec une silhouette de 1,70 m comme
 étalon.
 
-### Les objets ponctuels : 55 posés, 206 écartés avec une raison
+### Les objets ponctuels : 49 posés, 212 écartés avec une raison
 
 L'export patrimoine contient **261 points isolés**. Les poser tous en props
 instanciés aurait été exactement ce qu'on refuse. Le tri est donc mesuré, et ce
@@ -804,6 +804,8 @@ qui est écarté l'est pour une raison écrite dans le fichier généré :
 | 6 plaques, 5 peintures murales | c'est sur un mur, pas dans l'espace |
 | 32 points « autres » | ce sont des noms de gare et de place |
 | **40 sculptures contemporaines** | **leur forme est ce qu'aucune étiquette ne détermine** |
+| 8 œuvres postérieures à 1950 taguées `statue` | même raison, et le filtre par type seul les laissait passer |
+| 2 déjà posées par un kit bespoke | les reposer les mettrait en double |
 
 Ce dernier point est le plus important. « Les Femmes Noires » de Ndary Lo, « Pouet »
 de Rémy Jacquier ou « Une Île Suffisante » d'Ervin Patkaï ne se déduisent pas d'un
@@ -811,8 +813,22 @@ tag `artwork_type=sculpture`. Les inventer serait précisément la faute qu'on
 évite ailleurs. Elles méritent un traitement individuel sur source, comme les
 monuments, et attendront.
 
-Restent **57 objets de typologies où la forme découle du type** : croix de chemin
-(14), monument aux morts (10), stèle (6), buste (6), statue (21). Une croix de
+**Le filtre par type seul ne suffisait pas.** « Les Femmes Noires » de Ndary Lo
+(2005), citée juste au-dessus comme l'exemple même de ce qu'on refuse d'inventer,
+sortait en statue sur socle du XIXe parce qu'OSM la tague `artwork_type=statue`.
+Mesure : 21 des 57 points retenus étaient des `tourism=artwork`, dont 8
+postérieurs à 1950. C'est la **date** qui coupe, pas l'auteur : une statue
+académique d'avant-guerre suit une typologie dont la forme découle vraiment du
+type, une œuvre d'après 1950 n'en suit aucune.
+
+**Et un objet était posé deux fois.** La Rubanerie est en haut du perron de
+l'Hôtel de Ville, posée par le kit du monument avec La Métallurgie (Étienne
+Montagny, 1870 et 1872) ; la couche ponctuelle la reposait en silhouette
+générique à son point OSM. Seule La Métallurgie y échappait, et par accident,
+parce que son point tombe dans l'emprise.
+
+Restent **49 objets de typologies où la forme découle du type** : croix de chemin
+(14), monument aux morts (10), stèle (6), buste (6), statue (13). Une croix de
 chemin est un fût sur un emmarchement avec sa croix, un monument aux morts un
 obélisque sur socle à ressauts, une stèle une dalle dressée. Le tag OSM porte la
 forme, et les hauteurs varient de ±10 % sur une graine tirée des coordonnées.
@@ -822,7 +838,7 @@ du jeu**, dont la largeur est une convention de dessin : il est poussé
 perpendiculairement du minimum nécessaire plutôt que jeté, parce que c'est sa
 position qui est juste. Un seul cas, une croix à 2,4 m de l'axe d'un chemin dont
 la demi-chaussée fait 2,5 m. Et **tout est fusionné en deux maillages** : passés
-par le mécanisme des repères, ces 55 objets auraient coûté jusqu'à 150 draw
+par le mécanisme des repères, ces 49 objets auraient coûté jusqu'à 150 draw
 calls, contre 194 pour la ville entière. Ils en coûtent deux, pour 5 640
 triangles.
 
@@ -884,7 +900,7 @@ photo prise à ce poste se superpose au rendu de `npm run elevation`, affiché e
 regard sur la planche : on compare, on n'apprécie pas.
 
 **82 sujets, 98 postes** : les 17 repères sur emprise, le stade et les 7 objets
-de la place Jean-Jaurès, et les 57 objets ponctuels, regroupés par typologie
+de la place Jean-Jaurès, et les 49 objets ponctuels, regroupés par typologie
 puisque leur forme découle de leur type.
 
 ### Ce que le relevé vérifie, et ce qu'il ne peut pas vérifier
@@ -1037,6 +1053,37 @@ Cette mesure lance 130 000 rayons dans l'index des murs à la construction, et
 à 0,57 s** en réutilisant un marqueur. La caméra, qui interroge le même index à
 chaque frame, y gagne aussi.
 
+### Les passages piétons ne sont pas déduits, ils sont relevés
+
+C'est la seule couche de marquage du jeu qui ne soit pas une convention de
+dessin. Saint-Étienne cartographie **4 762 passages piétons, dont 4 178 marqués
+au sol**, ce qui est considérable pour de la donnée bénévole.
+
+Le tri est mesuré. Sur les 4 178 marqués, **2 324 sont posés** dans la boîte
+jouable : 1 499 sont hors boîte, 256 à plus d'une demi-chaussée de tout axe, donc
+sur des cheminements piétons que le jeu ne rend pas, et 62 sont des doublons,
+OSM cartographiant souvent le même passage en nœud **et** en ligne. Le
+regroupement se fait par tronçon et par position le long de l'axe, jamais par
+simple distance, sinon les quatre traversées d'un carrefour fusionneraient en
+une.
+
+**L'orientation est validée par la donnée, pas supposée.** La position vient d'un
+nœud de la chaussée, à 0,0 m de l'axe en médiane : il n'y a rien à projeter,
+seulement à orienter. La perpendiculaire à la rue est la règle évidente, et les
+81 passages cartographiés en ligne permettent de la vérifier : l'angle entre la
+ligne relevée et la tangente de la rue vaut **87 degrés en médiane et 90 au
+p90**. Même méthode que l'azimut du viaduc, recoupé par les auvents de quai.
+
+La forme vient du règlement (IISR, article 113-1) : des bandes blanches
+**parallèles à l'axe** de la chaussée, larges de 0,50 m, espacées de 0,50 à
+0,80 m. C'est ce qui fait qu'un conducteur voit des barres pointées vers lui et
+non des barres en travers. Ce qui n'est pas sourcé et qui est annoncé comme tel :
+la longueur du passage le long de la rue, qu'OSM ne porte pas, fixée au plancher
+réglementaire de 2,50 m et portée à 4 m sur les axes.
+
+Coût : 10 847 bandes, 22 000 triangles, **un seul draw call**, 7 ms. Vérification
+au harnais : 3 bandes sur 10 847 débordent de la chaussée.
+
 ### Regarder et vérifier la voirie sans GPU
 
 ```bash
@@ -1151,7 +1198,7 @@ scripts/build-notable.mjs  export.geojson -> src/lib/notable.ts (notabilité)
 scripts/elevation.mjs   élévation d'un repère en JPEG, sans GPU (+ .entry.ts)
 src/lib/rail.ts         voies ferrées, profil en long du viaduc et rampes
 src/lib/monuments.ts    objets de place et typologies de l'espace public
-src/lib/monumentPoints.ts  GÉNÉRÉ : les 57 objets ponctuels retenus
+src/lib/monumentPoints.ts  GÉNÉRÉ : les 49 objets ponctuels retenus
 src/lib/project.ts      lat/lon <-> mètres (équirectangulaire locale)
 src/lib/osm.ts          chargement, parsing, palette et largeurs par classe
 src/lib/graph.ts        graphe routier + index spatial + nearestEdge
