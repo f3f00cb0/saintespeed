@@ -11,6 +11,8 @@ const FOV_BASE = 68;
 const FOV_MAX = 88; // s'ouvre avec la vitesse, ca donne le grisant
 const MIN_DIST = 5.2; // en dessous le cadrage devient inutilisable
 const SKIN = 1.2; // marge devant le mur touche
+const targetScratch = new THREE.Vector3();
+const lookAtScratch = new THREE.Vector3();
 
 export function ChaseCamera({ walls }: { walls: WallIndex | null }) {
   const { camera } = useThree();
@@ -47,25 +49,25 @@ export function ChaseCamera({ walls }: { walls: WallIndex | null }) {
     boom.current += (allowed - boom.current) * (1 - Math.exp(-rate * dt));
 
     const eff = back * boom.current;
-    const target = new THREE.Vector3(
+    // Rentree, la camera monte au lieu de descendre : de pres et bas elle
+    // perd la voiture, de pres et haut elle la surplombe et reste lisible.
+    targetScratch.set(
       car.x - cx * eff,
-      // Rentree, la camera monte au lieu de descendre : de pres et bas elle
-      // perd la voiture, de pres et haut elle la surplombe et reste lisible.
       4.2 + (wantY - 4.2) * boom.current,
       -(car.y - cy * eff),
     );
     // le point vise se rapproche avec le bras, sinon la voiture sort du cadre
     const ahead = LOOK_AHEAD * (0.28 + 0.72 * boom.current);
-    const lookAt = new THREE.Vector3(car.x + cx * ahead, 1.6, -(car.y + cy * ahead));
+    lookAtScratch.set(car.x + cx * ahead, 1.6, -(car.y + cy * ahead));
 
     if (!ready.current) {
-      pos.current.copy(target);
-      look.current.copy(lookAt);
+      pos.current.copy(targetScratch);
+      look.current.copy(lookAtScratch);
       ready.current = true;
     } else {
       // lissage exponentiel, independant du framerate
-      pos.current.lerp(target, 1 - Math.exp(-7 * dt));
-      look.current.lerp(lookAt, 1 - Math.exp(-11 * dt));
+      pos.current.lerp(targetScratch, 1 - Math.exp(-7 * dt));
+      look.current.lerp(lookAtScratch, 1 - Math.exp(-11 * dt));
     }
 
     // Verrou dur apres lissage : pendant que la camera rattrape sa cible elle

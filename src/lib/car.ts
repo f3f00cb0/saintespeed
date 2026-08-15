@@ -49,6 +49,7 @@ const GRIP_MARGIN = 2.0; // metres toleres au dela du bord du ruban
 const PULL_GAIN = 5; // force du rappel vers la chaussee
 const PULL_MAX = 25; // m/s max de rappel, evite le teleport
 const OFFROAD_DRAG = 3.2;
+const followHit: EdgeHit = { edge: null!, t: 0, x: 0, y: 0, dist: 0, tx: 0, ty: 0 };
 
 export function resetCar(x: number, y: number, heading: number, edgeId = -1) {
   car.x = x;
@@ -74,26 +75,28 @@ function follow(g: RoadGraph): EdgeHit | null {
 
   if (car.edgeId >= 0) {
     let e = g.edges[car.edgeId];
-    let hit = g.project(e, car.x, car.y);
+    g.projectInto(e, car.x, car.y, followHit);
 
-    if (hit.t <= 1e-4 || hit.t >= 1 - 1e-4) {
-      const nodeId = hit.t >= 0.5 ? e.b : e.a;
+    if (followHit.t <= 1e-4 || followHit.t >= 1 - 1e-4) {
+      const nodeId = followHit.t >= 0.5 ? e.b : e.a;
       const next = g.nextEdgeAt(nodeId, mx, my, e.id);
       if (next) {
         e = next;
-        hit = g.project(e, car.x, car.y);
+        g.projectInto(e, car.x, car.y, followHit);
       }
     }
     // On ne garde l'edge courant que tant qu'on roule vraiment dessus. Une
     // tolerance large collait la voiture a une rue qu'elle avait quittee, et
     // le rappel la faisait tourner en rond autour.
-    if (hit.dist <= e.halfWidth + GRIP_MARGIN) {
+    if (followHit.dist <= e.halfWidth + GRIP_MARGIN) {
       car.edgeId = e.id;
-      return hit;
+      return followHit;
     }
   }
 
-  const hit = g.nearestAligned(car.x, car.y, mx, my, 80) ?? g.nearestEdge(car.x, car.y);
+  const hit =
+    g.nearestAlignedInto(car.x, car.y, mx, my, followHit, 80) ??
+    g.nearestEdgeInto(car.x, car.y, followHit);
   if (hit) car.edgeId = hit.edge.id;
   return hit;
 }

@@ -58,6 +58,16 @@ export class RoadGraph {
   private grid = new Map<number, number[]>();
   private byPos = new Map<string, number>();
   private nextNode = 0;
+  // tampons reutilises par les requetes sans allocation (physique voiture)
+  private edgeSeen = new Int32Array(0);
+  private stamp = 0;
+  private nearBuf: GraphEdge[] = [];
+  private hitScratch: EdgeHit = { edge: null!, t: 0, x: 0, y: 0, dist: 0, tx: 0, ty: 0 };
+  // tampon de projection interne a nearestEdgeInto : il doit rester distinct
+  // de hitScratch, que les wrappers passent comme sortie (sinon chaque
+  // projection ecraserait le meilleur candidat deja copie dans out)
+  private projScratch: EdgeHit = { edge: null!, t: 0, x: 0, y: 0, dist: 0, tx: 0, ty: 0 };
+  private alignPool: EdgeHit[] = [];
 
   constructor(proj: Projector) {
     this.proj = proj;
@@ -121,8 +131,41 @@ export class RoadGraph {
 
   // --- requetes ----------------------------------------------------------
 
+  private ensureEdgeSeen() {
+    const n = this.edges.length;
+    if (this.edgeSeen.length < n) {
+      const next = new Int32Array(Math.max(n, this.edgeSeen.length * 2 || 256));
+      next.set(this.edgeSeen);
+      this.edgeSeen = next;
+    }
+  }
+
+  private bumpStamp(): number {
+    if (++this.stamp === 0x7fffffff) {
+      this.edgeSeen.fill(0);
+      this.stamp = 1;
+    }
+    return this.stamp;
+  }
+
+  private copyHit(from: EdgeHit, to: EdgeHit) {
+    to.edge = from.edge;
+    to.t = from.t;
+    to.x = from.x;
+    to.y = from.y;
+    to.dist = from.dist;
+    to.tx = from.tx;
+    to.ty = from.ty;
+  }
+
+  private ensureAlignPool(n: number) {
+    while (this.alignPool.length < n) {
+      this.alignPool.push({ edge: null!, t: 0, x: 0, y: 0, dist: 0, tx: 0, ty: 0 });
+    }
+  }
+
   // Projette un point sur un edge. t clampe dans [0,1].
-  project(e: GraphEdge, x: number, y: number): EdgeHit {
+  projectInto(e: GraphEdge, x: number, y: number, out: EdgeHit): EdgeHit {
     const vx = x - e.ax;
     const vy = y - e.ay;
     let t = (vx * e.dx + vy * e.dy) / e.len;
@@ -130,13 +173,26 @@ export class RoadGraph {
     else if (t > 1) t = 1;
     const px = e.ax + e.dx * e.len * t;
     const py = e.ay + e.dy * e.len * t;
-    return { edge: e, t, x: px, y: py, dist: Math.hypot(x - px, y - py), tx: e.dx, ty: e.dy };
+    out.edge = e;
+    out.t = t;
+    out.x = px;
+    out.y = py;
+    out.dist = Math.hypot(x - px, y - py);
+    out.tx = e.dx;
+    out.ty = e.dy;
+    return out;
+  }
+
+  project(e: GraphEdge, x: number, y: number): EdgeHit {
+    const h = this.projectInto(e, x, y, this.hitScratch);
+    return { edge: h.edge, t: h.t, x: h.x, y: h.y, dist: h.dist, tx: h.tx, ty: h.ty };
   }
 
   // Edges candidats dans un rayon donne, sans tri.
-  near(x: number, y: number, radius: number): GraphEdge[] {
-    const out: GraphEdge[] = [];
-    const seen = new Set<number>();
+  nearInto(x: number, y: number, radius: number, out: GraphEdge[]): number {
+    this.ensureEdgeSeen();
+    const stamp = this.bumpStamp();
+    let n = 0;
     const cx = Math.floor(x / CELL);
     const cy = Math.floor(y / CELL);
     const r = Math.max(0, Math.ceil(radius / CELL));
@@ -145,71 +201,105 @@ export class RoadGraph {
         const bucket = this.grid.get(cellKey(cx + i, cy + j));
         if (!bucket) continue;
         for (const id of bucket) {
-          if (seen.has(id)) continue;
-          seen.add(id);
-          out.push(this.edges[id]);
+          if (this.edgeSeen[id] === stamp) continue;
+          this.edgeSeen[id] = stamp;
+          out[n++] = this.edges[id];
         }
       }
     }
+    out.length = n;
+    return n;
+  }
+
+  near(x: number, y: number, radius: number): GraphEdge[] {
+    const out: GraphEdge[] = [];
+    this.nearInto(x, y, radius, out);
     return out;
   }
 
   // Segment le plus proche. Anneaux croissants, on s'arrete des qu'aucun
   // anneau plus lointain ne peut faire mieux.
-  nearestEdge(x: number, y: number, maxRadius = 400): EdgeHit | null {
+  nearestEdgeInto(x: number, y: number, out: EdgeHit, maxRadius = 400): EdgeHit | null {
+    this.ensureEdgeSeen();
+    const stamp = this.bumpStamp();
     const cx = Math.floor(x / CELL);
     const cy = Math.floor(y / CELL);
     const maxRing = Math.ceil(maxRadius / CELL);
-    let best: EdgeHit | null = null;
-    const seen = new Set<number>();
+    let hasBest = false;
+    let bestDist = Infinity;
 
     for (let r = 0; r <= maxRing; r++) {
-      if (best && (r - 1) * CELL > best.dist) break;
+      if (hasBest && (r - 1) * CELL > bestDist) break;
       for (let i = -r; i <= r; i++) {
         for (let j = -r; j <= r; j++) {
           if (r > 0 && Math.abs(i) !== r && Math.abs(j) !== r) continue; // anneau seul
           const bucket = this.grid.get(cellKey(cx + i, cy + j));
           if (!bucket) continue;
           for (const id of bucket) {
-            if (seen.has(id)) continue;
-            seen.add(id);
-            const hit = this.project(this.edges[id], x, y);
-            if (!best || hit.dist < best.dist) best = hit;
+            if (this.edgeSeen[id] === stamp) continue;
+            this.edgeSeen[id] = stamp;
+            const hit = this.projectInto(this.edges[id], x, y, this.projScratch);
+            if (!hasBest || hit.dist < bestDist) {
+              this.copyHit(hit, out);
+              bestDist = hit.dist;
+              hasBest = true;
+            }
           }
         }
       }
     }
-    return best;
+    return hasBest ? out : null;
+  }
+
+  nearestEdge(x: number, y: number, maxRadius = 400): EdgeHit | null {
+    const hit = this.nearestEdgeInto(x, y, this.hitScratch, maxRadius);
+    if (!hit) return null;
+    return { edge: hit.edge, t: hit.t, x: hit.x, y: hit.y, dist: hit.dist, tx: hit.tx, ty: hit.ty };
   }
 
   // Comme nearestEdge, mais departage les candidats proches par l'alignement
   // avec le cap. C'est ce qui evite de se faire happer par une perpendiculaire
   // au milieu d'un carrefour.
-  nearestAligned(x: number, y: number, hx: number, hy: number, radius = 60): EdgeHit | null {
-    const cands = this.near(x, y, radius);
-    if (!cands.length) return this.nearestEdge(x, y);
+  nearestAlignedInto(
+    x: number,
+    y: number,
+    hx: number,
+    hy: number,
+    out: EdgeHit,
+    radius = 60,
+  ): EdgeHit | null {
+    const n = this.nearInto(x, y, radius, this.nearBuf);
+    if (!n) return this.nearestEdgeInto(x, y, out);
 
+    this.ensureAlignPool(n);
     let closest = Infinity;
-    const hits: EdgeHit[] = [];
-    for (const e of cands) {
-      const hit = this.project(e, x, y);
-      hits.push(hit);
+    for (let i = 0; i < n; i++) {
+      const hit = this.projectInto(this.nearBuf[i], x, y, this.alignPool[i]);
       if (hit.dist < closest) closest = hit.dist;
     }
 
     const cut = closest + 20;
-    let best: EdgeHit | null = null;
     let bestScore = Infinity;
-    for (const hit of hits) {
+    let bestIdx = -1;
+    for (let i = 0; i < n; i++) {
+      const hit = this.alignPool[i];
       if (hit.dist > cut) continue;
       const align = Math.abs(hit.tx * hx + hit.ty * hy);
       const score = hit.dist - 25 * align;
       if (score < bestScore) {
         bestScore = score;
-        best = hit;
+        bestIdx = i;
       }
     }
-    return best;
+    if (bestIdx < 0) return null;
+    this.copyHit(this.alignPool[bestIdx], out);
+    return out;
+  }
+
+  nearestAligned(x: number, y: number, hx: number, hy: number, radius = 60): EdgeHit | null {
+    const hit = this.nearestAlignedInto(x, y, hx, hy, this.hitScratch, radius);
+    if (!hit) return null;
+    return { edge: hit.edge, t: hit.t, x: hit.x, y: hit.y, dist: hit.dist, tx: hit.tx, ty: hit.ty };
   }
 
   // A un noeud, l'edge sortant le plus aligne avec la direction donnee.
