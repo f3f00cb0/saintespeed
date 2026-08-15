@@ -370,6 +370,20 @@ export type Landmark = {
    * precis). L'axe x local suit la facade, -y pointe vers le parvis.
    */
   rot?: number;
+  /**
+   * Le cote du repere local ou le kit compose sa facade principale : celui d'ou
+   * il faut le regarder pour verifier ce qu'il affirme. Il n'etait nulle part,
+   * et se repassait a la main a chaque rendu (`npm run elevation -- --from=`) :
+   * une valeur mesuree qui ne vivait que dans la ligne de commande. Le defaut
+   * "y-" reste le cas courant, mais il est faux une fois sur trois.
+   *
+   * La valeur est relevee sur ce que le kit pose (son `front`, ses baies, sa
+   * marquise), pas devinee. La deriver a la volee ne marche pas : la regle
+   * naturelle, "la facade la plus proche d'une rue", designe l'est de l'Hotel de
+   * Ville, alors que son perron donne au sud, parce que la place devant lui est
+   * pietonne et n'existe donc pas dans la couche des routes.
+   */
+  face?: "y-" | "y+" | "x-" | "x+";
   label: string;
 };
 
@@ -393,7 +407,7 @@ export const LANDMARKS = new Map<number, Landmark>([
   // fait 49,3 m d'un seul tenant. La hauteur de corniche vient des photos de
   // reference/photos, mise a l'echelle sur cette largeur de facade : 18,5 m,
   // pour 22,7 m au sommet du cadran.
-  [-5201020, { archetype: Archetype.Pierre, wall: 0xe2d8c1, height: 18.5, rot: 0.196, label: "Hotel de Ville" }],
+  [-5201020, { archetype: Archetype.Pierre, wall: 0xe2d8c1, height: 18.5, rot: 0.196, face: "y-", label: "Hotel de Ville" }],
   // Cite du Design : long volume clair perfore, la signature moderne de la
   // ville. Elle etait hors de l'ancienne bbox batiments.
   // La Platine : sa peau est une enveloppe de triangles equilateraux, sans
@@ -415,14 +429,19 @@ export const LANDMARKS = new Map<number, Landmark>([
   // calee sur du logement et rate d'un tiers ici.
   [63261991, { archetype: Archetype.Brique, wall: 0x9c5646, roof: 0x4a3128, height: 15, label: "Ancienne Manufacture d'Armes" }],
   // Cathedrale Saint-Charles : croix latine 80 x 30 m, 40 m de haut, sans tour.
-  [63322493, { archetype: Archetype.Pierre, wall: 0xbfb69f, height: 40, unlit: true, label: "Cathedrale Saint-Charles" }],
+  // La rosace est sur la facade occidentale, soit le bout x- local : c'est de
+  // la que le kit se verifie, l'edifice n'ayant ni tour ni fleche ailleurs.
+  [63322493, { archetype: Archetype.Pierre, wall: 0xbfb69f, height: 40, unlit: true, face: "x-", label: "Cathedrale Saint-Charles" }],
   // Opera : grande masse claire du centre, eclairee proprement.
   [63305534, { archetype: Archetype.Pierre, wall: 0xe2d8c1, label: "Opera" }],
   // Musee d'Art et d'Industrie : pierre monumentale du centre.
   [63340891, { archetype: Archetype.Pierre, wall: 0xded3ba, label: "Musee d'Art et d'Industrie" }],
   // Puits Couriot : le chevalement (35 m, metal), memoire miniere. Le kit
   // remplace l'extrusion : treillis pyramidal + molettes + salle des machines.
-  [63308936, { archetype: Archetype.Brique, wall: 0x6f6f76, roof: 0x55555c, replaceBase: true, label: "Chevalement du Puits Couriot" }],
+  // Les deux molettes sont posees dans le plan x, donc invisibles de face : vu
+  // de y le chevalement n'est qu'une pyramide, et c'est justement ce qu'on veut
+  // pouvoir comparer.
+  [63308936, { archetype: Archetype.Brique, wall: 0x6f6f76, roof: 0x55555c, replaceBase: true, face: "x+", label: "Chevalement du Puits Couriot" }],
   // Centrale energie de Manufrance : brique manufacturiere.
   [63330900, { archetype: Archetype.Brique, wall: 0x8f4a3a, label: "Centrale Manufrance" }],
   // Gare de Saint-Etienne Carnot, place Sadi Carnot. Les trois emprises du
@@ -465,26 +484,29 @@ export const LANDMARKS = new Map<number, Landmark>([
   //
   // Bourse du Travail, 1901, Lamaiziere : trois niveaux monumentaux en pierre
   // de taille de Saint-Paul-Trois-Chateaux, peristyle inscrit MH.
-  [63319547, { archetype: Archetype.Pierre, wall: 0xd8cfb8, height: 15, label: "Bourse du Travail" }],
+  [63319547, { archetype: Archetype.Pierre, wall: 0xd8cfb8, height: 15, face: "y+", label: "Bourse du Travail" }],
   // Nouvelles Galeries, 1894, Lamaiziere : 3 000 m2 sur TROIS niveaux. La
   // facade est sous bardage metallique depuis les annees 1960, d'ou le gris
   // froid plutot que la pierre, et le dome de la tourelle a disparu.
-  [63281257, { archetype: Archetype.Pierre, wall: 0xb4b5b2, roof: 0x4a4c4e, height: 15, label: "Les Nouvelles Galeries" }],
+  [63281257, { archetype: Archetype.Pierre, wall: 0xb4b5b2, roof: 0x4a4c4e, height: 15, face: "y-", label: "Les Nouvelles Galeries" }],
   // Prefecture, 1895-1902 : socle plus deux niveaux monumentaux. Elle sortait
   // en archetype faubourg a 9,3 m, soit un pavillon de banlieue.
-  [-1000783, { archetype: Archetype.Pierre, wall: 0xdcd3bc, height: 18, label: "Prefecture de la Loire" }],
+  [-1000783, { archetype: Archetype.Pierre, wall: 0xdcd3bc, height: 18, face: "x+", label: "Prefecture de la Loire" }],
   // La Comedie, 2017, StudioMilou : volumes bas, la cage de scene de 28 m est
   // posee par le kit.
-  [63288593, { archetype: Archetype.Moderne, wall: 0x53565c, roof: 0x40434a, height: 12, label: "La Comedie" }],
+  [63288593, { archetype: Archetype.Moderne, wall: 0x53565c, roof: 0x40434a, height: 12, face: "x-", label: "La Comedie" }],
   // Centre Deux, 1979 : brique rouge et masse aveugle. Il sortait en verre
   // moderne, ce qui est faux sur 26 400 m2 d'emprise.
-  [63303610, { archetype: Archetype.Brique, wall: 0x8f4b3c, roof: 0x3a3330, height: 14, unlit: true, label: "Centre Deux" }],
+  // Le kit compose sur un LONG cote : trois volumes decroches et neuf caissons
+  // de ventilation le long de l'axe. Le bout x+ ne porte qu'une entree, et une
+  // photo prise de la ne montrerait rien de ce que le kit affirme.
+  [63303610, { archetype: Archetype.Brique, wall: 0x8f4b3c, roof: 0x3a3330, height: 14, unlit: true, face: "y+", label: "Centre Deux" }],
   // Chateaucreux, 1882-1884, Bouvard pour le PLM : briques polychromes. OSM
   // tague building:levels=1, ce qui donnait un batiment voyageurs de 3,1 m ;
   // on garde le niveau unique mais a sa vraie hauteur de hall, la toiture et
   // le corps d'horloge venant du kit.
-  [63322681, { archetype: Archetype.Brique, wall: 0x9c5a44, roof: 0x40342e, height: 8.5, label: "Gare de Chateaucreux" }],
+  [63322681, { archetype: Archetype.Brique, wall: 0x9c5a44, roof: 0x40342e, height: 8.5, face: "y-", label: "Gare de Chateaucreux" }],
   // Palais Mimard, 1893, Lamaiziere : cinq niveaux hauts, brique et pierre,
   // seul edifice neo-gothique de la ville, sur la ligne de depart.
-  [63300869, { archetype: Archetype.Pierre, wall: 0xc9b79c, roof: 0x4b3f36, height: 19, label: "Le Palais Mimard" }],
+  [63300869, { archetype: Archetype.Pierre, wall: 0xc9b79c, roof: 0x4b3f36, height: 19, face: "x-", label: "Le Palais Mimard" }],
 ]);

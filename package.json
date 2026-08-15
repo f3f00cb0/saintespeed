@@ -12,6 +12,7 @@
     "fetch-reference": "node scripts/fetch-reference.mjs",
     "palette-reference": "node scripts/palette-reference.mjs",
     "elevation": "node scripts/elevation.mjs",
+    "field": "node scripts/field.mjs",
     "voirie": "node scripts/voirie.mjs"
   },
   "dependencies": {

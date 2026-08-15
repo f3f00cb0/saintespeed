@@ -72,14 +72,22 @@ export function renderSynthetic(key: string, outPath: string): string {
  * src/lib/landmarks.ts), donc le point de vue se choisit.
  */
 export type Side = "y-" | "y+" | "x-" | "x+";
+//
+// Le signe des deux cotes x etait inverse, et personne ne l'avait vu tant que
+// tout se rendait depuis y- : demander la facade x+ dessinait la facade x-.
+// Verification, avec la convention "la scene est tournee de -view puis regardee
+// depuis -y" : pour voir la facade x+, la direction locale +x doit tomber sur
+// le -y de la vue, donc (1,0) tourne de -extra doit valoir (0,-1), ce qui donne
+// extra = +pi/2. La Prefecture le montre a l'oeil nu, ses sept baies cintrees
+// sont sur le bout x+ et n'apparaissaient qu'en demandant x-.
 const EXTRA: Record<Side, number> = {
   "y-": 0,
   "y+": Math.PI,
-  "x-": Math.PI / 2,
-  "x+": -Math.PI / 2,
+  "x-": -Math.PI / 2,
+  "x+": Math.PI / 2,
 };
 
-export function render(id: number, cachePath: string, outPath: string, side: Side = "y-"): string {
+export function render(id: number, cachePath: string, outPath: string, side?: Side): string {
   const cache = JSON.parse(readFileSync(cachePath, "utf8"));
   const raw: Building[] = cache.buildings.map((b: any) => ({
     id: b.i, ring: b.g, levels: b.l, height: b.h, kind: b.k, material: b.m,
@@ -92,8 +100,11 @@ export function render(id: number, cachePath: string, outPath: string, side: Sid
   const kit = LANDMARK_KITS.get(id);
   if (!lm || !kit) throw new Error(`${id} n'a pas de kit bespoke`);
 
+  // Le cote se lisait dans la ligne de commande et nulle part ailleurs : il est
+  // maintenant porte par le repere (LANDMARKS.face), --from ne servant plus qu'a
+  // regarder volontairement une autre facade.
   const f = frameOf(b.ring, b.height, lm.rot);
-  const view = f.rot + EXTRA[side];
+  const view = f.rot + EXTRA[side ?? lm.face ?? "y-"];
   const tint = hexTint(lm.wall ?? 0xcccccc);
   const roofTint = hexTint(lm.roof ?? 0x555555);
 
