@@ -301,18 +301,35 @@
 <polygon points="882.3,116.9 882.1,112.4 879.6,111.8 876.6,114.5" fill="#6d6250" stroke="#c2a978" stroke-width="0.7"/>
 <polygon points="944.3,300.8 945.6,295.1 945.5,301.0 949.3,302.5" fill="#6d6250" stroke="#c2a978" stroke-width="0.7"/>
 <polygon points="736.3,-37.4 739.4,-34.8 739.3,-38.3 736.4,-35.5" fill="#6d6250" stroke="#c2a978" stroke-width="0.7"/>
-<circle cx="198.3" cy="260.9" r="2.7" fill="none" stroke="#7a6a3a" stroke-width="1.5"/>
-<circle cx="164.5" cy="268.5" r="2.7" fill="none" stroke="#7a6a3a" stroke-width="1.5"/>
-<circle cx="502.7" cy="322.4" r="2.7" fill="none" stroke="#7a6a3a" stroke-width="1.5"/>
-<circle cx="848.2" cy="91.8" r="2.7" fill="none" stroke="#e8c46a" stroke-width="1.5"/>
-<circle cx="892.7" cy="121.9" r="2.7" fill="none" stroke="#e8c46a" stroke-width="1.5"/>
-<circle cx="154.6" cy="238.4" r="2.7" fill="none" stroke="#e8c46a" stroke-width="1.5"/>
-<circle cx="175.7" cy="272.7" r="2.7" fill="none" stroke="#e8c46a" stroke-width="1.5"/>
-<circle cx="178.8" cy="300.5" r="2.7" fill="none" stroke="#e8c46a" stroke-width="1.5"/>
-<circle cx="182.0" cy="273.7" r="2.7" fill="none" stroke="#e8c46a" stroke-width="1.5"/>
-<circle cx="503.4" cy="317.0" r="2.7" fill="none" stroke="#e8c46a" stroke-width="1.5"/>
-<circle cx="499.9" cy="343.6" r="2.7" fill="none" stroke="#e8c46a" stroke-width="1.5"/>
-<circle cx="201.7" cy="261.4" r="2.7" fill="none" stroke="#e8c46a" stroke-width="1.5"/>
-<text x="12" y="26" fill="#cfd6e6" font-family="monospace" font-size="15">4.4045, 45.4445 · rayon 200 m · 95 emprises, 97 bandes, 12 passages pietons, 22 sols</text>
-<text x="12" y="46" fill="#9aa094" font-family="monospace" font-size="12">gris clair = trottoir · ocre = raccord d'angle · cercle jaune = passage pieton OSM</text>
+<polygon points="843.2,92.7 844.0,91.9 847.9,96.0 847.0,96.8" fill="#b9b39f"/>
+<polygon points="845.0,91.0 845.8,90.2 849.7,94.3 848.8,95.1" fill="#b9b39f"/>
+<polygon points="846.8,89.3 847.6,88.5 851.5,92.6 850.6,93.4" fill="#b9b39f"/>
+<polygon points="848.6,87.6 849.4,86.9 853.3,90.9 852.4,91.7" fill="#b9b39f"/>
+<polygon points="895.4,117.5 895.4,118.6 889.8,118.8 889.7,117.7" fill="#b9b39f"/>
+<polygon points="895.4,120.0 895.5,121.1 889.9,121.3 889.8,120.2" fill="#b9b39f"/>
+<polygon points="895.5,122.5 895.6,123.6 889.9,123.8 889.9,122.7" fill="#b9b39f"/>
+<polygon points="895.6,124.9 895.6,126.1 890.0,126.3 890.0,125.1" fill="#b9b39f"/>
+<polygon points="170.2,280.0 170.3,278.9 179.3,280.1 179.1,281.2" fill="#b9b39f"/>
+<polygon points="170.5,277.6 170.6,276.4 179.6,277.6 179.4,278.7" fill="#b9b39f"/>
+<polygon points="170.8,275.1 171.0,274.0 179.9,275.1 179.7,276.3" fill="#b9b39f"/>
+<polygon points="171.1,272.6 171.3,271.5 180.2,272.7 180.1,273.8" fill="#b9b39f"/>
+<polygon points="171.5,270.2 171.6,269.1 180.5,270.2 180.4,271.3" fill="#b9b39f"/>
+<polygon points="171.8,267.7 171.9,266.6 180.8,267.8 180.7,268.9" fill="#b9b39f"/>
+<polygon points="172.1,265.3 172.2,264.2 181.2,265.3 181.0,266.4" fill="#b9b39f"/>
+<polygon points="176.3,280.9 176.5,279.7 185.4,281.2 185.2,282.3" fill="#b9b39f"/>
+<polygon points="176.7,278.4 176.9,277.3 185.8,278.7 185.6,279.8" fill="#b9b39f"/>
+<polygon points="177.1,276.0 177.3,274.9 186.1,276.3 186.0,277.4" fill="#b9b39f"/>
+<polygon points="177.5,273.5 177.6,272.4 186.5,273.8 186.4,274.9" fill="#b9b39f"/>
+<polygon points="177.9,271.1 178.0,270.0 186.9,271.4 186.7,272.5" fill="#b9b39f"/>
+<polygon points="178.2,268.6 178.4,267.5 187.3,268.9 187.1,270.0" fill="#b9b39f"/>
+<polygon points="178.6,266.2 178.8,265.1 187.7,266.5 187.5,267.6" fill="#b9b39f"/>
+<polygon points="497.9,324.3 498.0,323.2 507.0,324.4 506.8,325.5" fill="#b9b39f"/>
+<polygon points="498.2,321.9 498.4,320.7 507.3,322.0 507.1,323.1" fill="#b9b39f"/>
+<polygon points="498.6,319.4 498.7,318.3 507.6,319.5 507.5,320.6" fill="#b9b39f"/>
+<polygon points="498.9,317.0 499.0,315.8 508.0,317.1 507.8,318.2" fill="#b9b39f"/>
+<polygon points="499.2,314.5 499.4,313.4 508.3,314.6 508.1,315.7" fill="#b9b39f"/>
+<polygon points="499.6,312.0 499.7,310.9 508.6,312.1 508.5,313.3" fill="#b9b39f"/>
+<polygon points="499.9,309.6 500.0,308.5 509.0,309.7 508.8,310.8" fill="#b9b39f"/>
+<text x="12" y="26" fill="#cfd6e6" font-family="monospace" font-size="15">4.4045, 45.4445 · rayon 200 m · 95 emprises, 97 bandes, 29 bandes de passage pieton, 22 sols</text>
+<text x="12" y="46" fill="#9aa094" font-family="monospace" font-size="12">gris clair = trottoir · ocre = raccord d'angle · blanc = passage pieton releve dans OSM</text>
 </svg>

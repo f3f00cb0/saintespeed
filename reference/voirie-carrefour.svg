@@ -115,6 +115,6 @@
 <polygon points="381.0,411.1 239.9,-324.9 220.5,-321.6 361.7,414.8" fill="#5c6058" stroke="#9aa094" stroke-width="0.7"/>
 <polygon points="436.3,400.5 295.4,-334.3 314.8,-337.5 455.6,396.8" fill="#5c6058" stroke="#9aa094" stroke-width="0.7"/>
 <polygon points="460.9,417.0 465.9,392.2 455.6,396.8 436.3,400.5" fill="#6d6250" stroke="#c2a978" stroke-width="0.7"/>
-<text x="12" y="26" fill="#cfd6e6" font-family="monospace" font-size="15">4.388856, 45.437928 · rayon 32 m · 87 emprises, 11 bandes, 0 passages pietons, 3 sols</text>
-<text x="12" y="46" fill="#9aa094" font-family="monospace" font-size="12">gris clair = trottoir · ocre = raccord d'angle · cercle jaune = passage pieton OSM</text>
+<text x="12" y="26" fill="#cfd6e6" font-family="monospace" font-size="15">4.388856, 45.437928 · rayon 32 m · 87 emprises, 11 bandes, 0 bandes de passage pieton, 3 sols</text>
+<text x="12" y="46" fill="#9aa094" font-family="monospace" font-size="12">gris clair = trottoir · ocre = raccord d'angle · blanc = passage pieton releve dans OSM</text>
 </svg>
