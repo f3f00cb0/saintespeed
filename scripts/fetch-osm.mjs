@@ -108,6 +108,21 @@ const FEATURES_QUERY =
   `way["natural"="water"]${bb(BBOX)};` +
   `way["amenity"="parking"]${bb(BBOX)};` +
   `way["railway"="tram"]${bb(BBOX)};` +
+  // L'USAGE DU SOL, parce que le vide entre une facade et la chaussee n'est pas
+  // du vide. Mesure sur trois fenetres de 16 ha, grille de 1 m : 14,6 % de sol
+  // noir dans l'hypercentre, 33 % en tissu residentiel, 82,6 % autour de
+  // Chateaucreux. Et la totalite de ce vide tombe dans un landuse.
+  //
+  // On ne prend PAS landuse=residential : ses 17 polygones font 2 857 ha, dont
+  // un seul de 1 069 ha qui recouvre le centre entier. Peindre celui-la, ce
+  // n'est pas suivre la donnee, c'est repeindre la ville d'une teinte unique en
+  // se donnant l'alibi d'un tag. Ne sont prises que les classes qui disent
+  // reellement quelque chose de local.
+  `way["landuse"~"^(industrial|brownfield|construction|allotments|railway|quarry|farmyard)$"]${bb(DECOR_BBOX)};` +
+  `relation["landuse"~"^(industrial|brownfield|construction|allotments|railway)$"]${bb(DECOR_BBOX)};` +
+  `way["landuse"~"^(retail|commercial)$"]${bb(DECOR_BBOX)};` +
+  `way["amenity"~"^(school|hospital|university|college)$"]${bb(DECOR_BBOX)};` +
+  `way["railway"="platform"]${bb(DECOR_BBOX)};` +
   // Une fontaine de place est cartographiee par son bassin, donc en way, pas en
   // noeud. Ne prendre que les noeuds ratait justement celles qui comptent : la
   // fontaine de la place du Peuple (way 1300735962, a 32 m du centre de la
@@ -728,6 +743,20 @@ function classifyArea(t) {
   if (t.landuse === "cemetery") return "cemetery";
   if (t.landuse === "forest") return "forest";
   if (t.landuse === "grass" || t.landuse === "meadow") return "grass";
+
+  // L'usage du sol vient EN DERNIER : il est fait de grandes emprises qui
+  // englobent souvent un parc, un parking ou une place deja classes plus haut.
+  // Le tester avant ferait disparaitre le parc de Carnot sous une dalle
+  // ferroviaire, exactement le piege de place=square documente au dessus.
+  if (t.railway === "platform") return "platform";
+  if (t.landuse === "railway") return "rail";
+  if (t.landuse === "allotments") return "allotments"; // jardins ouvriers
+  if (t.landuse === "brownfield" || t.landuse === "quarry") return "brownfield";
+  if (t.landuse === "construction") return "construction";
+  if (t.landuse === "industrial" || t.landuse === "farmyard") return "industrial";
+  if (t.landuse === "retail" || t.landuse === "commercial") return "retail";
+  if (t.amenity === "school" || t.amenity === "college" || t.amenity === "university") return "school";
+  if (t.amenity === "hospital") return "hospital";
   return null;
 }
 

@@ -26,10 +26,13 @@ const ROOT = resolve(HERE, "..");
 const PUBLIC = resolve(ROOT, "public");
 const ENTRY = resolve(HERE, "voirie.entry.ts");
 
-// Trois lieux qui couvrent les trois cas : un carrefour a trois branches, une
-// place, et un tissu residentiel dense.
+// Quatre lieux qui couvrent les cas : un carrefour a trois branches, un quartier
+// de gare et ses emprises ferroviaires, une place, et un tissu residentiel dense.
 const PLANS = [
   { nom: "carrefour", lon: 4.388856, lat: 45.437928, rayon: 32 },
+  // Chateaucreux : 82,6 % de sol vide avant la couche d'usage du sol, 22,6 %
+  // apres. C'est la vue ou cette couche se juge.
+  { nom: "chateaucreux", lon: 4.4045, lat: 45.4445, rayon: 200 },
   { nom: "jean-jaures", lon: 4.3897, lat: 45.4372, rayon: 110 },
   { nom: "residentiel", lon: 4.3955, lat: 45.4315, rayon: 80 },
 ];

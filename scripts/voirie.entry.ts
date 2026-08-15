@@ -21,6 +21,7 @@ import { buildGraph, type RoadGraph } from "../src/lib/graph";
 import { prepareBuildings, buildWallIndex, type Building, type FlatBuilding } from "../src/lib/buildings";
 import { buildSidewalks } from "../src/lib/sidewalks";
 import { prepareVoirie, type Voirie } from "../src/lib/voirie";
+import { AREAS, type AreaKind } from "../src/lib/features";
 
 type Charge = {
   ways: Way[];
@@ -29,6 +30,8 @@ type Charge = {
   walls: ReturnType<typeof buildWallIndex>;
   voirie: Voirie;
   centre: { x: number; y: number };
+  /** surfaces au sol brutes, pour que le plan montre aussi de quoi est fait le sol */
+  areas: { k: AreaKind; pts: { x: number; y: number }[] }[];
 };
 
 export function charger(pub: string): Charge {
@@ -49,7 +52,17 @@ export function charger(pub: string): Charge {
   } catch {
     console.log("  (pas de sainte-voirie.json : regle geometrique seule)");
   }
-  return { ways, graph, buildings, walls, voirie, centre: graph.proj.project(4.39, 45.4397) };
+  let areas: Charge["areas"] = [];
+  try {
+    const f = JSON.parse(readFileSync(pub + "/sainte-features.json", "utf8"));
+    areas = (f.areas ?? []).map((a: any) => ({
+      k: a.k as AreaKind,
+      pts: (a.g as [number, number][]).map((p) => graph.proj.project(p[0], p[1])),
+    }));
+  } catch {
+    console.log("  (pas de sainte-features.json : plan sans les sols)");
+  }
+  return { ways, graph, buildings, walls, voirie, areas, centre: graph.proj.project(4.39, 45.4397) };
 }
 
 /** Point dans une emprise : le seul test qui reponde vraiment "dans un mur". */
@@ -154,6 +167,19 @@ export function plan(c: Charge, lon: number, lat: number, rayon: number, sortie:
     `<rect width="100%" height="100%" fill="#0e1526"/>`,
   ];
 
+  // Les sols d'abord, du plus bas au plus haut : c'est l'ordre du rendu.
+  const hex = (v: number) => "#" + v.toString(16).padStart(6, "0");
+  const sols = c.areas
+    .filter((a) => a.pts.some((p) => Math.abs(p.x - o.x) < rayon + 60 && Math.abs(p.y - o.y) < rayon + 60))
+    .sort((a, b) => (AREAS[a.k]?.z ?? 0) - (AREAS[b.k]?.z ?? 0));
+  for (const a of sols) {
+    const spec = AREAS[a.k];
+    if (!spec) continue;
+    out.push(
+      `<polygon points="${a.pts.map((p) => `${X(p.x)},${Y(p.y)}`).join(" ")}" fill="${hex(spec.c)}"/>`,
+    );
+  }
+
   let nb = 0;
   for (const b of c.buildings) {
     if (Math.abs(b.ring[0].x - o.x) > rayon + 60 || Math.abs(b.ring[0].y - o.y) > rayon + 60) continue;
@@ -187,7 +213,7 @@ export function plan(c: Charge, lon: number, lat: number, rayon: number, sortie:
     out.push(`<circle cx="${X(cr.x)}" cy="${Y(cr.y)}" r="${(1.2 * S).toFixed(1)}" fill="none" stroke="${cr.marked ? "#e8c46a" : "#7a6a3a"}" stroke-width="1.5"/>`);
   }
   out.push(
-    `<text x="12" y="26" fill="#cfd6e6" font-family="monospace" font-size="15">${lon}, ${lat} · rayon ${rayon} m · ${nb} emprises, ${ns} bandes, ${nc} passages pietons</text>`,
+    `<text x="12" y="26" fill="#cfd6e6" font-family="monospace" font-size="15">${lon}, ${lat} · rayon ${rayon} m · ${nb} emprises, ${ns} bandes, ${nc} passages pietons, ${sols.length} sols</text>`,
     `<text x="12" y="46" fill="#9aa094" font-family="monospace" font-size="12">gris clair = trottoir · ocre = raccord d'angle · cercle jaune = passage pieton OSM</text>`,
     `</svg>`,
   );

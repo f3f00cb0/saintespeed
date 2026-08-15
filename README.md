@@ -946,6 +946,58 @@ une chaussée voisine, combien finissent dans une emprise), le plan dit où. C'e
 le plan qui a révélé les dalles de carrefour, et les chiffres qui ont prouvé que
 le rayon de rabotage partait du mauvais point.
 
+## L'usage du sol : le vide n'est pas du vide
+
+Entre une façade et la chaussée, il restait du **noir**. Mesure avant d'écrire
+quoi que ce soit, grille de 1 m sur trois fenêtres de 16 ha, chaque cellule
+classée par ce qui la couvre :
+
+| fenêtre | bâtiment | sol vide | chaussée | trottoir | décor |
+| --- | --- | --- | --- | --- | --- |
+| hypercentre | 59,3 % | **14,6 %** | 6,5 % | 2,6 % | 16,9 % |
+| tissu résidentiel | 35,3 % | **33,0 %** | 13,0 % | 7,1 % | 11,6 % |
+| Châteaucreux | 6,1 % | **82,6 %** | 3,7 % | 2,5 % | 5,1 % |
+
+La totalité de ce vide tombe dans un `landuse` OSM. Mais la couverture ne dit pas
+la même chose selon la classe, et c'est ce qui a décidé du contenu de la couche :
+
+| classe | polygones | surface | la plus grande |
+| --- | --- | --- | --- |
+| residential | 17 | 2 857 ha | **1 069 ha** |
+| industrial | 11 | 793 ha | 261 ha |
+| allotments | 26 | 24 ha | 3,3 ha |
+| railway et quais | 20 | 28,6 ha | 27,7 ha |
+| écoles, université, hôpitaux | 53 | 69 ha | 14,3 ha |
+| friches et chantiers | 43 | 16 ha | 2,6 ha |
+
+**`landuse=residential` est écarté.** Un seul de ses polygones fait 1 069 ha et
+recouvre le centre entier : le peindre ne serait pas suivre la donnée, ce serait
+repeindre la ville d'une teinte unique en se donnant l'alibi d'un tag. Les autres
+classes, elles, désignent quelque chose de local, et c'est là qu'est la
+reconnaissance : les jardins ouvriers sont une signature stéphanoise autant que le
+tram, une friche n'est pas une cour d'usine, un ballast n'est pas un parking.
+
+**Le classement se fait en queue de cascade** (`classifyArea`). Une emprise
+ferroviaire ou industrielle englobe souvent un parc ou un parking déjà classés :
+testée avant eux, elle aurait posé une dalle par-dessus le parc de Carnot, le
+même piège que `place=square` avait déjà tendu. De même, les rangs de dessin sont
+négatifs, de -3 pour l'industriel à 0 pour les friches : cette couche est un fond
+de plan, jamais un dessus. Les quais font exception et remontent au-dessus du
+ballast, comme les dalles qu'ils sont.
+
+Résultat mesuré dans les mêmes fenêtres :
+
+| fenêtre | vide avant | vide après | ce qui a comblé |
+| --- | --- | --- | --- |
+| Châteaucreux | 82,6 % | **22,6 %** | ballast 30,7 %, chantier 24,5 %, école 4,7 % |
+| hypercentre | 14,6 % | 14,6 % | rien |
+| tissu résidentiel | 33,0 % | 32,4 % | école 0,6 % |
+
+Autrement dit la couche règle Châteaucreux et ne touche pas au reste, parce que
+le vide qui reste est **entièrement** sous la couverture résidentielle. Ce
+qu'elle coûte : 2 922 triangles, soit 10 % de plus sur la couche de sol, et
+978 ha couverts contre 13 409 déjà dessinés.
+
 ## Le décor
 
 Avant d'écrire une ligne de rendu, les couches ont été **comptées** sur la bbox

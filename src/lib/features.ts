@@ -18,7 +18,20 @@ export type AreaKind =
   | "pitch"
   | "cemetery"
   | "parking"
-  | "water";
+  | "water"
+  // --- usage du sol : ce qui remplit le vide entre la facade et la chaussee ---
+  // Mesure sur trois fenetres de 16 ha, grille de 1 m, avant cette couche :
+  // 14,6 % de sol noir dans l'hypercentre, 33 % en tissu residentiel, 82,6 %
+  // autour de Chateaucreux. La totalite de ce vide tombe dans un landuse.
+  | "rail"
+  | "platform"
+  | "industrial"
+  | "retail"
+  | "school"
+  | "hospital"
+  | "allotments"
+  | "brownfield"
+  | "construction";
 
 /** Un espace au sol, avec ce que les jointures hors ligne ont releve dessus. */
 export type RawArea = {
@@ -75,13 +88,28 @@ export type AreaSpec = { c: number; z: number };
 
 export const AREAS: Record<AreaKind, AreaSpec> = {
   pedestrian: { c: 0x4c4a41, z: 5 }, // dalle claire, au dessus du reste
-  parking: { c: 0x26261f, z: 4 }, // bitume
+  platform: { c: 0x3a3a34, z: 3.5 }, // quai : dalle beton, au dessus du ballast
   pitch: { c: 0x2b3a2a, z: 4 },
+  parking: { c: 0x26261f, z: 4 }, // bitume
+  water: { c: 0x111c2b, z: 3 },
   cemetery: { c: 0x24291f, z: 2 },
   park: { c: 0x232d1e, z: 2 }, // vert desature
   grass: { c: 0x252f1f, z: 1 },
   forest: { c: 0x1d2619, z: 1 },
-  water: { c: 0x111c2b, z: 3 },
+
+  // L'usage du sol passe SOUS tout le reste (z negatif ou nul) : ce sont de
+  // grandes emprises qui englobent souvent un parc ou un parking deja peints,
+  // et c'est le fond de plan, pas le dessus. Les teintes sont tres sombres,
+  // a peine au dessus du sol de base (0x141509) : le but n'est pas d'eclairer
+  // les coeurs d'ilot, c'est que le sol cesse d'etre un trou.
+  brownfield: { c: 0x231f1a, z: 0 }, // friche : terre et gravats
+  construction: { c: 0x2a241d, z: 0 }, // chantier : terre nue
+  allotments: { c: 0x212a1d, z: -1 }, // jardins ouvriers, signature stephanoise
+  school: { c: 0x282722, z: -1 }, // cour d'ecole, enrobe
+  hospital: { c: 0x272621, z: -1 },
+  rail: { c: 0x232320, z: -2 }, // ballast
+  industrial: { c: 0x272620, z: -3 }, // beton et enrobe de cour d'usine
+  retail: { c: 0x26251f, z: -3 },
 };
 
 // Le sol de base est a -0.4 et la premiere couche de route a 0.06 (LAYER_STEP).
