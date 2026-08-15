@@ -859,6 +859,110 @@ de 13,8 m relevée dans OSM, la corniche de la photo tombe vers **15 m**. La tab
 (`addHipped`) : deux longs pans trapézoïdaux et deux croupes à 45°, utile aussi
 aux 17 emprises taguées `roof:shape=hipped`.
 
+## Aller voir en vrai : les postes de relevé
+
+```bash
+npm run field                      # calcule les postes, écrit la planche
+npm run field -- --list            # un sujet par ligne, dans le terminal
+npm run field -- import <dossier>  # range des photos sur leur EXIF
+```
+
+Sur les **17 repères bespoke posés sur une emprise, 6 seulement ont une photo**
+dans `reference/photos` : Hôtel de Ville, Platine, Manufacture, Zénith,
+Châteaucreux, Nouvelles Galeries. Les onze autres ont été modélisés sur du
+texte. Ce que ça coûte est déjà chiffré plus haut : la reprise de l'Hôtel de
+Ville, c'est un campanile inventé, deux statues à dix mètres de leur place et un
+perron de sept marches au lieu de seize. Aucune de ces erreurs n'était une erreur
+de rendu, toutes venaient de l'absence d'image. Et `reference/NOTES.md` note
+qu'il n'y a rien d'utilisable sur Commons pour les grands ensembles.
+
+`npm run field` ne produit pas une liste de courses, il calcule un **poste de
+prise de vue**. Il part du repère du jeu (`frameOf`, même centre de bbox, même
+`rot` mesuré), prend la façade que le kit compose, recule de ce qu'il faut pour
+la cadrer au téléphone, et rend **une position GPS et un cap boussole**. Une
+photo prise à ce poste se superpose au rendu de `npm run elevation`, affiché en
+regard sur la planche : on compare, on n'apprécie pas.
+
+**82 sujets, 98 postes** : les 17 repères sur emprise, le stade et les 7 objets
+de la place Jean-Jaurès, et les 57 objets ponctuels, regroupés par typologie
+puisque leur forme découle de leur type.
+
+### Ce que le relevé vérifie, et ce qu'il ne peut pas vérifier
+
+Le recul n'est pas théorique. À partir du **nu de façade réel** (l'intersection
+de la ligne de visée avec le contour, et non le milieu de la face de bbox, qui
+tombe hors du bâtiment dès que l'emprise est en L), le poste s'écarte mètre par
+mètre et s'arrête sur deux critères : une **emprise bâtie qui coupe la ligne de
+vue**, et l'**espace public** (chaussées hors voies rapides, rues piétonnes,
+chemins, places, parcs, parkings). Trois conséquences mesurées :
+
+| sans le test | avec |
+| --- | --- |
+| Centre Deux à **243 m** de recul, à travers trois îlots | **6 postes**, 265 m de façade couverts sur 321 |
+| Nouvelles Galeries à **3 m** de recul, le nu de bbox tombant chez le voisin | **12 m**, la largeur réelle de la rue |
+| Daphné photographiée à **3 m**, c'est-à-dire depuis le bassin | **11 m**, sur la margelle |
+
+Le sens de l'appareil est calculé, pas laissé au hasard : la cathédrale fait 30 m
+de large pour 40 m de haut, le paysage demande **81 m** de recul et le portrait
+**58 m**, ce qui décide si la photo est possible depuis le parvis.
+
+Le nombre de postes se décide sur **neuf sondages** répartis le long de la
+façade, pas sur une mesure prise au milieu : le recul disponible varie trop pour
+qu'un seul point le résume. Quand aucun sondage ne cadre plus de 8 m, le relevé
+arrête de découper et le dit, plutôt que d'aligner huit postes de quatre mètres :
+sous le viaduc de Carnot, le quai sud fait 63 m et il s'en photographie 40.
+
+Ce que le relevé **ne sait pas** : ce qui bouche la vue en dehors du bâti. Ni les
+arbres, ni les travaux, ni les camions. Au-delà de 80 m de recul il le dit et
+laisse trancher sur place. Il ne connaît pas non plus les horaires : une grille
+fermée reste une grille fermée.
+
+### La façade principale était dans la ligne de commande
+
+`npm run elevation` prenait le côté à regarder en `--from=`, retapé à chaque
+rendu. C'était une mesure qui ne vivait nulle part. Elle est maintenant portée
+par le repère (`LANDMARKS.face`, dix repères sur dix-sept), relevée sur ce que
+chaque kit compose, et `elevation` la suit par défaut.
+
+La dériver automatiquement ne marche pas, essai à l'appui : la règle naturelle
+« la façade la plus proche d'une rue » désigne le côté est de l'Hôtel de Ville,
+alors que son perron donne au sud, parce que **la place devant lui est piétonne
+et n'existe donc pas dans la couche des routes**. Pour les sept volumes
+symétriques qui ne composent aucune façade (une tour, une halle, un auvent de
+quai), le côté est choisi par la mesure, sur le critère « d'où voit-on le plus de
+sujet » et non « quel côté est le plus accessible » : l'auvent du quai sud de
+Carnot fait 63 m de long sur 2,6 m de large, et le photographier par son pignon
+est parfaitement accessible et parfaitement inutile.
+
+**Le champ `face` a fait apparaître un bug du rendu d'élévation** : les deux
+côtés x étaient inversés, `--from=x+` dessinait la façade x−. Personne ne l'avait
+vu tant que tout se rendait depuis `y-`. La Préfecture le montre à l'œil nu, ses
+sept baies cintrées sont sur le bout x+ et n'apparaissaient qu'en demandant x−.
+
+### La planche, et le retour
+
+`reference/field/index.html` est une page autonome (images en data URI, aucun
+appel réseau) faite pour être ouverte dehors, sur un téléphone : les postes
+triés par distance, le cap à viser sur une rose qui suit la boussole, l'élévation
+du kit en regard, et **les questions que la photo doit trancher**. Ces questions
+ne décrivent pas le bâtiment, elles sortent de ce que le code affirme sans
+source : « la cage de scène de 28 m, sa position dans l'emprise est déduite,
+faute de plan », « hauteur de 9,3 m : inférence, aucune source ne la donne »,
+« les quatre pinacles aux coins du transept : le kit les pose, la source ne les
+mentionne pas ».
+
+Au retour, `npm run field -- import` lit l'EXIF (position, cap de la boussole au
+déclenchement, focale, date), rattache chaque photo à un sujet et la range dans
+`reference/terrain` avec son manifeste. Le rattachement se fait sur la distance
+au **poste**, pas au centre du sujet : une photo prise pile au poste de l'Hôtel
+de Ville tombe à 76 m de son centre, et notée sur le centre elle était rattachée
+à une statue voisine. Le cap sert de garde-fou, un sujet qu'on ne regardait pas
+est écarté même si on était juste devant.
+
+Le manifeste garde l'**écart entre le poste calculé et le poste réel**. C'est la
+seule façon de savoir si un poste tenait debout sur le terrain, et donc si ce
+relevé vaut quelque chose.
+
 ## Les trottoirs : ce qu'OSM en dit, et ce que la place permet
 
 Première idée à écarter, parce qu'elle était fausse : « OSM ne contient que les

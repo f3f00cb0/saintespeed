@@ -13,3 +13,14 @@ reference/photos
 
 # Elevations generees par `npm run elevation` : artefacts de verification.
 reference/elevation-*.jpg
+
+# Planche de terrain generee par `npm run field` : 1,4 Mo d'HTML autonome et les
+# elevations qui vont avec, tout est reconstruit par la commande.
+reference/field
+
+# Photos de terrain. Elles, on ne peut PAS les retelecharger : elles n'existent
+# que parce que quelqu'un est alle sur place. Les images restent hors du depot
+# (plusieurs mega-octets chacune, a garder avec les originaux du telephone),
+# mais le manifeste est versionne : il porte la position, le cap, la focale et
+# l'ecart au poste calcule, c'est-a-dire tout ce qui se raisonne sans l'image.
+reference/terrain/*.jpg

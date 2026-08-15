@@ -10,9 +10,9 @@
 //   npm run elevation -- --list       # les ids et clefs disponibles
 //
 // La facade principale n'est pas du meme cote pour tous les reperes : elle est
-// mesuree emprise par emprise (src/lib/landmarks.ts). Par defaut on regarde
-// depuis -y, ce qui est le cas le plus courant ; --from=y+ / x- / x+ pour les
-// autres.
+// mesuree emprise par emprise et portee par LANDMARKS.face, que ce script suit
+// par defaut. --from=y+ / x- / x+ ne sert plus qu'a regarder volontairement une
+// autre facade que la principale.
 //
 // Pourquoi cet outil existe : on ne peut pas regarder un kit dans le jeu depuis
 // un terminal. Un onglet qui n'est pas au premier plan gele
@@ -46,8 +46,10 @@ const ENTRY = resolve(HERE, "elevation.entry.ts");
 const args = process.argv.slice(2);
 const targets = args.filter((a) => !a.startsWith("--"));
 const fromArg = args.find((a) => a.startsWith("--from="));
-const side = fromArg ? fromArg.slice("--from=".length) : "y-";
-if (!["y-", "y+", "x-", "x+"].includes(side)) {
+// Sans --from, le cote vient du repere lui-meme (LANDMARKS.face) : la facade
+// principale est une mesure, elle n'a pas a etre retapee a chaque rendu.
+const side = fromArg ? fromArg.slice("--from=".length) : undefined;
+if (side !== undefined && !["y-", "y+", "x-", "x+"].includes(side)) {
   console.error(`cote inconnu : ${side} (attendu y-, y+, x- ou x+)`);
   process.exit(1);
 }
