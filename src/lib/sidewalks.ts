@@ -48,8 +48,8 @@ const WIDTH: Record<string, number> = {
 // la mesure le confirme (motorway et trunk sont a 13 m et plus de toute facade,
 // ils ne longent rien a pieds).
 
-/** Vue de bordure, en metres. Bordure T2 francaise. */
-export const CURB = 0.14;
+/** Vue de bordure, en metres. Un peu plus haute pour etre lisible en vue basse. */
+export const CURB = 0.20;
 
 /**
  * Sous cette largeur libre, la facade est sur la bordure : il n'y a pas de
@@ -64,14 +64,14 @@ const MIN_WIDTH = 0.35;
 const WALL_GAP = 0.15;
 
 /** Pas d'echantillonnage de la place libre le long d'un segment, en metres. */
-const SAMPLE_STEP = 5;
+const SAMPLE_STEP = 2.5;
 
 /**
  * Marge au dela de la demi-chaussee de la voie CROISEE. Le trottoir s'arrete au
  * bord de la chaussee qu'il traverse, pas plus loin : c'est la que passe le
  * passage pieton, et l'angle lui-meme est rempli par le raccord.
  */
-const JUNCTION_GAP = 0.25;
+const JUNCTION_GAP = 0.12;
 
 /**
  * En dessous, ce n'est plus un trottoir mais une dalle isolee. Le seuil porte
@@ -81,14 +81,11 @@ const JUNCTION_GAP = 0.25;
  */
 const MIN_RUN = 8.0;
 
-/**
- * Ecart angulaire maximal entre deux bouts de bande pour qu'ils forment un
- * ANGLE et non une traversee de chaussee. Autour d'un carrefour les bouts se
- * rangent par paires : deux bouts a quelques degres l'un de l'autre sont le meme
- * coin de trottoir, deux bouts a 80 degres sont les deux rives d'une chaussee,
- * et entre eux il doit rester le vide du passage pieton.
- */
-const CORNER_MAX_ANGLE = Math.PI / 5; // 36 degres
+/** Surélévation de la dalle pour éviter le z-fighting avec la chaussée. */
+const TOP_LIFT = 0.015;
+
+/** Bande de rive sombre entre chaussee et dalle. */
+const LIP = 0.22;
 
 /** Quantification des sommets pour retrouver les carrefours (0,1 m, comme graph.ts). */
 const QUANT = 10;
@@ -98,23 +95,18 @@ export type SidewalkMesh = {
   top: Float32Array;
   /** Triangles de la face verticale de bordure, en xyz. */
   curb: Float32Array;
+  /** Bande sombre au bord chaussee (lisibilite). */
+  lip: Float32Array;
   stats: {
     segments: number;
     posed: number;
     skippedNoRoom: number;
     skippedJunction: number;
+    skippedOverlap: number;
     narrowed: number;
-    /** Cotes poses parce qu'OSM dit qu'il y a un trottoir de ce cote. */
     fromTag: number;
-    /** Cotes ecartes parce qu'OSM dit qu'il n'y en a pas. */
     deniedByTag: number;
-    /** Bandes abandonnees parce que trop courtes pour etre un trottoir. */
     droppedShort: number;
-    /** Raccords d'angle poses aux carrefours. */
-    corners: number;
-    /** Indice dans `top` ou commencent les raccords : avant, ce sont les bandes. */
-    cornerStart: number;
-    /** Bandes continues posees, et leurs longueurs en metres. */
     runs: number;
     runLengths: number[];
     triangles: number;
@@ -161,31 +153,26 @@ function findJunctions(ways: Way[], proj: Projector): Map<string, Junction> {
  * pointilles. La bonne valeur est le bord de la chaussee croisee, l'angle etant
  * rempli par le raccord.
  */
-function junctionBite(j: Map<string, Junction>, x: number, y: number, wayId: number): number {
+function junctionBite(
+  j: Map<string, Junction>,
+  x: number,
+  y: number,
+  wayId: number,
+  ownHalf: number,
+): number {
   const e = j.get(keyOf(x, y));
   if (!e || e.deg < 3) return 0;
   let other = 0;
   for (const [id, half] of e.ways) {
     if (id !== wayId && half > other) other = half;
   }
-  return other > 0 ? other + JUNCTION_GAP : 0;
+  // Recul = chaussee croisee + une fraction de la notre : evite que la bande
+  // deborde dans l'ile du carrefour (visible en X sur les captures).
+  return other > 0 ? other + ownHalf * 0.35 + JUNCTION_GAP : 0;
 }
 
-/** Un bout de bande qui s'arrete a un carrefour, garde pour raccorder l'angle. */
-type End = {
-  /** Direction en s'eloignant du carrefour. */
-  dx: number;
-  dy: number;
-  /** Bord interieur (cote chaussee) et exterieur (cote facade) du bout. */
-  ix: number;
-  iy: number;
-  ox: number;
-  oy: number;
-  h: number;
-};
-
 /**
- * Construit les deux maillages du trottoir.
+ * Construit les maillages du trottoir.
  *
  * @param area demi-cote de la boite ou l'on pose des trottoirs, autour de
  *   `centre`. Meme convention que les lampadaires : c'est un detail de
@@ -204,17 +191,35 @@ export function buildSidewalks(
   const junctions = findJunctions(ways, proj);
   const top: number[] = [];
   const curb: number[] = [];
-  const ends = new Map<string, End[]>();
+  const lip: number[] = [];
   let segments = 0;
   let posed = 0;
   let skippedNoRoom = 0;
   let skippedJunction = 0;
+  let skippedOverlap = 0;
   let narrowed = 0;
   let fromTag = 0;
   let deniedByTag = 0;
   let droppedShort = 0;
-  let corners = 0;
   const runLengths: number[] = [];
+
+  /** Point au coeur d'une chaussee (pas sur le bord du trottoir). */
+  const onCarriageway = (x: number, y: number, ownWayId: number) => {
+    const hit = graph.nearestEdge(x, y, 25);
+    if (!hit) return false;
+    if (hit.dist < hit.edge.halfWidth - 0.2) return true;
+    return hit.edge.wayId !== ownWayId && hit.dist < hit.edge.halfWidth - 0.05;
+  };
+
+  type Pt = { ix: number; iy: number; ox: number; oy: number };
+
+  /** Le bord interieur touche la chaussee par design : on ne teste que l'exterieur. */
+  const quadOnCarriageway = (a: Pt, b: Pt, ownWayId: number) => {
+    const cx = (a.ix + b.ix + b.ox + a.ox) / 4;
+    const cy = (a.iy + b.iy + b.oy + a.oy) / 4;
+    if (onCarriageway(cx, cy, ownWayId)) return true;
+    return onCarriageway(a.ox, a.oy, ownWayId) || onCarriageway(b.ox, b.oy, ownWayId);
+  };
 
   // Un morceau de bande en attente : rien n'est emis avant de connaitre la
   // longueur totale de la bande. On garde l'AXE et la normale, pas les points
@@ -236,9 +241,34 @@ export function buildSidewalks(
   const emitQuad = (
     x0: number, y0: number, x1: number, y1: number,
     x2: number, y2: number, x3: number, y3: number,
-    h: number,
+    hSurf: number,
   ) => {
-    top.push(x0, h, -y0, x1, h, -y1, x2, h, -y2, x0, h, -y0, x2, h, -y2, x3, h, -y3);
+    top.push(x0, hSurf, -y0, x1, hSurf, -y1, x2, hSurf, -y2, x0, hSurf, -y0, x2, hSurf, -y2, x3, hSurf, -y3);
+  };
+
+  /** Bande de rive sombre posée juste au-dessus de la chaussée. */
+  const emitLip = (a: Pt, b: Pt, nx: number, ny: number, h: number) => {
+    const la = Math.min(LIP, Math.hypot(a.ox - a.ix, a.oy - a.iy));
+    const lb = Math.min(LIP, Math.hypot(b.ox - b.ix, b.oy - b.iy));
+    if (la < 0.05 || lb < 0.05) return;
+    const push = (x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number) => {
+      lip.push(x0, h, -y0, x1, h, -y1, x2, h, -y2, x0, h, -y0, x2, h, -y2, x3, h, -y3);
+    };
+    push(
+      a.ix, a.iy, b.ix, b.iy,
+      b.ix + nx * lb, b.iy + ny * lb,
+      a.ix + nx * la, a.iy + ny * la,
+    );
+  };
+  /** Face verticale de bordure entre deux points du bord interieur ou exterieur. */
+  const emitCurb = (
+    x0: number, y0: number, x1: number, y1: number,
+    hRoad: number, hSurf: number,
+  ) => {
+    curb.push(
+      x0, hRoad, -y0, x1, hRoad, -y1, x1, hSurf, -y1,
+      x0, hRoad, -y0, x1, hSurf, -y1, x0, hSurf, -y0,
+    );
   };
 
   for (const w of ways) {
@@ -253,7 +283,8 @@ export function buildSidewalks(
     const spec = specFor(w.type);
     const half = spec.w / 2;
     const hRoad = spec.z * LAYER_STEP;
-    const hTop = hRoad + CURB;
+    const hSurf = hRoad + CURB + TOP_LIFT;
+    const minRun = w.name && /^place\b/i.test(w.name) ? 4.0 : MIN_RUN;
 
     const P = w.pts.map((p) => proj.project(p[0], p[1]));
 
@@ -268,7 +299,7 @@ export function buildSidewalks(
     }
     const bites: { t: number; b: number; x: number; y: number }[] = [];
     for (let i = 0; i < P.length; i++) {
-      const b = junctionBite(junctions, P[i].x, P[i].y, w.id);
+      const b = junctionBite(junctions, P[i].x, P[i].y, w.id, half);
       if (b > 0) bites.push({ t: S[i], b, x: P[i].x, y: P[i].y });
     }
 
@@ -339,45 +370,19 @@ export function buildSidewalks(
 
       let run: Piece[] = [];
       let runLen = 0;
-      let runStart: { j: { x: number; y: number }; p: Piece } | null = null;
       let pendingStart: { x: number; y: number } | null = null;
-      let pendingEnd: { x: number; y: number } | null = null;
-
-      const noteEnd = (jx: number, jy: number, p: Piece, atStart: boolean) => {
-        const k = keyOf(jx, jy);
-        let list = ends.get(k);
-        if (!list) ends.set(k, (list = []));
-        const px = atStart ? p.ax : p.bx;
-        const py = atStart ? p.ay : p.by;
-        const wd = atStart ? p.wa : p.wb;
-        const ddx = atStart ? p.bx - p.ax : p.ax - p.bx;
-        const ddy = atStart ? p.by - p.ay : p.ay - p.by;
-        const l = Math.hypot(ddx, ddy) || 1;
-        list.push({
-          dx: ddx / l,
-          dy: ddy / l,
-          ix: px + p.nx * half,
-          iy: py + p.ny * half,
-          ox: px + p.nx * (half + wd),
-          oy: py + p.ny * (half + wd),
-          h: hTop,
-        });
-      };
 
       const flush = () => {
-        if (runLen >= MIN_RUN && run.length) {
+        if (runLen >= minRun && run.length) {
           runLengths.push(runLen);
-          // Normale d'onglet a un sommet partage : la bissectrice des deux
-          // normales, allongee de 1/cos pour que le bord exterieur reste
-          // parallele a l'axe de part et d'autre du coude. Le facteur est
-          // plafonne, sinon un angle aigu envoie le sommet a l'infini.
+          // Bissectrice au coude, SANS allongement : l'allongement (scale > 1)
+          // envoyait des triangles dans les carrefours sur les captures.
           const mitre = (i: number, at: "a" | "b") => {
             const p = run[i];
             const other = at === "a" ? run[i - 1] : run[i + 1];
             const use = other && (at === "a" ? p.joined : other.joined);
             let mx = p.nx;
             let my = p.ny;
-            let scale = 1;
             if (use) {
               mx = p.nx + other.nx;
               my = p.ny + other.ny;
@@ -385,10 +390,6 @@ export function buildSidewalks(
               if (l > 1e-6) {
                 mx /= l;
                 my /= l;
-                // Plafond a 1,43 : un angle aigu enverrait le sommet exterieur
-                // tres loin, au dela de la place mesuree jusqu'a la facade. Au
-                // dela, on prefere un petit biseau a un debord dans le mur.
-                scale = 1 / Math.max(0.7, mx * p.nx + my * p.ny);
               } else {
                 mx = p.nx;
                 my = p.ny;
@@ -396,34 +397,33 @@ export function buildSidewalks(
             }
             const x = at === "a" ? p.ax : p.bx;
             const y = at === "a" ? p.ay : p.by;
-            const w = at === "a" ? p.wa : p.wb;
+            const wd = at === "a" ? p.wa : p.wb;
             return {
-              ix: x + mx * half * scale,
-              iy: y + my * half * scale,
-              ox: x + mx * (half + w) * scale,
-              oy: y + my * (half + w) * scale,
+              ix: x + mx * half,
+              iy: y + my * half,
+              ox: x + mx * (half + wd),
+              oy: y + my * (half + wd),
             };
           };
           for (let i = 0; i < run.length; i++) {
-            posed++;
             const A = mitre(i, "a");
             const B = mitre(i, "b");
-            emitQuad(A.ix, A.iy, B.ix, B.iy, B.ox, B.oy, A.ox, A.oy, hTop);
-            // face verticale de la bordure, cote chaussee
-            curb.push(
-              A.ix, hRoad, -A.iy, B.ix, hRoad, -B.iy, B.ix, hTop, -B.iy,
-              A.ix, hRoad, -A.iy, B.ix, hTop, -B.iy, A.ix, hTop, -A.iy,
-            );
+            if (quadOnCarriageway(A, B, w.id)) {
+              skippedOverlap++;
+              continue;
+            }
+            posed++;
+            const p = run[i];
+            emitQuad(A.ix, A.iy, B.ix, B.iy, B.ox, B.oy, A.ox, A.oy, hSurf);
+            emitCurb(A.ix, A.iy, B.ix, B.iy, hRoad, hSurf);
+            emitLip(A, B, p.nx, p.ny, hRoad + 0.004);
           }
-          if (runStart) noteEnd(runStart.j.x, runStart.j.y, runStart.p, true);
-          if (pendingEnd) noteEnd(pendingEnd.x, pendingEnd.y, run[run.length - 1], false);
         } else if (run.length) {
           droppedShort += run.length;
         }
         run = [];
         runLen = 0;
-        runStart = null;
-        pendingEnd = null;
+        pendingStart = null;
       };
 
       for (let i = 0; i < P.length - 1; i++) {
@@ -489,12 +489,18 @@ export function buildSidewalks(
         const bx = a.x + dx * s1;
         const by = a.y + dy * s1;
 
-        // Un trottoir ne se pose pas sur la chaussee d'a cote. Meme test que les
-        // lampadaires (src/scene/Lamps.tsx).
+        // Un trottoir ne se pose pas sur la chaussee d'a cote. On teste le
+        // milieu de la bande ET le bord interieur (cote chaussee), parce que
+        // le milieu peut rester libre alors que le bord mord sur la voie voisine.
+        const probe = (px: number, py: number) => {
+          const hit = graph.nearestEdge(px, py, 25);
+          return hit && hit.edge.wayId !== w.id && hit.dist < hit.edge.halfWidth + 0.05;
+        };
         const mx = (ax + bx) / 2 + nx * (half + Math.max(wa, wb) / 2);
         const my = (ay + by) / 2 + ny * (half + Math.max(wa, wb) / 2);
-        const hit = graph.nearestEdge(mx, my, 30);
-        if (hit && hit.edge.wayId !== w.id && hit.dist < hit.edge.halfWidth + 0.2) {
+        const ix = (ax + bx) / 2 + nx * half;
+        const iy = (ay + by) / 2 + ny * half;
+        if (probe(mx, my) || probe(ix, iy)) {
           skippedNoRoom++;
           flush();
           continue;
@@ -509,81 +515,32 @@ export function buildSidewalks(
           ax, ay, bx, by, nx, ny, wa, wb,
           joined: !!prev && Math.hypot(prev.bx - ax, prev.by - ay) < 0.05,
         };
-        if (!run.length && pendingStart) {
-          runStart = { j: pendingStart, p: piece };
-          pendingStart = null;
-        }
+        if (!run.length && pendingStart) pendingStart = null;
         run.push(piece);
         runLen += s1 - s0;
-        if (hi < S[i + 1] && hiJ) {
-          pendingEnd = hiJ;
-          flush();
-        }
+        if (hi < S[i + 1] && hiJ) flush();
       }
       flush();
-    }
-  }
-
-  const cornerStart = top.length;
-
-  // --- raccords d'angle ------------------------------------------------------
-  // Un trottoir tourne le coin. Sans ce raccord, chaque carrefour laisse quatre
-  // bouts qui s'arretent dans le vide, et le reseau se lit en pointilles.
-  //
-  // Les bouts d'un meme carrefour se rangent par angle autour du noeud : deux
-  // bouts separes de quelques degres sont les deux moities d'un meme coin, deux
-  // bouts separes de 80 degres sont les deux rives d'une chaussee et il doit
-  // rester entre eux le vide du passage pieton.
-  for (const [, list] of ends) {
-    if (list.length < 2) continue;
-    let cx = 0;
-    let cy = 0;
-    for (const e of list) {
-      cx += e.ix;
-      cy += e.iy;
-    }
-    cx /= list.length;
-    cy /= list.length;
-    const ranged = list
-      .map((e) => ({ e, a: Math.atan2(e.oy - cy, e.ox - cx) }))
-      .sort((p, q) => p.a - q.a);
-    for (let i = 0; i < ranged.length; i++) {
-      const A = ranged[i];
-      const B = ranged[(i + 1) % ranged.length];
-      if (A === B) continue;
-      let d = B.a - A.a;
-      if (d < 0) d += Math.PI * 2;
-      if (d > CORNER_MAX_ANGLE) continue;
-      // deux bouts qui repartent dans la meme direction ne forment pas un coin
-      if (A.e.dx * B.e.dx + A.e.dy * B.e.dy > 0.9) continue;
-      corners++;
-      emitQuad(
-        A.e.ix, A.e.iy,
-        A.e.ox, A.e.oy,
-        B.e.ox, B.e.oy,
-        B.e.ix, B.e.iy,
-        Math.max(A.e.h, B.e.h),
-      );
     }
   }
 
   return {
     top: new Float32Array(top),
     curb: new Float32Array(curb),
+    lip: new Float32Array(lip),
     stats: {
       segments,
       posed,
       skippedNoRoom,
       skippedJunction,
+      skippedOverlap,
       narrowed,
       fromTag,
       deniedByTag,
       droppedShort,
-      corners,
-      cornerStart,
       runs: runLengths.length,
       runLengths,
-      triangles: (top.length + curb.length) / 9,
+      triangles: (top.length + curb.length + lip.length) / 9,
       ms: Date.now() - t0,
     },
   };
