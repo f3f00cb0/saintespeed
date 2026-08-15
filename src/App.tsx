@@ -8,7 +8,7 @@ import { loadBuildings, prepareBuildings, buildWallIndex } from "./lib/buildings
 import { loadFeatures, prepareFeatures } from "./lib/features";
 import { loadVoirie, prepareVoirie } from "./lib/voirie";
 import { loadRail, prepareRail, railLength, makeRoadProbe } from "./lib/rail";
-import { useKeyboard } from "./lib/input";
+import { useInput } from "./lib/input";
 import { useStore } from "./state/store";
 import { Roads } from "./scene/Roads";
 import { Car } from "./scene/Car";
@@ -160,7 +160,7 @@ export default function App() {
 
   const onToggleBuildings = useCallback(() => useStore.getState().toggleBuildings(), []);
 
-  useKeyboard(onReset, onToggleBuildings);
+  useInput(onReset, onToggleBuildings);
 
   const ready = phase === "ready" && !!graph;
 

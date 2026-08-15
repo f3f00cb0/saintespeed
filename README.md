@@ -34,6 +34,17 @@ Si le fichier manque, l'appli retombe sur un appel Overpass au runtime.
 | `R` | replacer la voiture au dernier checkpoint |
 | `B` | afficher ou masquer les bâtiments |
 
+Manette (mapping standard Xbox / DualSense) :
+
+| bouton | effet |
+| --- | --- |
+| `RT` / `R2` / `A` | accélérer |
+| `LT` / `L2` / `B` | freiner, puis marche arrière |
+| stick gauche / croix | tourner |
+| `X` / `RB` | frein à main |
+| `Y` / `△` | replacer la voiture au dernier checkpoint |
+| `Select` / `Share` | afficher ou masquer les bâtiments |
+
 Le chrono démarre au premier coup d'accélérateur. Le clavier est mappé sur
 `event.code`, donc AZERTY et QWERTY marchent tous les deux.
 

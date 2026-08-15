@@ -74,6 +74,9 @@ export function Hud() {
         <div className="keys">
           <b>Z/↑</b> accélérer · <b>S/↓</b> freiner · <b>Q D</b> tourner · <b>espace</b> frein à main ·{" "}
           <b>R</b> replacer · <b>B</b> bâtiments
+          <br />
+          manette : <b>RT</b> accélérer · <b>LT</b> freiner · <b>stick</b> tourner · <b>X</b> frein à main ·{" "}
+          <b>Y</b> replacer · <b>Select</b> bâtiments
         </div>
         <div className="attrib">
           données © contributeurs OpenStreetMap, ODbL · {source}
@@ -82,7 +85,7 @@ export function Hud() {
 
       {!running && (
         <div className="start">
-          <div>appuie sur <b>Z</b> ou <b>↑</b> pour lancer le chrono</div>
+          <div>appuie sur <b>Z</b>, <b>↑</b> ou <b>RT</b> pour lancer le chrono</div>
         </div>
       )}
     </>
