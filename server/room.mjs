@@ -1,6 +1,7 @@
 // Salon unique : tout le monde qui se connecte se voit.
 // Relais de poses, du tracé courant, et d'un départ partagé. Pas d'autorité.
 
+import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
 
 const COLORS = [0x5ec8e0, 0x9aa06f, 0xc47ae0, 0xe0b15e, 0x7ec8a3, 0xff8a5b];
@@ -107,4 +108,25 @@ export function attachRoom(httpServer) {
 
   console.log("salon saintespeed sur /ws");
   return wss;
+}
+
+export function listenRoom(port = Number(process.env.SALON_PORT || 8787)) {
+  if (listenRoom.server) return listenRoom.server;
+  const server = createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "text/plain" });
+    res.end("saintespeed");
+  });
+  attachRoom(server);
+  listenRoom.server = server;
+  server.listen(port, "0.0.0.0", () => {
+    console.log(`salon saintespeed :${port}/ws`);
+  });
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.log(`salon deja en ecoute :${port}`);
+      return;
+    }
+    console.error(err);
+  });
+  return server;
 }

@@ -2,19 +2,24 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 // salon Node, pas de types bundler pour le .mjs
 // @ts-expect-error -- server/room.mjs
-import { attachRoom } from "./server/room.mjs";
+import { listenRoom } from "./server/room.mjs";
+
+const SALON = 8787;
 
 function roomPlugin(): Plugin {
-  const attach = (httpServer: { on: (...args: unknown[]) => unknown } | null) => {
-    if (httpServer) attachRoom(httpServer);
-  };
   return {
     name: "saintespeed-room",
-    configureServer(server) {
-      return () => attach(server.httpServer);
+    config() {
+      const proxy = {
+        "/ws": { target: `http://127.0.0.1:${SALON}`, ws: true },
+      };
+      return { server: { proxy }, preview: { proxy } };
     },
-    configurePreviewServer(server) {
-      return () => attach(server.httpServer);
+    configureServer() {
+      listenRoom(SALON);
+    },
+    configurePreviewServer() {
+      listenRoom(SALON);
     },
   };
 }

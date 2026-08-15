@@ -1,8 +1,8 @@
 # Déploiement (Dokploy)
 
-Sainté Speed est un SPA Vite 100 % statique : pas de backend, pas de base, pas
-de variable d'environnement. Le `Dockerfile` build le bundle avec npm puis le
-sert avec nginx. Dokploy et Traefik gèrent le domaine et le TLS.
+Sainté Speed est un SPA Vite servi par nginx, plus un petit salon Node sur
+`/ws` (même conteneur, port 80). Pas de base, pas de variable d'environnement.
+Dokploy et Traefik gèrent le domaine et le TLS.
 
 ## Déploiement actuel
 
@@ -17,8 +17,9 @@ sert avec nginx. Dokploy et Traefik gèrent le domaine et le TLS.
 
 ## Fichiers de déploiement
 
-- `Dockerfile` : build multi-stage (Node 22 + npm vers nginx 1.27 alpine).
-- `nginx.conf` : service statique, fallback SPA, cache, `gzip_static`.
+- `Dockerfile` : build multi-stage (Node 22 + npm vers nginx 1.27 alpine + Node pour `/ws`).
+- `nginx.conf` : service statique, fallback SPA, cache, `gzip_static`, proxy WebSocket `/ws`.
+- `server/` : salon WebSocket (port interne 8787).
 - `security-headers.conf` : en-têtes de sécurité et CSP.
 - `.dockerignore`.
 

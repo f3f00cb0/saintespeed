@@ -18,17 +18,23 @@ RUN npm run build
 RUN find dist -type f \( -name '*.json' -o -name '*.geojson' -o -name '*.js' -o -name '*.css' \) \
       -exec gzip -9 -k {} \;
 
-# Etape 2 : service statique via nginx
+# Etape 2 : nginx pour le SPA, Node pour le salon WebSocket.
 FROM nginx:1.27-alpine AS serve
+
+RUN apk add --no-cache nodejs
 
 # On ne garde que le resultat du build, rien de la toolchain Node.
 COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /app/node_modules/ws /app/node_modules/ws
+COPY server /app/server
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY security-headers.conf /etc/nginx/snippets/security-headers.conf
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
 
 # Sonde simple : nginx repond sur / des qu'il est pret.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1
 
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/start.sh"]

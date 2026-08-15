@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "salon": "node server/listen.mjs",
     "fetch-osm": "node scripts/fetch-osm.mjs",
     "build-notable": "node scripts/build-notable.mjs",
     "fetch-reference": "node scripts/fetch-reference.mjs",
