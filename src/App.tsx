@@ -6,7 +6,6 @@ import { buildGraph, type RoadGraph } from "./lib/graph";
 import { makeCheckpoints, spawnAt } from "./lib/race";
 import { loadBuildings, prepareBuildings, buildWallIndex } from "./lib/buildings";
 import { loadFeatures, prepareFeatures } from "./lib/features";
-import { loadVoirie, prepareVoirie } from "./lib/voirie";
 import { loadRail, prepareRail, railLength, makeRoadProbe } from "./lib/rail";
 import { useKeyboard } from "./lib/input";
 import { useStore } from "./state/store";
@@ -25,7 +24,6 @@ import { Monuments } from "./scene/Monuments";
 import { Perf } from "./scene/Perf";
 import { AutoQuality } from "./scene/Quality";
 import { Lamps } from "./scene/Lamps";
-import { Sidewalks } from "./scene/Sidewalks";
 import { Sky, HORIZON } from "./scene/Sky";
 import { ChaseCamera } from "./scene/Camera";
 import { Hud } from "./ui/Hud";
@@ -51,7 +49,6 @@ export default function App() {
   const ways = useStore((s) => s.ways);
   const buildings = useStore((s) => s.buildings);
   const walls = useStore((s) => s.walls);
-  const voirie = useStore((s) => s.voirie);
   const features = useStore((s) => s.features);
   const rail = useStore((s) => s.rail);
   const roadProbe = useStore((s) => s.roadProbe);
@@ -119,20 +116,6 @@ export default function App() {
           useStore.getState().setRail(flatRail);
         });
 
-        // La voirie : 150 ko, elle dit de quel cote OSM a releve un trottoir et
-        // ou sont les passages pietons. Sans elle, les trottoirs restent sur la
-        // regle geometrique, donc le jeu tourne comme avant.
-        loadVoirie().then((rawVoirie) => {
-          if (dead) return;
-          const v = prepareVoirie(rawVoirie, g.proj);
-          console.log(
-            `voirie: ${v.sidewalks.size} rues avec un cote de trottoir tague, ` +
-              `${v.crossings.length} passages pietons ` +
-              `(${v.crossings.filter((c) => c.marked).length} marques au sol)`,
-          );
-          useStore.getState().setVoirie(v);
-        });
-
         // Les batiments arrivent apres, ils ne doivent pas retarder le depart.
         // Les hauteurs manquantes sont inferees depuis l'Hotel de Ville, que
         // prepareBuildings connait : plus on en est pres, plus on monte.
@@ -196,18 +179,6 @@ export default function App() {
             {/* la ceinture d'un jardin est ce qui le separe d'un parc de loin */}
             {features && <Fences fences={features.fences} />}
             {centre && <Lamps ways={ways} proj={graph!.proj} centre={centre} graph={graph!} />}
-            {/* le trottoir se pose une fois l'index des murs la : c'est lui qui
-                borne sa largeur sur la facade reelle */}
-            {centre && walls && (
-              <Sidewalks
-                ways={ways}
-                proj={graph!.proj}
-                graph={graph!}
-                walls={walls}
-                centre={centre}
-                sides={voirie?.sidewalks ?? null}
-              />
-            )}
             {/* le viaduc avant les batiments : c'est un ouvrage, pas du relief,
                 et il doit exister meme si la couche batiments est coupee */}
             {rail.length > 0 && <Viaduct rail={rail} buildings={buildings} onRoad={roadProbe} />}

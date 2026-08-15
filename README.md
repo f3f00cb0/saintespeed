@@ -859,93 +859,6 @@ de 13,8 m relevée dans OSM, la corniche de la photo tombe vers **15 m**. La tab
 (`addHipped`) : deux longs pans trapézoïdaux et deux croupes à 45°, utile aussi
 aux 17 emprises taguées `roof:shape=hipped`.
 
-## Les trottoirs : ce qu'OSM en dit, et ce que la place permet
-
-Première idée à écarter, parce qu'elle était fausse : « OSM ne contient que les
-chaussées, il faudra inventer les trottoirs ». C'est ce que dit `src/lib/osm.ts`,
-mais ce fichier ne décrit que les tags **que le parseur garde**. Comptage fait
-sur la vraie base : **1 440 rues sur 5 842 portent un tag `sidewalk`**, dont 917
-des deux côtés, 229 à droite, 89 à gauche, et **205 qui disent explicitement
-qu'il n'y a pas de trottoir**. Le tag apporte ce qu'aucune géométrie ne donne :
-le **côté**. Il est tiré par `npm run fetch-osm -- voirie` dans son propre
-fichier, clé par id de way, donc sans toucher à `sainte.geojson` ni au réseau
-roulable.
-
-Pour les 75 % de rues sans tag, la largeur vient de la place réellement
-disponible. Mesure sur 10 073 milieux de segment dans 2,5 km du centre, distance
-à la façade la plus proche **de chaque côté**, au-delà du bord de chaussée :
-
-| classe | p10 | médiane | sous 1,5 m |
-| --- | --- | --- | --- |
-| residential | 2,1 m | 9,5 m | 6 % |
-| secondary | 4,7 m | 16,0 m | 3 % |
-| tertiary | 3,9 m | 16,5 m | 1 % |
-| unclassified | 6,6 m | 17,5 m | 1 % |
-| living_street | 1,8 m | 9,3 m | 7 % |
-
-Une largeur fixe par classe rentrerait donc dans la façade une fois sur quinze en
-rue résidentielle. Chaque côté est raboté sur un rayon lancé dans **l'index des
-murs déjà construit pour la caméra**, ce qui ne coûte aucune structure nouvelle.
-
-**Le rayon part de l'axe, pas du bord de chaussée.** La largeur de chaussée est
-une convention de dessin et une façade tombe parfois dedans : parti du bord, le
-rayon démarrait déjà dans le mur et ne voyait rien. Mesuré au harnais, **256
-bandes finissaient dans une emprise ; il en reste 1** sur la ville entière.
-
-### Le trottoir fait le tour du pâté de maisons
-
-Première version : couper la bande à chaque carrefour et s'arrêter là. Résultat
-regardé sur plan, et jugé à juste titre inutilisable, **le réseau se lisait en
-pointillés**. Quatre défauts distincts, tous corrigés :
-
-1. **Le trou de carrefour était deux fois trop grand.** Reculer de la
-   demi-chaussée croisée plus un trottoir ouvrait près de 10 m de vide pour une
-   rue de 5 m. Le trottoir s'arrête au bord de la chaussée qu'il traverse, et
-   c'est tout : le reste du carrefour lui appartient.
-2. **Il manquait le raccord d'angle.** Un trottoir tourne le coin. Les bouts qui
-   arrivent à un même carrefour sont rangés par angle autour du nœud : deux
-   bouts séparés de quelques degrés sont les deux moitiés d'un même coin, deux
-   bouts séparés de 80 degrés sont les deux rives d'une chaussée et il doit
-   rester le vide du passage piéton entre eux. **2 269 raccords** dans la zone
-   jouable, 2,9 m² en moyenne.
-3. **Une façade serrée coupait toute la bande.** Le seuil de largeur est passé
-   de 0,80 m à 0,35 m, sans plancher de dessin : une bande de 40 cm au pied d'un
-   immeuble est ce qui existe réellement, une rupture tous les 30 m ne l'est pas.
-4. **Les coudes laissaient une encoche.** Des quads posés segment par segment ne
-   raccordent pas leurs bords extérieurs dans un virage, et le résultat
-   ressemblait à des dalles isolées. Le ruban est maintenant à onglets : le
-   décalage se calcule sur la bissectrice au sommet, plafonné à 1,43 pour qu'un
-   angle aigu ne déborde pas dans la façade.
-
-Cinquième défaut, que le plan ne pouvait pas montrer parce qu'il ignore
-l'enroulement : **une face sur deux était invisible en 3D**. Les bandes de gauche
-et de droite s'enroulent en sens inverse et le matériau était en `FrontSide`.
-
-La place libre est mesurée par **échantillons tous les 5 m le long de chaque
-segment**, puis ramenée aux sommets pour que le bord extérieur reste continu.
-Trois versions ont été nécessaires : par segment, le bord sortait en dents de
-scie ; par sommet sur la normale moyenne, la mesure ne s'appliquait pas à la
-direction réellement tracée et **74 bandes finissaient dans une emprise** ; par
-échantillons, il en reste 9 sur 21 000.
-
-Cette mesure lance 130 000 rayons dans l'index des murs à la construction, et
-`WallIndex.clear` allouait un `Set` par appel : **1,6 s de construction, ramenée
-à 0,57 s** en réutilisant un marqueur. La caméra, qui interroge le même index à
-chaque frame, y gagne aussi.
-
-### Regarder et vérifier la voirie sans GPU
-
-```bash
-npm run voirie                     # les chiffres, boîte jouable puis ville entière
-npm run voirie -- plan             # trois plans SVG dans reference/
-npm run voirie -- plan 4.3874 45.4397 90   # un plan ailleurs, rayon en mètres
-```
-
-Les chiffres disent ce qu'aucune capture ne montre (combien de bandes tombent sur
-une chaussée voisine, combien finissent dans une emprise), le plan dit où. C'est
-le plan qui a révélé les dalles de carrefour, et les chiffres qui ont prouvé que
-le rayon de rabotage partait du mauvais point.
-
 ## Le décor
 
 Avant d'écrire une ligne de rendu, les couches ont été **comptées** sur la bbox
@@ -1005,8 +918,6 @@ src/lib/input.ts        clavier
 src/lib/buildings.ts    emprises OSM, déduction des hauteurs, retrait de toit
 src/lib/archetypes.ts   cascade d'archétypes de façade et palettes
 src/lib/features.ts     décor OSM : sols triangulés, arbres, tram, mobilier
-src/lib/sidewalks.ts    trottoirs et bordures : côté OSM, largeur bornée sur la façade
-src/lib/voirie.ts       côté du trottoir et passages piétons relevés dans OSM
 src/lib/places.ts       caractère des espaces ouverts : minéral / jardin / parc
 src/lib/frame.ts        repère local d'une emprise (axe principal, bbox locale)
 src/lib/notable.ts      GÉNÉRÉ : patrimoine, culte et noms depuis export.geojson

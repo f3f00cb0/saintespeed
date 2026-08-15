@@ -5,7 +5,6 @@
 //   npm run fetch-osm -- buildings
 //   npm run fetch-osm -- features surfaces au sol, arbres, tram, mobilier
 //   npm run fetch-osm -- rail     voies ferrees, dont les viaducs
-//   npm run fetch-osm -- voirie   cote du trottoir et passages pietons
 // Donnees OpenStreetMap sous ODbL.
 
 import { writeFile, mkdir } from "node:fs/promises";
@@ -129,33 +128,6 @@ const FEATURES_QUERY =
   `relation["leisure"~"park|garden|pitch|playground"]${bb(BBOX)};` +
   `relation["landuse"~"grass|forest|meadow|cemetery"]${bb(BBOX)};` +
   `);out geom;`;
-
-// La voirie : ce qu'OSM sait du trottoir et du passage pieton.
-//
-// Mesure prealable qui justifie cette couche, comptee sur la bbox de travail :
-// 1 346 rues sur 5 842 (23 %) portent un tag "sidewalk", dont 917 "both",
-// 187 "right" et 56 "left". Autrement dit, la ou OSM a l'information, elle dit
-// de quel COTE est le trottoir, ce qu'aucune deduction geometrique ne donne.
-// Le reste des rues reste deduit de la place mesuree jusqu'a la facade
-// (src/lib/sidewalks.ts).
-//
-// Cette couche sort dans son PROPRE fichier, clef par id de way : elle ne
-// retouche pas sainte.geojson, donc pas le reseau routier ni le gameplay.
-const VOIRIE_QUERY =
-  `[out:json][timeout:300];(` +
-  `way["highway"~"^(${HIGHWAYS}|${LINKS})$"]["sidewalk"]${bb(BBOX)};` +
-  `way["highway"~"^(${HIGHWAYS}|${LINKS})$"]["sidewalk:left"]${bb(BBOX)};` +
-  `way["highway"~"^(${HIGHWAYS}|${LINKS})$"]["sidewalk:right"]${bb(BBOX)};` +
-  `);out tags;` +
-  // Les passages pietons, eux, ne se devinent pas : ils sont soit un noeud sur
-  // la chaussee, soit une ligne qui la traverse. La LIGNE porte l'orientation,
-  // donc le sens des bandes ; le noeud ne donne que la position.
-  `(` +
-  `way["footway"="crossing"]${bb(BBOX)};` +
-  `);out geom;` +
-  `(` +
-  `node["highway"="crossing"]${bb(BBOX)};` +
-  `);out;`;
 
 const ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
@@ -956,64 +928,12 @@ function featuresToCompact(json) {
   };
 }
 
-// --- voirie : cote du trottoir et passages pietons -------------------------
-
-/** yes/both -> les deux, left, right, no/separate -> aucun. Bitmask 1=gauche, 2=droite. */
-function sidewalkCode(t) {
-  const val = (v) => (v === "both" || v === "yes" ? 3 : v === "left" ? 1 : v === "right" ? 2 : 0);
-  if (t.sidewalk) return val(t.sidewalk);
-  let code = 0;
-  const side = (v) => v === "yes" || v === "both" || v === "left" || v === "right";
-  if (side(t["sidewalk:left"])) code |= 1;
-  if (side(t["sidewalk:right"])) code |= 2;
-  return code;
-}
-
-function voirieToCompact(json) {
-  const sidewalks = {};
-  const crossWays = [];
-  const crossings = [];
-  let tagged = 0;
-
-  for (const el of json.elements ?? []) {
-    const t = el.tags ?? {};
-    if (el.type === "way" && t.footway === "crossing" && Array.isArray(el.geometry)) {
-      // "marked" vaut zebre : c'est la seule distinction qui se voit au sol.
-      const marked =
-        t["crossing:markings"] && t["crossing:markings"] !== "no"
-          ? 1
-          : /^(marked|zebra|traffic_signals|uncontrolled)$/.test(t.crossing ?? "")
-            ? 1
-            : 0;
-      crossWays.push({ g: el.geometry.map((g) => [r6(g.lon), r6(g.lat)]), m: marked });
-      continue;
-    }
-    if (el.type === "way") {
-      const code = sidewalkCode(t);
-      tagged++;
-      sidewalks[el.id] = code;
-      continue;
-    }
-    if (el.type === "node" && t.highway === "crossing") {
-      const marked =
-        t["crossing:markings"] && t["crossing:markings"] !== "no"
-          ? 1
-          : /^(marked|zebra|traffic_signals|uncontrolled)$/.test(t.crossing ?? "")
-            ? 1
-            : 0;
-      crossings.push([r6(el.lon), r6(el.lat), marked]);
-    }
-  }
-  return { attribution: ATTRIBUTION, bbox: BBOX, sidewalks, crossWays, crossings, tagged };
-}
-
 // --- pilotage --------------------------------------------------------------
 const arg = process.argv[2];
 const doRoads = !arg || arg === "roads";
 const doBuildings = !arg || arg === "buildings";
 const doFeatures = !arg || arg === "features";
 const doRail = !arg || arg === "rail";
-const doVoirie = !arg || arg === "voirie";
 
 await mkdir(PUBLIC, { recursive: true });
 
@@ -1136,25 +1056,5 @@ if (doRail) {
       `${(body.length / 1e3).toFixed(0)} ko\n` +
       `  ${Math.round(total)} m de voie, dont ${Math.round(aerien)} m EN L'AIR ` +
       `(${bridges.length} troncons en pont ou en layer positif)`,
-  );
-}
-
-if (doVoirie) {
-  console.log("voirie ->", BBOX.join(", "));
-  const json = await fetchWithRetry(VOIRIE_QUERY, "voirie");
-  const data = voirieToCompact(json);
-  const body = JSON.stringify(data);
-  await writeFile(resolve(PUBLIC, "sainte-voirie.json"), body);
-
-  const codes = Object.values(data.sidewalks);
-  const n = (c) => codes.filter((v) => v === c).length;
-  console.log(
-    `  ecrit sainte-voirie.json : ${(body.length / 1e3).toFixed(0)} ko\n` +
-      `  rues avec un tag trottoir : ${codes.length} ` +
-      `(des deux cotes ${n(3)}, gauche ${n(1)}, droite ${n(2)}, aucun ${n(0)})\n` +
-      `  passages pietons : ${data.crossWays.length} en ligne ` +
-      `(dont ${data.crossWays.filter((c) => c.m).length} marques au sol), ` +
-      `${data.crossings.length} en noeud ` +
-      `(dont ${data.crossings.filter((c) => c[2]).length} marques)`,
   );
 }
