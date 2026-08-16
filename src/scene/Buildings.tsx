@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { FLOOR, insetRing, type FlatBuilding } from "../lib/buildings";
 import { Archetype, STYLES, hash01, type ArchetypeStyle } from "../lib/archetypes";
+import type { RoadGraph } from "../lib/graph";
 import { car } from "../lib/car";
 import { editView } from "../lib/editView";
 import { useStore } from "../state/store";
@@ -29,6 +30,22 @@ import { NOTABLE } from "../lib/notable";
 
 const PARAPET = 0.75; // bandeau vertical des toits plats
 const ROOF_RISE = 1.9; // hauteur du bandeau incline des toits en pente
+
+// Stores : signal de vie au rez-de-chaussee, LOD plein seulement. Palette
+// courte, hashée sur l'id OSM — bordeaux, vert, ocre, gris de nuit.
+const AWNING_DEPTH = 1.1;
+const AWNING_Y_IN = 2.48;
+const AWNING_Y_OUT = 2.4;
+const AWNING_DROP = 2.05;
+const AWNING_MIN_LEN = 3.5;
+const AWNING_SLACK = 4; // metres au-dela du bord de chaussee
+const AWNING_ALIGN = 0.55;
+const AWNING_PALETTE: [number, number, number][] = [
+  [0.36, 0.14, 0.19],
+  [0.18, 0.29, 0.2],
+  [0.54, 0.42, 0.22],
+  [0.29, 0.31, 0.32],
+];
 
 // Combien de tuiles au plus on construit par tick de streaming. Sans worker, la
 // construction est synchrone : une tuile de 36 emprises coute environ 1,3 ms,
@@ -72,6 +89,33 @@ function tintsOf(b: FlatBuilding, style: ArchetypeStyle) {
   return { tint: scratchTint, roofTint: scratchRoof };
 }
 
+/** Plateau + lambrequin, pousse le long de la normale vers la rue. */
+function emitAwning(
+  A: { pos: number[]; col: number[] },
+  p: { x: number; y: number },
+  q: { x: number; y: number },
+  nx: number,
+  ny: number,
+  rgb: [number, number, number],
+) {
+  const [r, g, b] = rgb;
+  const o0x = p.x + nx * AWNING_DEPTH;
+  const o0z = -(p.y + ny * AWNING_DEPTH);
+  const o1x = q.x + nx * AWNING_DEPTH;
+  const o1z = -(q.y + ny * AWNING_DEPTH);
+  const i0x = p.x;
+  const i0z = -p.y;
+  const i1x = q.x;
+  const i1z = -q.y;
+  A.pos.push(
+    i0x, AWNING_Y_IN, i0z, i1x, AWNING_Y_IN, i1z, o1x, AWNING_Y_OUT, o1z,
+    i0x, AWNING_Y_IN, i0z, o1x, AWNING_Y_OUT, o1z, o0x, AWNING_Y_OUT, o0z,
+    o0x, AWNING_Y_OUT, o0z, o1x, AWNING_Y_OUT, o1z, o1x, AWNING_DROP, o1z,
+    o0x, AWNING_Y_OUT, o0z, o1x, AWNING_DROP, o1z, o0x, AWNING_DROP, o0z,
+  );
+  for (let k = 0; k < 12; k++) A.col.push(r, g, b);
+}
+
 /** Plein detail et detail reduit : meme geometrie, le reduit perd son socle. */
 function emitDetailed(
   b: FlatBuilding,
@@ -79,9 +123,11 @@ function emitDetailed(
   W: Buf,
   S: Buf,
   R: { pos: number[]; col: number[] },
+  A: { pos: number[]; col: number[] },
   tex: Painted,
   style: ArchetypeStyle,
   scratch: THREE.Vector2[],
+  graph: RoadGraph | null,
 ): { shop: boolean; sloped: boolean; insetFail: boolean } {
   const { tint, roofTint } = tintsOf(b, style);
   const ring = b.ring;
@@ -128,6 +174,24 @@ function emitDetailed(
         S.col.push(tint.r * 0.5, tint.g * 0.5, tint.b * 0.5);
       }
       S.uv.push(su0, 0, su1, 0, su1, 1, su0, 0, su1, 1, su0, 1);
+
+      // store : seulement le mur qui longe vraiment une rue, pas la cour
+      if (graph && len >= AWNING_MIN_LEN) {
+        const mx = (p.x + q.x) * 0.5;
+        const my = (p.y + q.y) * 0.5;
+        const hit = graph.nearestEdge(mx, my, 24);
+        if (hit && hit.dist < hit.edge.halfWidth + AWNING_SLACK) {
+          const align = Math.abs((dx / len) * hit.tx + (dy / len) * hit.ty);
+          const toward = nx * (hit.x - mx) + ny * (hit.y - my);
+          if (align > AWNING_ALIGN && toward > 0) {
+            const pal =
+              AWNING_PALETTE[
+                Math.floor(hash01(b.id, i + 17) * AWNING_PALETTE.length) % AWNING_PALETTE.length
+              ];
+            emitAwning(A, p, q, nx, ny, pal);
+          }
+        }
+      }
     }
 
     const u0 = run / tex.tileU + du;
@@ -346,6 +410,7 @@ export type TileGeometry = {
   lod: Lod;
   walls: { archetype: Archetype; geometry: THREE.BufferGeometry }[];
   shop: THREE.BufferGeometry | null;
+  awning: THREE.BufferGeometry | null;
   roofs: THREE.BufferGeometry | null;
   /** silhouette : tout l'archetype confondu dans un seul maillage */
   box: THREE.BufferGeometry | null;
@@ -354,7 +419,12 @@ export type TileGeometry = {
   triangles: number;
 };
 
-function buildTile(list: FlatBuilding[], lod: Lod, painted: Painted[]): TileGeometry {
+function buildTile(
+  list: FlatBuilding[],
+  lod: Lod,
+  painted: Painted[],
+  graph: RoadGraph | null,
+): TileGeometry {
   const scratch: THREE.Vector2[] = [];
 
   if (lod === Lod.Silhouette) {
@@ -373,11 +443,21 @@ function buildTile(list: FlatBuilding[], lod: Lod, painted: Painted[]): TileGeom
       appendWithNormals(B, far.walls);
     }
     const box = toGeometry(B, false);
-    return { lod, walls: [], shop: null, roofs: null, box, glow: null, triangles: B.pos.length / 9 };
+    return {
+      lod,
+      walls: [],
+      shop: null,
+      awning: null,
+      roofs: null,
+      box,
+      glow: null,
+      triangles: B.pos.length / 9,
+    };
   }
 
   const walls = new Map<Archetype, Buf>();
   const shopBuf = newBuf();
+  const awningBuf = { pos: [] as number[], col: [] as number[] };
   const roof = { pos: [] as number[], col: [] as number[] };
   const glowBuf = { pos: [] as number[], col: [] as number[] };
 
@@ -385,7 +465,18 @@ function buildTile(list: FlatBuilding[], lod: Lod, painted: Painted[]): TileGeom
     if (b.landmark?.replaceBase) continue; // rendu par Landmarks.tsx
     let W = walls.get(b.archetype);
     if (!W) walls.set(b.archetype, (W = newBuf()));
-    emitDetailed(b, lod, W, shopBuf, roof, painted[b.archetype], STYLES[b.archetype], scratch);
+    emitDetailed(
+      b,
+      lod,
+      W,
+      shopBuf,
+      roof,
+      awningBuf,
+      painted[b.archetype],
+      STYLES[b.archetype],
+      scratch,
+      graph,
+    );
   }
 
   const near = newEmit();
@@ -420,6 +511,16 @@ function buildTile(list: FlatBuilding[], lod: Lod, painted: Painted[]): TileGeom
   const shop = shopBuf.pos.length ? toGeometry(shopBuf, true) : null;
   if (shop) triangles += shopBuf.pos.length / 9;
 
+  let awning: THREE.BufferGeometry | null = null;
+  if (awningBuf.pos.length) {
+    awning = new THREE.BufferGeometry();
+    awning.setAttribute("position", new THREE.Float32BufferAttribute(awningBuf.pos, 3));
+    awning.setAttribute("color", new THREE.Float32BufferAttribute(awningBuf.col, 3));
+    awning.computeVertexNormals();
+    awning.computeBoundingSphere();
+    triangles += awningBuf.pos.length / 9;
+  }
+
   // Les lumieres des kits sont additives et non eclairees : ni normales ni UV.
   let glow: THREE.BufferGeometry | null = null;
   if (glowBuf.pos.length) {
@@ -430,12 +531,13 @@ function buildTile(list: FlatBuilding[], lod: Lod, painted: Painted[]): TileGeom
     triangles += glowBuf.pos.length / 9;
   }
 
-  return { lod, walls: out, shop, roofs, box: null, glow, triangles };
+  return { lod, walls: out, shop, awning, roofs, box: null, glow, triangles };
 }
 
 function disposeTile(t: TileGeometry) {
   for (const w of t.walls) w.geometry.dispose();
   t.shop?.dispose();
+  t.awning?.dispose();
   t.roofs?.dispose();
   t.box?.dispose();
   t.glow?.dispose();
@@ -528,7 +630,7 @@ export function Buildings({ buildings }: { buildings: FlatBuilding[] }) {
     for (const item of plan.load.slice(0, BUILD_BUDGET)) {
       const list = index.map.get(item.key);
       if (!list) continue;
-      const built = buildTile(list, item.lod, painted);
+      const built = buildTile(list, item.lod, painted, useStore.getState().graph);
       const old = resident.current.get(item.key);
       resident.current.set(item.key, built);
       if (old) pending.current.push(old);
@@ -551,7 +653,13 @@ export function Buildings({ buildings }: { buildings: FlatBuilding[] }) {
       let meshes = 0;
       for (const t of resident.current.values()) {
         tris += t.triangles;
-        meshes += t.walls.length + (t.shop ? 1 : 0) + (t.roofs ? 1 : 0) + (t.box ? 1 : 0) + (t.glow ? 1 : 0);
+        meshes +=
+          t.walls.length +
+          (t.shop ? 1 : 0) +
+          (t.awning ? 1 : 0) +
+          (t.roofs ? 1 : 0) +
+          (t.box ? 1 : 0) +
+          (t.glow ? 1 : 0);
       }
       console.log(
         `streaming stabilise: ${resident.current.size} tuiles residentes ` +
@@ -589,6 +697,11 @@ export function Buildings({ buildings }: { buildings: FlatBuilding[] }) {
                 vertexColors
                 side={THREE.DoubleSide}
               />
+            </mesh>
+          )}
+          {t.awning && (
+            <mesh geometry={t.awning}>
+              <meshLambertMaterial vertexColors side={THREE.DoubleSide} />
             </mesh>
           )}
           {t.roofs && (
