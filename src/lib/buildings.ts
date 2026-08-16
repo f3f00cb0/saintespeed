@@ -18,6 +18,7 @@
 // hauteurs sont inchangees au chiffre pres.
 
 import type { Projector } from "./project";
+import { zAt } from "./elev";
 import { archetypeFor, hasShopFront, isUnlit, LANDMARKS, Archetype, type Landmark } from "./archetypes";
 import { Family, culteHeight, familyOf } from "./families";
 import { frameOf, type Frame } from "./frame";
@@ -263,7 +264,10 @@ export function buildWallIndex(buildings: FlatBuilding[]): WallIndex {
       const len = Math.hypot(q.x - p.x, q.y - p.y);
       if (len < 0.2) continue;
       const idx = seg.length;
-      seg.push(p.x, p.y, q.x, q.y, b.height);
+      // sommet du mur en altitude de jeu : sans ca, une camera a y = 80
+      // passerait au-dessus de tous les prismes encore mesures depuis 0.
+      const top = b.height + 2.2 + zAt(b.cx, b.cy);
+      seg.push(p.x, p.y, q.x, q.y, top);
       const steps = Math.max(1, Math.ceil(len / (WALL_CELL * 0.5)));
       for (let s = 0; s <= steps; s++) {
         const f = s / steps;

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import { AREA_BASE, type FlatFence } from "../lib/features";
+import { liftGeometry } from "../lib/elev";
 
 // Clotures, haies et murets qui ceinturent les espaces ouverts.
 //
@@ -90,7 +91,7 @@ export function Fences({ fences }: { fences: FlatFence[] }) {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
       geometry.computeVertexNormals();
-      geometry.computeBoundingSphere();
+      liftGeometry(geometry);
       out.push({ kind, geometry, color: SPECS[kind].color });
     }
 

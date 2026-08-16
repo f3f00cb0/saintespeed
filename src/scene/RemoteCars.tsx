@@ -2,6 +2,7 @@ import { useRef, useSyncExternalStore } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { onPeers, peerListKey, peers, samplePeer } from "../lib/peers";
+import { pitchAt, zAt } from "../lib/elev";
 import { CarMesh, pulseBrake, useCarLights } from "./CarMesh";
 
 function RemoteCar({ id }: { id: string }) {
@@ -14,8 +15,10 @@ function RemoteCar({ id }: { id: string }) {
     const p = peers.get(id);
     if (!p || !body.current) return;
     samplePeer(p, performance.now());
-    body.current.position.set(p.x, 0.35, -p.y);
+    body.current.position.set(p.x, zAt(p.x, p.y) + 0.35, -p.y);
+    body.current.rotation.order = "YZX";
     body.current.rotation.y = p.heading;
+    body.current.rotation.z = pitchAt(p.x, p.y, p.heading);
     body.current.rotation.x = -p.steer * Math.min(1, Math.abs(p.speed) / 30) * 0.12;
     pulseBrake(tailMat, p.brake > 0.2, dt);
   });

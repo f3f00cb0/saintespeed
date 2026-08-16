@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { clampHeight, editView, HEIGHT_MAX, HEIGHT_MIN } from "../lib/editView";
+import { zAt } from "../lib/elev";
 
 const TILT = 0.42; // recul sud, pour garder un peu de relief
 const FOV = 52;
@@ -126,7 +127,7 @@ export function EditorCamera() {
     } else {
       cam.position.lerp(want, 1 - Math.exp(-8 * dt));
     }
-    cam.lookAt(tx, 0, -ty);
+    cam.lookAt(tx, zAt(tx, ty), -ty);
     if (Math.abs(cam.fov - FOV) > 0.05) {
       cam.fov = FOV;
       cam.updateProjectionMatrix();

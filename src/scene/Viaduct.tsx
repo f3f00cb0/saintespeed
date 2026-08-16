@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import * as THREE from "three";
 import { DECK_HEIGHT, DECK_THICKNESS, DECK_WIDTH, railLength, type FlatRail, type RoadProbe } from "../lib/rail";
 import type { FlatBuilding } from "../lib/buildings";
+import { zAt } from "../lib/elev";
 
 // Le viaduc : tablier continu le long du trace ferroviaire reel, sur ses piles.
 //
@@ -118,24 +119,24 @@ export function Viaduct({
         const nx = -dy / len, ny = dx / len; // normale horizontale
         const hw = DECK_WIDTH / 2;
 
+        const za = a.z + zAt(a.x, a.y);
+        const zb = b.z + zAt(b.x, b.y);
         const corner = (p: typeof a, s: number, z: number) => [p.x + nx * hw * s, z, -(p.y + ny * hw * s)];
 
-        // dessus du tablier
+        // dessus du tablier — z unique par station, pas drapé en travers
         quad(
           buf,
-          corner(a, -1, a.z), corner(b, -1, b.z), corner(b, 1, b.z), corner(a, 1, a.z),
+          corner(a, -1, za), corner(b, -1, zb), corner(b, 1, zb), corner(a, 1, za),
           DECK_TOP,
         );
-        // bande de ballast, plus sombre, au milieu
         const bw = DECK_WIDTH * 0.55 / 2;
-        const bal = (p: typeof a, s: number) => [p.x + nx * bw * s, p.z + 0.12, -(p.y + ny * bw * s)];
-        quad(buf, bal(a, -1), bal(b, -1), bal(b, 1), bal(a, 1), BALLAST);
-        // les deux joues
+        const bal = (p: typeof a, s: number, z: number) => [p.x + nx * bw * s, z + 0.12, -(p.y + ny * bw * s)];
+        quad(buf, bal(a, -1, za), bal(b, -1, zb), bal(b, 1, zb), bal(a, 1, za), BALLAST);
         for (const s of [-1, 1] as const) {
           quad(
             buf,
-            corner(a, s, a.z - DECK_THICKNESS), corner(b, s, b.z - DECK_THICKNESS),
-            corner(b, s, b.z), corner(a, s, a.z),
+            corner(a, s, za - DECK_THICKNESS), corner(b, s, zb - DECK_THICKNESS),
+            corner(b, s, zb), corner(a, s, za),
             DECK_SIDE,
           );
         }
@@ -150,8 +151,6 @@ export function Viaduct({
           const py = a.y + dy * t;
           const pz = a.z + (b.z - a.z) * t;
           if (pz - DECK_THICKNESS < PIER_MIN_HEIGHT) continue; // remblai, pas de pile
-          // On cherche un sol libre en glissant le long de l'ouvrage, de part
-          // et d'autre de l'appui theorique.
           let ox = px, oy = py, ok = !blocked(px, py), moved = 0;
           if (!ok) {
             for (const d of [2, -2, 4, -4, 6, -6]) {
@@ -164,7 +163,8 @@ export function Viaduct({
           if (!ok) { skipped++; continue; }
           if (moved) shifted++;
           const oz = a.z + (b.z - a.z) * (t + moved / len);
-          box(buf, ox, oy, PIER_W, PIER_D, 0, oz - DECK_THICKNESS, PIER);
+          const ground = zAt(ox, oy);
+          box(buf, ox, oy, PIER_W, PIER_D, ground, ground + oz - DECK_THICKNESS, PIER);
           piers++;
         }
       }
@@ -174,7 +174,6 @@ export function Viaduct({
     g.setAttribute("position", new THREE.Float32BufferAttribute(buf.pos, 3));
     g.setAttribute("color", new THREE.Float32BufferAttribute(buf.col, 3));
     g.computeVertexNormals();
-    g.computeBoundingSphere();
     console.log(
       `viaduc: ${rail.length} troncons aeriens, ${Math.round(railLength(rail))} m, ` +
         `${piers} piles (${shifted} decalees, ${skipped} sautees : batiment ou chaussee), ` +

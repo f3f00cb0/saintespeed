@@ -14,7 +14,8 @@
     "palette-reference": "node scripts/palette-reference.mjs",
     "elevation": "node scripts/elevation.mjs",
     "field": "node scripts/field.mjs",
-    "voirie": "node scripts/voirie.mjs"
+    "voirie": "node scripts/voirie.mjs",
+    "fetch-elev": "node scripts/fetch-elev.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",

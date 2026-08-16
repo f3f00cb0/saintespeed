@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useStore } from "../state/store";
 import type { Checkpoint } from "../lib/race";
+import { zAt } from "../lib/elev";
 
 const ACTIVE = 0xff5d3b;
 const IDLE = 0x4a5450;
@@ -35,7 +36,7 @@ function Gate({
   const half = Math.max(cp.width / 2, 5);
 
   return (
-    <group position={[cp.x, 0, -cp.y]} rotation={[0, rot, 0]}>
+    <group position={[cp.x, zAt(cp.x, cp.y), -cp.y]} rotation={[0, rot, 0]}>
       {[-half, half].map((off) => (
         <mesh key={off} position={[off, 4, 0]}>
           <boxGeometry args={[0.7, 8, 0.7]} />

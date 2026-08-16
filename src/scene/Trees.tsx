@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { rand01 } from "../lib/features";
+import { zAt } from "../lib/elev";
 
 // Arbres OSM, en InstancedMesh.
 //
@@ -118,22 +119,23 @@ function TreeSector({
       const slim = 0.85 + rand01(i * 7 + 3) * 0.4;
       const rot = rand01(i * 11 + 5) * Math.PI * 2;
       const z = -t.y;
+      const gz = zAt(t.x, t.y);
 
       e.set(0, rot, 0);
       q.setFromEuler(e);
 
-      pos.set(t.x, (TRUNK_H * s) / 2, z);
+      pos.set(t.x, gz + (TRUNK_H * s) / 2, z);
       scl.set(s, s, s);
       trunks.current!.setMatrixAt(instIdx, m.compose(pos, q, scl));
 
-      pos.set(t.x, TRUNK_H * s + CROWN_R * s * 0.35, z);
+      pos.set(t.x, gz + TRUNK_H * s + CROWN_R * s * 0.35, z);
       scl.set(s * slim, s * 0.82, s * slim);
       low.current!.setMatrixAt(instIdx, m.compose(pos, q, scl));
 
       const lean = (rand01(i * 13 + 7) - 0.5) * 1.1;
       pos.set(
         t.x + lean,
-        TRUNK_H * s + CROWN_R * s * 1.15,
+        gz + TRUNK_H * s + CROWN_R * s * 1.15,
         z + (rand01(i * 17 + 9) - 0.5) * 1.1,
       );
       scl.set(s * 0.95, s * 0.95, s * 0.95);

@@ -2,6 +2,7 @@
 // Integration a la main, pas de moteur physique. Le fun avant le realisme.
 
 import type { EdgeHit, RoadGraph } from "./graph";
+import { elevReady, gradeAt } from "./elev";
 
 export type CarState = {
   x: number;
@@ -141,6 +142,14 @@ export function stepCar(g: RoadGraph, dt: number, c: CarState = car, inp: CarInp
   const authority = Math.min(1, v / 4); // a l'arret on ne pivote pas sur place
   const yaw = (YAW_BASE / (1 + v * YAW_FALLOFF)) * authority * (inp.handbrake ? 1.5 : 1);
   c.heading += c.steer * yaw * dt * (c.speed < 0 ? -1 : 1);
+
+  // pente arcade : assez pour sentir l'Eternite, pas assez pour caler.
+  // En descente on bride : au-dela de ~10 % ca devenait un tremplin.
+  if (elevReady()) {
+    const g = gradeAt(c.x, c.y, Math.cos(c.heading), Math.sin(c.heading));
+    c.speed -= Math.max(-0.1, g) * 12 * dt;
+    c.speed = Math.max(-MAX_REVERSE, Math.min(MAX_SPEED, c.speed));
+  }
 
   // --- deplacement -------------------------------------------------------
   c.x += Math.cos(c.heading) * c.speed * dt;

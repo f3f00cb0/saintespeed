@@ -85,6 +85,13 @@ canvas { display: block; }
 }
 .road.off { color: var(--signal); }
 
+.grade {
+  margin-top: 4px;
+  font: 500 11px/1.3 var(--mono);
+  color: var(--ochre);
+  letter-spacing: 0.06em;
+}
+
 .cpwrap { display: flex; align-items: center; gap: 14px; }
 .arrow { width: 62px; height: 62px; }
 .cpinfo { text-align: right; }

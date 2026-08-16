@@ -108,6 +108,7 @@ export function useInput(
   onToggleBuildings: () => void,
   onToggleEdit: () => void,
   driving: boolean,
+  onJump?: () => void,
 ) {
   useEffect(() => {
     if (!driving) {
@@ -119,6 +120,10 @@ export function useInput(
     }
     const down = (e: KeyboardEvent) => {
       if (typing(e.target)) return;
+      if (e.code === "KeyG") {
+        onJump?.();
+        return;
+      }
       if (e.code === "KeyE") {
         onToggleEdit();
         return;
@@ -170,7 +175,7 @@ export function useInput(
       blur();
       prevBtn.clear();
     };
-  }, [onReset, onToggleBuildings, onToggleEdit, driving]);
+  }, [onReset, onToggleBuildings, onToggleEdit, driving, onJump]);
 }
 
 /** @deprecated utiliser useInput */

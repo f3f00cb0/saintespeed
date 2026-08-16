@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { car } from "../lib/car";
 import type { WallIndex } from "../lib/buildings";
+import { zAt } from "../lib/elev";
 
 const DIST = 14; // recul derriere la voiture
 const HEIGHT = 6.2;
@@ -11,6 +12,7 @@ const FOV_BASE = 68;
 const FOV_MAX = 88; // s'ouvre avec la vitesse, ca donne le grisant
 const MIN_DIST = 5.2; // en dessous le cadrage devient inutilisable
 const SKIN = 1.2; // marge devant le mur touche
+const CLEAR = 2.2; // ne jamais passer sous le MNT, surtout en descente
 const targetScratch = new THREE.Vector3();
 const lookAtScratch = new THREE.Vector3();
 
@@ -27,51 +29,44 @@ export function ChaseCamera({ walls }: { walls: WallIndex | null }) {
     const cy = Math.sin(car.heading);
     const v = Math.abs(car.speed);
 
-    // plus on va vite, plus la camera recule et se leve
     const back = DIST + v * 0.16;
-    const wantY = HEIGHT + v * 0.03;
+    const tx = car.x - cx * back;
+    const ty = car.y - cy * back;
+    // hauteur lue AU POINT CAMERA, pas a la voiture : en descente le recul
+    // est en amont, 14 m a 12 % = 1,7 m dans la colline si on garde z(voiture).
+    const wantY = zAt(tx, ty) + HEIGHT + v * 0.03;
 
-    // Bras de camera : on teste le trajet voiture -> camera contre les murs et
-    // on rentre la camera devant l'obstacle. Sans ca elle traverse les
-    // immeubles des qu'on longe une facade ou qu'on sort d'une rue etroite.
     let allowed = 1;
     if (walls) {
-      const tx = car.x - cx * back;
-      const ty = car.y - cy * back;
       const hit = walls.clear(car.x, car.y, tx, ty, wantY);
       if (hit < 1) {
         const d = Math.max(MIN_DIST, hit * back - SKIN);
         allowed = Math.min(1, d / back);
       }
     }
-    // on rentre vite pour ne pas traverser, on ressort doucement
     const rate = allowed < boom.current ? 30 : 3.5;
     boom.current += (allowed - boom.current) * (1 - Math.exp(-rate * dt));
 
     const eff = back * boom.current;
-    // Rentree, la camera monte au lieu de descendre : de pres et bas elle
-    // perd la voiture, de pres et haut elle la surplombe et reste lisible.
-    targetScratch.set(
-      car.x - cx * eff,
-      4.2 + (wantY - 4.2) * boom.current,
-      -(car.y - cy * eff),
-    );
-    // le point vise se rapproche avec le bras, sinon la voiture sort du cadre
+    const bx = car.x - cx * eff;
+    const by = car.y - cy * eff;
+    const camH = 4.2 + (HEIGHT + v * 0.03 - 4.2) * boom.current;
+    targetScratch.set(bx, zAt(bx, by) + camH, -by);
+
     const ahead = LOOK_AHEAD * (0.28 + 0.72 * boom.current);
-    lookAtScratch.set(car.x + cx * ahead, 1.6, -(car.y + cy * ahead));
+    const lx = car.x + cx * ahead;
+    const ly = car.y + cy * ahead;
+    lookAtScratch.set(lx, zAt(lx, ly) + 1.6, -ly);
 
     if (!ready.current) {
       pos.current.copy(targetScratch);
       look.current.copy(lookAtScratch);
       ready.current = true;
     } else {
-      // lissage exponentiel, independant du framerate
       pos.current.lerp(targetScratch, 1 - Math.exp(-7 * dt));
       look.current.lerp(lookAtScratch, 1 - Math.exp(-11 * dt));
     }
 
-    // Verrou dur apres lissage : pendant que la camera rattrape sa cible elle
-    // peut encore traverser un mur, on la reprojette donc devant l'obstacle.
     if (walls) {
       const camX = pos.current.x;
       const camY = -pos.current.z;
@@ -87,6 +82,11 @@ export function ChaseCamera({ walls }: { walls: WallIndex | null }) {
         }
       }
     }
+
+    // le lerp et le recul anti-mur peuvent encore enfoncer dans le MNT
+    const gx = pos.current.x;
+    const gy = -pos.current.z;
+    pos.current.y = Math.max(pos.current.y, zAt(gx, gy) + CLEAR);
 
     camera.position.copy(pos.current);
     camera.lookAt(look.current);

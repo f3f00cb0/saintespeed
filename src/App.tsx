@@ -3,7 +3,8 @@ import { Canvas } from "@react-three/fiber";
 import * as THREE from "three";
 import { loadNetwork } from "./lib/osm";
 import { buildGraph, type RoadGraph } from "./lib/graph";
-import { makeCheckpoints, spawnAt, trackFromCheckpoints } from "./lib/race";
+import { makeCheckpoints, spawnAt, spawnEternite, trackFromCheckpoints } from "./lib/race";
+import { loadElev } from "./lib/elev";
 import { DEFAULT_TRACK, loadCurrent, saveCurrent } from "./lib/track";
 import { framePoints, jumpEditView } from "./lib/editView";
 import { car, input } from "./lib/car";
@@ -34,6 +35,7 @@ import { Lamps } from "./scene/Lamps";
 import { Sidewalks } from "./scene/Sidewalks";
 import { Crossings } from "./scene/Crossings";
 import { Sky, HORIZON } from "./scene/Sky";
+import { Terrain } from "./scene/Terrain";
 import { ChaseCamera } from "./scene/Camera";
 import { EditorCamera } from "./scene/EditorCamera";
 import { EditorTools } from "./scene/EditorTools";
@@ -96,6 +98,7 @@ export default function App() {
     (async () => {
       try {
         const t0 = performance.now();
+        await loadElev();
         const { ways, source } = await loadNetwork();
         if (dead) return;
         const g: RoadGraph = buildGraph(ways);
@@ -104,6 +107,7 @@ export default function App() {
         const track = trackFromCheckpoints(draft.id, draft.name, cps);
         saveCurrent(track);
         if (cps.length) spawnAt(g, cps, 0);
+        if (new URLSearchParams(location.search).get("at") === "eternite") spawnEternite(g);
         const ms = Math.round(performance.now() - t0);
         setStats(`${g.stats.nodes} noeuds · ${g.stats.edges} segments · ${ms} ms`);
         useStore.getState().setLoaded(g, ways, cps, source, track);
@@ -199,12 +203,17 @@ export default function App() {
     else jumpEditView(car.x, car.y, 280);
   }, []);
 
+  const onJumpEternite = useCallback(() => {
+    const g = useStore.getState().graph;
+    if (g) spawnEternite(g);
+  }, []);
+
   const onToggleEdit = useCallback(() => {
     if (useStore.getState().mode === "edit") enterDrive();
     else enterEdit();
   }, [enterDrive, enterEdit]);
 
-  useInput(onReset, onToggleBuildings, onToggleEdit, !editing);
+  useInput(onReset, onToggleBuildings, onToggleEdit, !editing, onJumpEternite);
 
   const ready = phase === "ready" && !!graph;
 
@@ -231,6 +240,7 @@ export default function App() {
         {ready && (
           <>
             <Sky />
+            <Terrain />
             {/* le decor passe avant les routes : les surfaces sont sous la
                 chaussee, qui doit rester lisible par dessus une place */}
             {features && <Ground areas={features.areas} paths={features.paths} />}

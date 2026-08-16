@@ -5,6 +5,7 @@ import type { RoadGraph } from "../lib/graph";
 import type { WallIndex } from "../lib/buildings";
 import type { Way } from "../lib/osm";
 import type { Projector } from "../lib/project";
+import { drapeTriangles } from "../lib/elev";
 
 // Trottoirs et bordures. La geometrie est calculee dans src/lib/sidewalks.ts,
 // qui est pur et se rejoue donc dans Node : c'est la qu'on verifie qu'aucune
@@ -48,8 +49,7 @@ export function Sidewalks({
     );
     const geo = (arr: Float32Array) => {
       const g = new THREE.BufferGeometry();
-      g.setAttribute("position", new THREE.BufferAttribute(arr, 3));
-      g.computeBoundingSphere();
+      g.setAttribute("position", new THREE.BufferAttribute(drapeTriangles(arr, 12), 3));
       return g;
     };
     return { top: geo(m.top), lip: geo(m.lip), curb: geo(m.curb) };

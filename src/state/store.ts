@@ -33,6 +33,8 @@ export type Telemetry = {
   offroad: boolean;
   cpDist: number;
   cpBearing: number; // radians, relatif au cap voiture
+  grade: number; // pente, m/m, positif = montee
+  alt: number; // altitude de jeu, metres
 };
 
 function persist(track: Track, cps: Checkpoint[]): Track {
@@ -131,7 +133,7 @@ export const useStore = create<Store>((set, get) => ({
   selectedCp: -1,
   library: loadLibrary(),
 
-  tele: { fps: 0, speedKmh: 0, roadName: "", roadType: "", offroad: false, cpDist: 0, cpBearing: 0 },
+  tele: { fps: 0, speedKmh: 0, roadName: "", roadType: "", offroad: false, cpDist: 0, cpBearing: 0, grade: 0, alt: 0 },
 
   nextCp: 1,
   running: false,

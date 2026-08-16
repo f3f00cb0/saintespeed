@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import * as THREE from "three";
 import { LAYER_STEP, specFor, type Way } from "../lib/osm";
 import type { Projector } from "../lib/project";
+import { elevReady, liftGeometry } from "../lib/elev";
 
 // Classes qui recoivent un axe discontinu. Les pointilles qui defilent sont le
 // repere de vitesse le plus efficace, et ca ne coute que de la geometrie.
@@ -22,6 +23,23 @@ const NIGHT_MIX_MARKS = 0.42; // les traits doivent rester lisibles
 
 function nightTint(hex: number, mix = NIGHT_MIX): THREE.Color {
   return new THREE.Color(hex).lerp(new THREE.Color(NIGHT_ASPHALT), mix);
+}
+
+/** Sur un MNT, un segment OSM de 80 m est une corde : on le decoupe pour suivre la pente. */
+function densify(P: { x: number; y: number }[], step = 5): { x: number; y: number }[] {
+  if (!elevReady() || P.length < 2) return P;
+  const out: { x: number; y: number }[] = [P[0]];
+  for (let i = 1; i < P.length; i++) {
+    const a = P[i - 1];
+    const b = P[i];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const n = Math.max(1, Math.ceil(len / step));
+    for (let k = 1; k <= n; k++) {
+      const t = k / n;
+      out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    }
+  }
+  return out;
 }
 
 // Extrusion des ways en rubans, une geometrie fusionnee par classe de route
@@ -45,7 +63,7 @@ function buildRibbons(ways: Way[], proj: Projector) {
     }
     let run = 0; // distance parcourue depuis le debut de l'axe
 
-    const P = w.pts.map((p) => proj.project(p[0], p[1]));
+    const P = densify(w.pts.map((p) => proj.project(p[0], p[1])));
     for (let i = 0; i < P.length - 1; i++) {
       const a = P[i];
       const b = P[i + 1];
@@ -112,7 +130,10 @@ function buildRibbons(ways: Way[], proj: Projector) {
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    geometry.computeBoundingSphere();
+    liftGeometry(geometry);
+    // un cran au-dessus du MNT : sans ca la corde du sol passe devant le ruban
+    const py = geometry.getAttribute("position").array as Float32Array;
+    for (let k = 1; k < py.length; k += 3) py[k] += 0.08;
     out.push({ type, geometry, color: nightTint(spec.c).getHex() });
   }
 
@@ -129,7 +150,9 @@ function buildRibbons(ways: Way[], proj: Projector) {
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    geometry.computeBoundingSphere();
+    liftGeometry(geometry);
+    const py = geometry.getAttribute("position").array as Float32Array;
+    for (let k = 1; k < py.length; k += 3) py[k] += 0.08;
     out.push({ type: type + "-marks", geometry, color: nightTint(MARK_COLOR, NIGHT_MIX_MARKS).getHex() });
   }
 
@@ -157,13 +180,15 @@ export function Roads({ ways, proj }: { ways: Way[]; proj: Projector }) {
 
   return (
     <group>
-      <mesh position={[0, -0.4, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[40000, 40000]} />
-        <meshBasicMaterial color={0x141509} />
-      </mesh>
       {layers.map((l, i) => (
-        <mesh key={l.type} geometry={l.geometry} renderOrder={i}>
-          <meshBasicMaterial color={l.color} side={THREE.DoubleSide} />
+        <mesh key={l.type} geometry={l.geometry} renderOrder={20 + i}>
+          <meshBasicMaterial
+            color={l.color}
+            side={THREE.DoubleSide}
+            polygonOffset
+            polygonOffsetFactor={-2}
+            polygonOffsetUnits={-2}
+          />
         </mesh>
       ))}
     </group>

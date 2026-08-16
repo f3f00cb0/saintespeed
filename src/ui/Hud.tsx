@@ -106,6 +106,10 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
         <div className={"road" + (tele.offroad ? " off" : "")}>
           {tele.offroad ? "HORS PISTE" : tele.roadName || tele.roadType || "—"}
         </div>
+        <div className="grade">
+          {tele.grade >= 0 ? "+" : ""}
+          {(tele.grade * 100).toFixed(0)} % · {Math.round(tele.alt)} m
+        </div>
       </div>
 
       {cp && (
@@ -135,7 +139,7 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
       <div className="hud bl">
         <div className="keys">
           <b>Z/↑</b> accélérer · <b>S/↓</b> freiner · <b>Q D</b> tourner · <b>espace</b> frein à main ·{" "}
-          <b>R</b> replacer · <b>B</b> bâtiments ·{" "}
+          <b>R</b> replacer · <b>G</b> rue de l'Éternité · <b>B</b> bâtiments ·{" "}
           <button type="button" className="link" onClick={onEdit}>
             E éditeur
           </button>
@@ -144,7 +148,7 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
           <b>Y</b> replacer · <b>Select</b> bâtiments
         </div>
         <div className="attrib">
-          données © contributeurs OpenStreetMap, ODbL · {source}
+          données © contributeurs OpenStreetMap, ODbL · relief IGN RGE ALTI, Etalab · {source}
         </div>
       </div>
 

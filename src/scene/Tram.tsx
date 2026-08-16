@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { liftGeometry, zAt } from "../lib/elev";
 
 // Le tram, signature stephanoise.
 //
@@ -103,7 +104,7 @@ function ribbon(
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  g.computeBoundingSphere();
+  liftGeometry(g);
   return g;
 }
 
@@ -163,7 +164,7 @@ export function Tram({ lines }: { lines: { x: number; y: number }[][] }) {
     if (!built || !poles.current) return;
     const m = new THREE.Matrix4();
     built.poles.forEach((p, i) => {
-      poles.current!.setMatrixAt(i, m.makeTranslation(p.x, POLE_H / 2, -p.y));
+      poles.current!.setMatrixAt(i, m.makeTranslation(p.x, zAt(p.x, p.y) + POLE_H / 2, -p.y));
     });
     poles.current.instanceMatrix.needsUpdate = true;
     fitInstancedBounds(poles.current, poleRadius);

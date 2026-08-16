@@ -2,9 +2,11 @@ import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { car, input, stepCar, stepCarFrozen } from "../lib/car";
+import { gradeAt, pitchAt, zAt } from "../lib/elev";
 import type { RoadGraph } from "../lib/graph";
 import { countdownLeft, session } from "../lib/session";
 import { useStore } from "../state/store";
+import { Headlights } from "./Headlights";
 import { CarMesh, pulseBrake, useCarLights } from "./CarMesh";
 
 const PUSH_INTERVAL = 0.06;
@@ -22,6 +24,7 @@ export function Car({ graph }: { graph: RoadGraph }) {
   const lap = useRef(0);
   const frames = useRef(0);
   const { headMat, tailMat } = useCarLights();
+  const pitchS = useRef(0);
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 1 / 30);
@@ -61,8 +64,16 @@ export function Car({ graph }: { graph: RoadGraph }) {
     }
 
     if (body.current) {
-      body.current.position.set(car.x, 0.35, -car.y);
+      const gz = zAt(car.x, car.y);
+      const pitch = pitchAt(car.x, car.y, car.heading);
+      const jumped =
+        Math.hypot(body.current.position.x - car.x, -body.current.position.z - car.y) > 25;
+      if (jumped) pitchS.current = pitch;
+      else pitchS.current += (pitch - pitchS.current) * (1 - Math.exp(-10 * dt));
+      body.current.position.set(car.x, gz + 0.35, -car.y);
+      body.current.rotation.order = "YZX";
       body.current.rotation.y = car.heading;
+      body.current.rotation.z = pitchS.current;
       body.current.rotation.x = -car.steer * Math.min(1, Math.abs(car.speed) / 30) * 0.12;
     }
 
@@ -83,6 +94,8 @@ export function Car({ graph }: { graph: RoadGraph }) {
           offroad: car.offroad,
           cpDist: dist,
           cpBearing: bearing,
+          grade: gradeAt(car.x, car.y, Math.cos(car.heading), Math.sin(car.heading)),
+          alt: zAt(car.x, car.y),
         },
         lap.current,
       );
@@ -90,8 +103,11 @@ export function Car({ graph }: { graph: RoadGraph }) {
   });
 
   return (
-    <group ref={body}>
-      <CarMesh color={LOCAL_COLOR} headMat={headMat} tailMat={tailMat} headlights />
-    </group>
+    <>
+      <group ref={body}>
+        <CarMesh color={LOCAL_COLOR} headMat={headMat} tailMat={tailMat} />
+      </group>
+      <Headlights />
+    </>
   );
 }

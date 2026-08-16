@@ -1,6 +1,7 @@
 import type { EdgeHit, RoadGraph } from "./graph";
 import type { Track } from "./track";
 import { resetCar } from "./car";
+import { eterniteSpawn } from "./elev";
 
 export type Checkpoint = {
   id: number;
@@ -92,4 +93,19 @@ export function spawnAt(g: RoadGraph, cps: Checkpoint[], index: number) {
   const heading = Math.atan2(cp.ty * sign, cp.tx * sign);
   const hit = g.nearestAligned(cp.x, cp.y, cp.tx * sign, cp.ty * sign, 40);
   resetCar(cp.x, cp.y, heading, hit ? hit.edge.id : -1);
+}
+
+/** Bas de la rue de l'Eternite, nez vers le haut. Proto relief. */
+export function spawnEternite(g: RoadGraph): boolean {
+  const p = eterniteSpawn();
+  if (!p) return false;
+  const hx = Math.cos(p.heading ?? 0);
+  const hy = Math.sin(p.heading ?? 0);
+  const hit = g.nearestAligned(p.x, p.y, hx, hy, 50) ?? g.nearestEdge(p.x, p.y, 50);
+  if (!hit) return false;
+  // coller le cap a l'axe OSM, signe = vers la crete
+  const along = hit.tx * hx + hit.ty * hy >= 0 ? 1 : -1;
+  const heading = Math.atan2(hit.ty * along, hit.tx * along);
+  resetCar(hit.x, hit.y, heading, hit.edge.id);
+  return true;
 }

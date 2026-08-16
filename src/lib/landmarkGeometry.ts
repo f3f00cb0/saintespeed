@@ -16,6 +16,7 @@
 import * as THREE from "three";
 import { TILE_V } from "./facades";
 import type { Painted } from "./facadeTextures";
+import { liftRigidGeometry } from "./elev";
 
 export type Buf = { pos: number[]; norm: number[]; uv: number[]; col: number[] };
 export const newBuf = (): Buf => ({ pos: [], norm: [], uv: [], col: [] });
@@ -728,5 +729,6 @@ export function toGeometry(b: Buf, withUv: boolean): THREE.BufferGeometry | null
   if (withUv) g.setAttribute("uv", new THREE.Float32BufferAttribute(b.uv, 2));
   g.setAttribute("color", new THREE.Float32BufferAttribute(b.col, 3));
   g.computeBoundingSphere();
+  liftRigidGeometry(g);
   return g;
 }

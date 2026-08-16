@@ -1,14 +1,20 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { car } from "../lib/car";
+import { zAt } from "../lib/elev";
 
 // Faisceau projete au sol devant la voiture. La chaussee est en
 // MeshBasicMaterial et n'est donc eclairee par aucune lumiere : on triche avec
-// un quad additif texture, c'est le truc arcade classique et ca coute un
-// triangle. Le quad vit dans le repere de la voiture, il suit donc le cap tout
-// seul.
+// un quad additif texture, c'est le truc arcade classique.
+//
+// En relief, un plan unique de 46 m rentre dans la colline en descente (crete
+// convexe) ou vole au-dessus (concave). On le decoupe et chaque sommet lit zAt.
 
-const LENGTH = 46; // portee du faisceau, en metres
+const LENGTH = 46;
 const WIDTH = 24;
+const SEGS = 10;
+const BUMPER = 1.6;
 const PX = 256;
 
 function makeBeamTexture() {
@@ -19,13 +25,9 @@ function makeBeamTexture() {
   const d = img.data;
 
   for (let j = 0; j < PX; j++) {
-    // v : position laterale, -1 a gauche, +1 a droite
     const lateral = (j / (PX - 1)) * 2 - 1;
     for (let i = 0; i < PX; i++) {
-      // u : distance vers l'avant, 0 au pare-chocs, 1 au bout de la portee
       const u = i / (PX - 1);
-
-      // les deux faisceaux s'ecartent avec la distance
       const spread = 0.1 + 0.62 * u;
       const halfW = 0.14 + 0.5 * u;
       let v = 0;
@@ -33,12 +35,9 @@ function makeBeamTexture() {
         const dx = (lateral - side * spread) / halfW;
         v += Math.exp(-dx * dx * 2.2);
       }
-
-      // montee courte devant le capot, puis extinction progressive
       const near = Math.min(1, u / 0.07);
       const far = Math.pow(Math.max(0, 1 - u), 1.7);
       const a = Math.min(1, v * 0.62) * near * far;
-
       const o = (j * PX + i) * 4;
       d[o] = 255;
       d[o + 1] = 244;
@@ -47,7 +46,6 @@ function makeBeamTexture() {
     }
   }
   ctx.putImageData(img, 0, 0);
-
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -55,22 +53,47 @@ function makeBeamTexture() {
 
 export function Headlights() {
   const beam = useMemo(makeBeamTexture, []);
+  const mesh = useRef<THREE.Mesh>(null);
+  const rest = useMemo(() => {
+    const g = new THREE.PlaneGeometry(LENGTH, WIDTH, SEGS, 1);
+    const src = g.getAttribute("position");
+    const xy = new Float32Array(src.count * 2);
+    for (let i = 0; i < src.count; i++) {
+      xy[i * 2] = src.getX(i);
+      xy[i * 2 + 1] = src.getY(i);
+    }
+    return { g, xy, n: src.count };
+  }, []);
+
+  useFrame(() => {
+    const attr = rest.g.getAttribute("position");
+    const hx = Math.cos(car.heading);
+    const hy = Math.sin(car.heading);
+    const nx = -hy;
+    const ny = hx;
+    const xy = rest.xy;
+    for (let i = 0; i < rest.n; i++) {
+      const along = (xy[i * 2] + LENGTH / 2) + BUMPER;
+      const lat = xy[i * 2 + 1];
+      const x = car.x + hx * along + nx * lat;
+      const y = car.y + hy * along + ny * lat;
+      attr.setXYZ(i, x, zAt(x, y) + 0.06, -y);
+    }
+    attr.needsUpdate = true;
+    rest.g.computeBoundingSphere();
+  });
 
   return (
-    <mesh
-      // a plat sur la chaussee, decale vers l'avant de la voiture.
-      // Le plan est cree en X = longueur et Y = largeur, puis bascule a plat :
-      // Y devient Z, donc l'axe U de la texture suit bien l'avant du vehicule.
-      position={[LENGTH / 2 + 1.6, -0.31, 0]}
-      rotation={[-Math.PI / 2, 0, 0]}
-    >
-      <planeGeometry args={[LENGTH, WIDTH]} />
+    <mesh ref={mesh} geometry={rest.g} frustumCulled={false}>
       <meshBasicMaterial
         map={beam}
         transparent
         blending={THREE.AdditiveBlending}
         depthWrite={false}
         fog={false}
+        polygonOffset
+        polygonOffsetFactor={-2}
+        polygonOffsetUnits={-2}
       />
     </mesh>
   );

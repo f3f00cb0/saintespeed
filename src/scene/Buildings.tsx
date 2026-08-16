@@ -13,6 +13,7 @@ import { Family } from "../lib/families";
 import { kitFor } from "../lib/familyKits";
 import { newEmit, type Buf as KitBuf, type Emit } from "../lib/landmarkGeometry";
 import { NOTABLE } from "../lib/notable";
+import { addY, elevReady, zAt } from "../lib/elev";
 
 // La peinture des facades vit dans lib/facades.ts : des canvas purs, sans
 // three.js, pour que la planche de comparaison (reference/) puisse afficher
@@ -296,6 +297,46 @@ function toGeometry(b: Buf, withUv: boolean): THREE.BufferGeometry {
   return g;
 }
 
+/** Jupe sous le prisme, cote aval : sans ca l'immeuble flotte au-dessus de la pente. */
+function emitSkirt(b: FlatBuilding, z0: number, buf: Buf, tex?: Painted, rgb?: THREE.Color) {
+  if (!elevReady()) return;
+  const ring = b.ring;
+  const n = ring.length;
+  const cr = (rgb?.r ?? 0.18) * 0.38;
+  const cg = (rgb?.g ?? 0.17) * 0.38;
+  const cb = (rgb?.b ?? 0.16) * 0.38;
+  const pu = tex?.patch[0] ?? 0;
+  const pv = tex?.patch[1] ?? 0;
+  for (let i = 0; i < n; i++) {
+    const p = ring[i];
+    const q = ring[(i + 1) % n];
+    const zp = zAt(p.x, p.y);
+    const zq = zAt(q.x, q.y);
+    if (zp >= z0 - 0.08 && zq >= z0 - 0.08) continue;
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 0.05) continue;
+    const nx = dy / len;
+    const ny = -dx / len;
+    const yp = Math.min(zp, z0);
+    const yq = Math.min(zq, z0);
+    buf.pos.push(
+      p.x, yp, -p.y,
+      q.x, yq, -q.y,
+      q.x, z0, -q.y,
+      p.x, yp, -p.y,
+      q.x, z0, -q.y,
+      p.x, z0, -p.y,
+    );
+    for (let k = 0; k < 6; k++) {
+      buf.norm.push(nx, 0, -ny);
+      buf.col.push(cr, cg, cb);
+      if (tex) buf.uv.push(pu, pv);
+    }
+  }
+}
+
 // --- kits de famille --------------------------------------------------------
 //
 // Un clocher, une toiture en sheds ou une cage d'ascenseur ne sont pas des
@@ -323,7 +364,14 @@ function emitFamilies(list: FlatBuilding[], far: boolean, e: Emit): boolean {
     if (b.family === Family.None || !b.frame || b.landmark?.replaceBase) continue;
     const kit = kitFor(b.family);
     if (!kit) continue;
+    const iR = e.roofs.pos.length;
+    const iW = e.walls.pos.length;
+    const iG = e.glow.pos.length;
     kit(e, b.frame, b.frame, kitContext(b, far));
+    const z0 = zAt(b.cx, b.cy);
+    addY(e.roofs.pos, z0, iR);
+    addY(e.walls.pos, z0, iW);
+    addY(e.glow.pos, z0, iG);
     any = true;
   }
   return any;
@@ -361,7 +409,11 @@ function buildTile(list: FlatBuilding[], lod: Lod, painted: Painted[]): TileGeom
     const B = newBuf();
     for (const b of list) {
       if (b.landmark?.replaceBase) continue; // rendu par Landmarks.tsx
+      const i0 = B.pos.length;
       emitSilhouette(b, STYLES[b.archetype], B);
+      const z0 = zAt(b.cx, b.cy);
+      addY(B.pos, z0, i0);
+      emitSkirt(b, z0, B);
     }
     // Au dela de 700 m on garde la masse des kits, pas leurs details : une
     // fleche d'eglise ou une cheminee d'usine sur la ligne d'horizon est
@@ -385,7 +437,15 @@ function buildTile(list: FlatBuilding[], lod: Lod, painted: Painted[]): TileGeom
     if (b.landmark?.replaceBase) continue; // rendu par Landmarks.tsx
     let W = walls.get(b.archetype);
     if (!W) walls.set(b.archetype, (W = newBuf()));
+    const iW = W.pos.length;
+    const iS = shopBuf.pos.length;
+    const iR = roof.pos.length;
     emitDetailed(b, lod, W, shopBuf, roof, painted[b.archetype], STYLES[b.archetype], scratch);
+    const z0 = zAt(b.cx, b.cy);
+    addY(W.pos, z0, iW);
+    addY(shopBuf.pos, z0, iS);
+    addY(roof.pos, z0, iR);
+    emitSkirt(b, z0, W, painted[b.archetype], tintsOf(b, STYLES[b.archetype]).tint);
   }
 
   const near = newEmit();

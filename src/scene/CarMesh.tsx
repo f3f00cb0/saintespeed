@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import * as THREE from "three";
-import { Headlights } from "./Headlights";
 
 export function useCarLights() {
   const headMat = useMemo(() => {
@@ -28,12 +27,10 @@ export function CarMesh({
   color,
   headMat,
   tailMat,
-  headlights = false,
 }: {
   color: number;
   headMat: THREE.MeshBasicMaterial;
   tailMat: THREE.MeshBasicMaterial;
-  headlights?: boolean;
 }) {
   return (
     <>
@@ -59,7 +56,6 @@ export function CarMesh({
           <boxGeometry args={[0.1, 0.2, 0.42]} />
         </mesh>
       ))}
-      {headlights && <Headlights />}
       {[
         [1.35, 0.95],
         [1.35, -0.95],

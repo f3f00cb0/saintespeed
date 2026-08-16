@@ -8,6 +8,7 @@ import {
   type FlatPath,
 } from "../lib/features";
 import { CHARACTER_NAMES, characterSpec, Character, MINERAL_PAVED } from "../lib/places";
+import { drapeTriangles, liftGeometry } from "../lib/elev";
 
 // Surfaces au sol : places pietonnes, parcs, parkings, eau.
 //
@@ -68,9 +69,9 @@ function merge(areas: FlatArea[]): Layer[] {
       pos.set(a.pos, o);
       o += a.pos.length;
     }
+    const draped = drapeTriangles(pos, 16);
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    geometry.computeBoundingSphere();
+    geometry.setAttribute("position", new THREE.BufferAttribute(draped, 3));
     out.push({ key, geometry, color: b.color, z: b.z });
   }
 
@@ -134,7 +135,7 @@ function mergePaths(paths: FlatPath[]) {
     if (!pos.length) continue;
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-    geometry.computeBoundingSphere();
+    liftGeometry(geometry);
     out.push({ key, geometry, color, z: PATH_Z });
   }
   return out;
