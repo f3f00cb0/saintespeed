@@ -24,7 +24,6 @@ export function Car({ graph }: { graph: RoadGraph }) {
   const lap = useRef(0);
   const frames = useRef(0);
   const { headMat, tailMat } = useCarLights();
-  const wet = useStore((s) => s.look === "cine");
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 1 / 30);
@@ -94,7 +93,7 @@ export function Car({ graph }: { graph: RoadGraph }) {
 
   return (
     <group ref={body}>
-      <CarMesh color={LOCAL_COLOR} headMat={headMat} tailMat={tailMat} headlights motion={carMotion} wet={wet} />
+      <CarMesh color={LOCAL_COLOR} headMat={headMat} tailMat={tailMat} headlights motion={carMotion} />
     </group>
   );
 }

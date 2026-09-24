@@ -3,7 +3,6 @@ import { useStore } from "../state/store";
 import { onPeers, peerListKey, peers } from "../lib/peers";
 import { countdownLeft } from "../lib/session";
 import { launchRace } from "../lib/net";
-import { LOOK_NAMES } from "../lib/look";
 
 function fmt(t: number) {
   const m = Math.floor(t / 60);
@@ -45,12 +44,6 @@ function Gauge({ speed, road, offroad }: { speed: number; road: string; offroad:
       <div className="gauge">
         <svg viewBox="-60 -60 120 120">
           <circle r={GAUGE_R} className="track" strokeDasharray={`${GAUGE_ARC} ${GAUGE_C}`} transform="rotate(135)" />
-          <circle
-            r={GAUGE_R}
-            className={"halo" + (frac > 0.85 ? " hot" : "")}
-            strokeDasharray={`${GAUGE_ARC * frac} ${GAUGE_C}`}
-            transform="rotate(135)"
-          />
           <circle
             r={GAUGE_R}
             className={"fill" + (frac > 0.85 ? " hot" : "")}
@@ -110,7 +103,6 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
   const netStatus = useStore((s) => s.netStatus);
   const netCount = useStore((s) => s.netCount);
   const goGen = useStore((s) => s.goGen);
-  const look = useStore((s) => s.look);
   const peerKey = useSyncExternalStore(onPeers, peerListKey, peerListKey);
   const [tick, setTick] = useState(0);
 
@@ -201,13 +193,13 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
         {/* l'aide s'efface pendant la course : le decor a besoin de la place */}
         <div className={"keys" + (running ? " quiet" : "")}>
           <b>Z/↑</b> accélérer · <b>S/↓</b> freiner · <b>Q D</b> tourner · <b>espace</b> frein à main ·{" "}
-          <b>R</b> replacer · <b>B</b> bâtiments · <b>V</b> look {LOOK_NAMES[look]} ·{" "}
+          <b>R</b> replacer · <b>B</b> bâtiments ·{" "}
           <button type="button" className="link" onClick={onEdit}>
             E éditeur
           </button>
           <br />
           manette : <b>RT</b> accélérer · <b>LT</b> freiner · <b>stick</b> tourner · <b>X</b> frein à main ·{" "}
-          <b>Y</b> replacer · <b>Select</b> bâtiments · <b>LB</b> look
+          <b>Y</b> replacer · <b>Select</b> bâtiments
         </div>
         <div className="attrib">
           données © contributeurs OpenStreetMap, ODbL · {source}

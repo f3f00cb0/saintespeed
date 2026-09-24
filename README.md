@@ -33,7 +33,6 @@ Si le fichier manque, l'appli retombe sur un appel Overpass au runtime.
 | `espace` | frein à main |
 | `R` | replacer la voiture au dernier checkpoint |
 | `B` | afficher ou masquer les bâtiments |
-| `V` | changer de look : ciné ou graphique |
 
 Manette (mapping standard Xbox / DualSense) :
 
@@ -45,7 +44,6 @@ Manette (mapping standard Xbox / DualSense) :
 | `X` / `RB` | frein à main |
 | `Y` / `△` | replacer la voiture au dernier checkpoint |
 | `Select` / `Share` | afficher ou masquer les bâtiments |
-| `LB` / `L1` | changer de look |
 
 Le chrono démarre au premier coup d'accélérateur. Le clavier est mappé sur
 `event.code`, donc AZERTY et QWERTY marchent tous les deux.
@@ -175,9 +173,9 @@ C'est un choix à faire pour cette raison-là, pas pour débloquer le navigateur
 
 ## Qualité de rendu : descente mesurée, pas devinée
 
-La scène de nuit tient son aspect de quatre passes plein écran (bloom à flou
-mipmap, tone mapping ACES, vignette, grain) posées sur une cible HDR en
-**MSAA 4x**. Sur un GPU dédié ça passe. Sur un GPU intégré c'est la bande
+La nuit dessinée tient son aspect de passes plein écran (bloom à flou mipmap,
+tone mapping ACES, dessin à l'encre, lignes de vitesse, vignette) posées sur une
+cible HDR en **MSAA 4x**. Sur un GPU dédié ça passe. Sur un GPU intégré c'est la bande
 passante qui plafonne, et pas du tout la géométrie : mesuré sur un **Intel
 Iris Xe en 1389x945 à dpr 1, 36 fps**, alors que la géométrie résidente ne pèse
 que 200 draw calls et 76 k triangles.
@@ -186,17 +184,17 @@ Le niveau n'est donc pas choisi sur le matériel, qu'on ne peut pas interroger d
 façon fiable depuis le navigateur, mais sur la **frame médiane mesurée** sur une
 fenêtre de 90 frames. Si elle dépasse 21 ms (47 fps), on descend d'un cran.
 
-| niveau | MSAA | dpr max | grain |
-| --- | --- | --- | --- |
-| haute | 4 | 2 | oui |
-| moyenne | 0 | 1,5 | oui |
-| basse | 0 | 1 | non |
+| niveau | MSAA | dpr max |
+| --- | --- | --- |
+| haute | 4 | 2 |
+| moyenne | 0 | 1,5 |
+| basse | 0 | 1 |
 
 L'ordre des renoncements suit le coût, pas le goût. **Le MSAA d'abord** : le plus
-cher, et le moins identitaire sur une scène sombre déjà grainée. **La densité de
-pixels ensuite**, qui divise le remplissage sans toucher à la composition. **Le
-grain en dernier**, parce qu'il ne coûte qu'une passe et fait beaucoup pour
-l'aspect photographique. Le bloom n'est jamais coupé : sans lui les fenêtres
+cher, et les contours encrés restent nets sans lui, ils sont tracés au pixel.
+**La densité de pixels ensuite**, qui divise le remplissage sans toucher à la
+composition. La passe de dessin n'est jamais coupée, c'est le style même. Le
+bloom non plus : sans lui les fenêtres
 allumées, les beffrois et les feux de balisage ne sont plus que des taches
 plates.
 
@@ -207,29 +205,21 @@ réévalue au rechargement. La politique est pure (`src/lib/quality.ts`) et
 vérifiée dans Node : descente sur régime lent, aucune descente sur un hoquet de
 streaming isolé (la médiane l'absorbe), jamais de remontée.
 
-## Deux looks : la nuit ciné et la nuit dessinée
+## La nuit dessinée
 
-La même ville se regarde de deux façons, basculées à chaud avec `V` (`LB` à la
-manette). Le choix est mémorisé dans le navigateur, et `?look=graphique` dans
-l'URL le force.
+Un seul style, celui d'une BD de nuit : la géométrie pauvre est assumée et
+soulignée. Une seule passe après le tone mapping fait le dessin. Les contours
+sortent du tampon de profondeur, sans passe de normales : on prend le laplacien
+de l'**inverse** de la distance, qui est nul sur tout plan (façade, toit,
+chaussée) et ne s'allume que sur les plis et les silhouettes. La lumière est
+quantifiée en aplats sur la racine de la luminance, en gardant la teinte : la
+palette des façades survit au dessin. Pas de grain, il salirait les aplats.
 
-- **Ciné.** La chaîne photographique décrite ci-dessus, plus la **chaussée
-  mouillée** : chaque lampadaire pose au sol une traînée qui part de son pied et
-  file vers la caméra, ce que fait le reflet d'une source haute sur un bitume
-  mouillé. Pas de passe de réflexion : l'orientation est calculée dans le vertex
-  shader, soit un maillage instancié de plus par secteur et zéro mise à jour CPU.
-  Les feux des voitures s'y reflètent de la même façon (rouge qui suit le
-  freinage, phares seulement du côté où ils éclairent), et le bitume lui-même
-  s'assombrit et prend un voile de ciel en incidence rasante.
-- **Graphique.** Une seule passe après le tone mapping. Les contours sortent du
-  tampon de profondeur, sans passe de normales : on prend le laplacien de
-  l'**inverse** de la distance, qui est nul sur tout plan (façade, toit,
-  chaussée) et ne s'allume que sur les plis et les silhouettes. La lumière est
-  quantifiée en aplats sur la racine de la luminance, en gardant la teinte : la
-  palette des façades survit au dessin. Le grain est coupé, il salirait les
-  aplats, et la passe de dessin prend sa place dans le budget.
+Un premier jet proposait à côté un look « ciné » (grain, chaussée mouillée,
+flou de vitesse) basculé à la touche `V`. Il a été retiré : le dessin est le
+style du jeu, tout le temps.
 
-Un correctif accompagne le look graphique : sous three 0.169, le composer de
+Un correctif accompagne le dessin : sous three 0.169, le composer de
 postprocessing 6.39 clonait ses trois textures de profondeur sur la **même image
 GPU**, la copie de profondeur échouait à chaque frame et tout effet de
 profondeur lisait un tampon vide. Chacune reçoit maintenant sa propre source
@@ -239,29 +229,33 @@ profondeur lisait un tampon vide. Chacune reçoit maintenant sa propre source
 l'archétype restent la majorité, mais une baie allumée sur cinq environ est une
 LED blanche, le bleu d'une télé ou un rideau coloré, et une sur cinq a un store
 à demi baissé dont les lames laissent filtrer un peu de lumière. Le socle
-commerçant passe de 3 à 8 travées avec un décalage par bâtiment, donc deux
-commerces voisins n'ont plus la même devanture, et le bandeau porte une
-enseigne une travée sur deux : néon à lettres, caisson lumineux, ou croix
-verte de pharmacie. La séquence des enseignes est fixée à la main : sur huit
-travées, un tirage au hasard ne sortait aucune pharmacie.
+commerçant est un atlas de **quatre rangées de huit devantures** dans une seule
+texture, donc toujours un seul draw call par tuile : chaque bâtiment tire sa
+rangée et son décalage de travée. Les devantures sont composées à la main :
+épicerie à rayons colorés, boutique à mannequins, bar à contre-jour,
+boulangerie, laverie à hublots, agence immobilière, rideau métallique baissé
+(la devanture la plus courante la nuit) ou vitrine éteinte ; et au-dessus, une
+enseigne néon, un caisson, des lettres dorées, la carotte rouge d'un tabac. La
+croix verte de pharmacie ne tient plus qu'une devanture sur trente-deux : trop
+fréquente, elle devenait banale.
+
+Les stores en toile (bannes) au-dessus des vitrines ont été retirés : ils
+gâchaient la lecture des devantures.
 
 **Les retours de conduite.** La physique arcade ne modélise pas le glissement,
 on le déduit donc de ce que fait le pilote : frein à main lancé, gros freinage
 à vitesse, braquage fort au-dessus de 80 km/h, plein gaz presque à l'arrêt.
 Cette glisse laisse des traces de pneus (un anneau de 1 800 segments qui écrase
 les plus vieux) et de la fumée (un pool de 160 bouffées), sans aucune
-allocation par frame. Au-dessus de 90 km/h, le look ciné ajoute un flou radial
-depuis le point de fuite, et le look graphique des lignes de vitesse de manga.
-Le flou est une convolution, donc une passe à lui : il saute à la première
-descente de qualité, avec le MSAA.
+allocation par frame. Au-dessus de 90 km/h, des lignes de vitesse de manga
+partent du point de fuite, fondues dans la même passe que le dessin.
 
-**Le HUD** s'habille selon le look (`body[data-look]`). Le compteur est un arc
-en bas au centre, avec le nom de la rue dessous ; une rangée de plots en haut
-montre la progression du tour ; l'aide des touches s'efface pendant la course.
-En ciné, panneaux fins sur verre fumé ; en graphique, cases de BD crème
-cernées d'encre, italiques et penchées.
+**Le HUD** est dessiné comme le reste : cases de BD crème cernées d'encre,
+italiques et penchées. Le compteur est un arc en bas au centre, avec le nom de
+la rue dessous ; une rangée de plots en haut montre la progression du tour ;
+l'aide des touches s'efface pendant la course.
 
-**La voiture** est commune aux deux looks. Elle reste procédurale : la caisse et
+**La voiture** reste procédurale : la caisse et
 le vitrage sont des profils latéraux extrudés et chanfreinés, avec les passages
 de roue creusés dans le profil. Les roues tournent avec la vitesse et les roues
 avant braquent. Le vernis et le vitrage reflètent une petite carte
@@ -391,10 +385,8 @@ de cavités visibles. La rampe verticale ci-dessous fait déjà l'essentiel du
 travail d'un AO, gratuitement. Si tu veux la réactiver malgré tout, il faut
 accepter ~50 fps.
 
-**Vignette et grain.** Placés après le tone mapping, donc en LDR. Le grain est
-sans `premultiply` : sinon il s'annule dans les noirs, or la scène est
-majoritairement noire. Il trame au passage le dégradé du ciel, qui bandait
-légèrement. Coût négligeable.
+**Vignette.** Placée après le tone mapping, donc en LDR, et légère : le dessin
+porte déjà le cadre.
 
 **Dégradé vertical des façades.** Il ne vient pas de la `hemisphereLight` :
 un mur a une normale horizontale, il reçoit donc partout le même mélange

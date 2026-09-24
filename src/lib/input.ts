@@ -46,7 +46,7 @@ function activePad(): Gamepad | null {
   return null;
 }
 
-type PadActions = { reset: boolean; toggleBuildings: boolean; toggleLook: boolean };
+type PadActions = { reset: boolean; toggleBuildings: boolean };
 
 function readPad(): PadActions & {
   throttle: number;
@@ -56,10 +56,7 @@ function readPad(): PadActions & {
 } {
   const gp = activePad();
   if (!gp) {
-    return {
-      throttle: 0, brake: 0, steer: 0, handbrake: false,
-      reset: false, toggleBuildings: false, toggleLook: false,
-    };
+    return { throttle: 0, brake: 0, steer: 0, handbrake: false, reset: false, toggleBuildings: false };
   }
 
   // Mapping standard W3C (Xbox, DualSense sur Chrome/Edge/Firefox).
@@ -81,7 +78,6 @@ function readPad(): PadActions & {
     handbrake,
     reset: edge(gp, 3), // Y / Triangle
     toggleBuildings: edge(gp, 8), // Back / Select
-    toggleLook: edge(gp, 4), // LB / L1
   };
 }
 
@@ -112,7 +108,6 @@ export function useInput(
   onToggleBuildings: () => void,
   onToggleEdit: () => void,
   driving: boolean,
-  onToggleLook: () => void = () => {},
 ) {
   useEffect(() => {
     if (!driving) {
@@ -134,10 +129,6 @@ export function useInput(
       }
       if (e.code === "KeyB") {
         onToggleBuildings();
-        return;
-      }
-      if (e.code === "KeyV") {
-        onToggleLook();
         return;
       }
       if (!driving) return;
@@ -164,7 +155,6 @@ export function useInput(
       const pad = apply();
       if (driving && pad.reset) onReset();
       if (pad.toggleBuildings) onToggleBuildings();
-      if (pad.toggleLook) onToggleLook();
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -180,7 +170,7 @@ export function useInput(
       blur();
       prevBtn.clear();
     };
-  }, [onReset, onToggleBuildings, onToggleEdit, driving, onToggleLook]);
+  }, [onReset, onToggleBuildings, onToggleEdit, driving]);
 }
 
 /** @deprecated utiliser useInput */

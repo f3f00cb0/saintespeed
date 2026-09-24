@@ -84,11 +84,6 @@ export default function App() {
     return null;
   }, [checkpoints, graph]);
   const showBuildings = useStore((s) => s.showBuildings);
-  const look = useStore((s) => s.look);
-  // le HUD s'habille selon le look : les regles CSS lisent body[data-look]
-  useEffect(() => {
-    document.body.dataset.look = look;
-  }, [look]);
   const [stats, setStats] = useState("");
   // Qualite de rendu : part au maximum et ne descend que sur mesure, voir
   // src/lib/quality.ts. Mesure a l'origine de ce reglage : un Intel Iris Xe
@@ -210,9 +205,7 @@ export default function App() {
     else enterEdit();
   }, [enterDrive, enterEdit]);
 
-  const onToggleLook = useCallback(() => useStore.getState().toggleLook(), []);
-
-  useInput(onReset, onToggleBuildings, onToggleEdit, !editing, onToggleLook);
+  useInput(onReset, onToggleBuildings, onToggleEdit, !editing);
 
   const ready = phase === "ready" && !!graph;
 
@@ -242,21 +235,13 @@ export default function App() {
             {/* le decor passe avant les routes : les surfaces sont sous la
                 chaussee, qui doit rester lisible par dessus une place */}
             {features && <Ground areas={features.areas} paths={features.paths} />}
-            <Roads ways={ways} proj={graph!.proj} wet={look === "cine"} />
+            <Roads ways={ways} proj={graph!.proj} />
             {features && <Tram lines={features.tram} />}
             {features && <Trees trees={features.trees} />}
             {features && <Fountains points={features.fountains} />}
             {/* la ceinture d'un jardin est ce qui le separe d'un parc de loin */}
             {features && <Fences fences={features.fences} />}
-            {centre && (
-              <Lamps
-                ways={ways}
-                proj={graph!.proj}
-                centre={centre}
-                graph={graph!}
-                wet={look === "cine"}
-              />
-            )}
+            {centre && <Lamps ways={ways} proj={graph!.proj} centre={centre} graph={graph!} />}
             {/* le trottoir se pose une fois l'index des murs la : c'est lui qui
                 borne sa largeur sur la facade reelle */}
             {/* les passages pietons se posent dans le trou que les trottoirs
@@ -293,7 +278,7 @@ export default function App() {
             {!editing && <DriveFx />}
             {editing ? <EditorCamera /> : <ChaseCamera walls={walls} />}
             <NetSync />
-            <Post level={level} look={look} />
+            <Post level={level} />
           </>
         )}
       </Canvas>

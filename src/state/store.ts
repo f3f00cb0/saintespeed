@@ -5,7 +5,6 @@ import type { FlatBuilding, WallIndex } from "../lib/buildings";
 import type { FlatFeatures } from "../lib/features";
 import type { FlatRail, RoadProbe } from "../lib/rail";
 import type { Voirie } from "../lib/voirie";
-import { initialLook, nextLook, saveLook, type Look } from "../lib/look";
 import type { Checkpoint } from "../lib/race";
 import { makeCheckpoints, snapCheckpoint, trackFromCheckpoints } from "../lib/race";
 import {
@@ -56,8 +55,6 @@ type Store = {
   buildings: FlatBuilding[];
   walls: WallIndex | null;
   showBuildings: boolean;
-  /** Direction artistique : nuit photographique ou nuit dessinee. */
-  look: Look;
   features: FlatFeatures | null;
   /** Troncons ferroviaires aeriens : le viaduc que porte la gare Carnot. */
   rail: FlatRail[];
@@ -91,7 +88,6 @@ type Store = {
   setVoirie(voirie: Voirie): void;
   setRoadProbe(probe: RoadProbe): void;
   toggleBuildings(): void;
-  toggleLook(): void;
   setError(msg: string): void;
   setTele(t: Telemetry, lapTime: number): void;
   passCheckpoint(): void;
@@ -125,7 +121,6 @@ export const useStore = create<Store>((set, get) => ({
   buildings: [],
   walls: null,
   showBuildings: true,
-  look: initialLook(),
   features: null,
   rail: [],
   roadProbe: null,
@@ -163,12 +158,6 @@ export const useStore = create<Store>((set, get) => ({
   setRoadProbe: (roadProbe) => set({ roadProbe }),
 
   toggleBuildings: () => set((s) => ({ showBuildings: !s.showBuildings })),
-  toggleLook: () =>
-    set((s) => {
-      const look = nextLook(s.look);
-      saveLook(look);
-      return { look };
-    }),
 
   setError: (error) => set({ phase: "error", error }),
 
