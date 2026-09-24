@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { Headlights } from "./Headlights";
+import { streakGeometry, streakMaterial } from "./wetStreak";
 
 // La voiture est l'objet que la camera montre en permanence : c'est la que la
 // pauvrete de la 3D se voyait le plus (quatre boites empilees). Elle reste
@@ -22,6 +23,8 @@ const MAX_WHEEL_STEER = 0.5; // rad, braquage visuel des roues avant
 // sinon le chanfrein les avale
 const FRONT = 2.29;
 const REAR = -2.31;
+// hauteur monde des reflets : au dessus de toutes les couches de chaussee
+const STREAK_Y = 0.47;
 
 // --- reflets : une carte d'environnement de nuit, generee une fois ---------
 
@@ -146,6 +149,7 @@ type CarGeo = {
   rim: THREE.BufferGeometry;
   spoke: THREE.BufferGeometry;
   shadow: THREE.BufferGeometry;
+  streak: THREE.BufferGeometry;
 };
 
 let sharedGeo: CarGeo | null = null;
@@ -165,6 +169,7 @@ function carGeometry(): CarGeo {
     rim,
     spoke: new THREE.BoxGeometry(0.4, 0.06, 0.28),
     shadow: new THREE.PlaneGeometry(5.4, 2.6).rotateX(-Math.PI / 2),
+    streak: streakGeometry(),
   };
   return sharedGeo;
 }
@@ -230,6 +235,7 @@ export function CarMesh({
   tailMat,
   headlights = false,
   motion,
+  wet = false,
 }: {
   color: number;
   headMat: THREE.MeshBasicMaterial;
@@ -237,6 +243,8 @@ export function CarMesh({
   headlights?: boolean;
   /** Vitesse (m/s) et braquage (-1..1) : font tourner et braquer les roues. */
   motion?: () => CarMotion | undefined;
+  /** Chaussee mouillee (look cine) : les feux s'y refletent. */
+  wet?: boolean;
 }) {
   const gl = useThree((s) => s.gl);
   const geo = useMemo(carGeometry, []);
@@ -276,11 +284,38 @@ export function CarMesh({
     };
   }, [gl, color]);
 
+  // reflets des feux : les feux arriere suivent le freinage, recopie a chaque
+  // frame depuis le materiau du feu, attenue pour ne pas eblouir
+  const streaks = useMemo(
+    () => ({
+      tail: streakMaterial({
+        color: new THREE.Color(),
+        length: 9,
+        width: 0.8,
+        groundY: STREAK_Y,
+        fadeNear: 40,
+        fadeFar: 160,
+        facing: new THREE.Vector3(-1, 0, 0),
+      }),
+      head: streakMaterial({
+        color: headMat.color.clone().multiplyScalar(0.3),
+        length: 16,
+        width: 1.0,
+        groundY: STREAK_Y,
+        fadeNear: 60,
+        fadeFar: 240,
+        facing: new THREE.Vector3(1, 0, 0),
+      }),
+    }),
+    [headMat],
+  );
+
   const steerRefs = useRef<(THREE.Group | null)[]>([]);
   const spinRefs = useRef<(THREE.Group | null)[]>([]);
   const spin = useRef(0);
 
   useFrame((_, dt) => {
+    if (wet) (streaks.tail.uniforms.color.value as THREE.Color).copy(tailMat.color).multiplyScalar(0.28);
     const m = motion?.();
     if (!m) return;
     spin.current -= (m.speed * Math.min(dt, 1 / 20)) / WHEEL_R;
@@ -322,6 +357,13 @@ export function CarMesh({
         </mesh>
       ))}
       {headlights && <Headlights />}
+      {wet &&
+        [0.66, -0.66].map((z) => (
+          <group key={"w" + z}>
+            <mesh geometry={geo.streak} material={streaks.tail} position={[REAR, 0, z]} frustumCulled={false} />
+            <mesh geometry={geo.streak} material={streaks.head} position={[FRONT, 0, z * 0.9]} frustumCulled={false} />
+          </group>
+        ))}
       {WHEELS.map(([x, z], i) => (
         <group key={i} position={[x, WHEEL_Y, z]} ref={(g) => (steerRefs.current[i] = g)}>
           <group ref={(g) => (spinRefs.current[i] = g)}>

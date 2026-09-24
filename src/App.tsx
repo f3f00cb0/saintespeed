@@ -237,7 +237,7 @@ export default function App() {
             {/* le decor passe avant les routes : les surfaces sont sous la
                 chaussee, qui doit rester lisible par dessus une place */}
             {features && <Ground areas={features.areas} paths={features.paths} />}
-            <Roads ways={ways} proj={graph!.proj} />
+            <Roads ways={ways} proj={graph!.proj} wet={look === "cine"} />
             {features && <Tram lines={features.tram} />}
             {features && <Trees trees={features.trees} />}
             {features && <Fountains points={features.fountains} />}

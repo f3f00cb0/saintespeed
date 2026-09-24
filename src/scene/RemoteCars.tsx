@@ -2,11 +2,13 @@ import { useCallback, useRef, useSyncExternalStore } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { onPeers, peerListKey, peers, samplePeer } from "../lib/peers";
+import { useStore } from "../state/store";
 import { CarMesh, pulseBrake, useCarLights } from "./CarMesh";
 
 function RemoteCar({ id }: { id: string }) {
   const body = useRef<THREE.Group>(null);
   const { headMat, tailMat } = useCarLights();
+  const wet = useStore((s) => s.look === "cine");
   const peer = peers.get(id);
   const color = peer?.color ?? 0x5ec8e0;
   const motion = useCallback(() => peers.get(id), [id]);
@@ -23,7 +25,7 @@ function RemoteCar({ id }: { id: string }) {
 
   return (
     <group ref={body}>
-      <CarMesh color={color} headMat={headMat} tailMat={tailMat} motion={motion} />
+      <CarMesh color={color} headMat={headMat} tailMat={tailMat} motion={motion} wet={wet} />
     </group>
   );
 }

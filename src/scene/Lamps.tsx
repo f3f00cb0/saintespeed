@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { specFor, type Way } from "../lib/osm";
 import type { Projector } from "../lib/project";
 import type { RoadGraph } from "../lib/graph";
+import { streakGeometry, streakMaterial } from "./wetStreak";
 
 // Lampadaires le long des axes. Trois maillages instancies : le mat, la tete
 // lumineuse, et une flaque de lumiere additive au sol. C'est la flaque qui fait
@@ -23,52 +24,11 @@ const POST_H = 8;
 const GLOW_R = 11;
 const WARM = 0xd49a52;
 
-// Reflet sur chaussee mouillee (look cine seulement). Une vraie reflexion
-// coute une passe ; ici chaque lampadaire pose au sol une trainee qui part de
-// son pied et file vers la camera, ce que fait le reflet d'une source haute sur
-// un bitume mouille. L'orientation est calculee dans le vertex shader, donc un
-// seul maillage instancie de plus par secteur, et rien a mettre a jour cote CPU.
+// Reflet sur chaussee mouillee (look cine) : voir wetStreak.ts. Un seul
+// maillage instancie de plus par secteur.
 const STREAK_LEN = 26;
 const STREAK_W = 1.5;
 const STREAK_Y = 0.46; // juste au dessus de la flaque, sous la voiture
-
-const streakVertex = /* glsl */ `
-uniform float streak;
-uniform float width;
-uniform float groundY;
-varying vec2 vUv;
-varying float vFade;
-void main() {
-  vec3 base = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-  vec2 toCam = cameraPosition.xz - base.xz;
-  float d = length(toCam);
-  vec2 dir = toCam / max(d, 1e-3);
-  vec2 side = vec2(-dir.y, dir.x);
-  // la trainee ne depasse jamais la camera
-  float len = min(streak, d * 0.7);
-  vec2 p = base.xz + dir * (position.y * len) + side * (position.x * width);
-  vUv = uv;
-  // de loin, le reflet se noie dans le brouillard avant la lampe elle-meme
-  vFade = 1.0 - smoothstep(70.0, 280.0, d);
-  gl_Position = projectionMatrix * viewMatrix * vec4(p.x, groundY, p.y, 1.0);
-}
-`;
-
-const streakFragment = /* glsl */ `
-uniform vec3 color;
-varying vec2 vUv;
-varying float vFade;
-void main() {
-  float lat = abs(vUv.x * 2.0 - 1.0);
-  float core = pow(1.0 - lat * lat, 3.0);
-  float along = vUv.y;
-  // pied net sous la lampe, queue qui s'effiloche vers la camera
-  float a = core * smoothstep(0.0, 0.1, along) * pow(1.0 - along, 1.6);
-  // ondulation du bitume : la trainee se casse en plaques
-  a *= 0.7 + 0.3 * sin(along * 38.0 + lat * 3.0);
-  gl_FragColor = vec4(color * a * vFade, 1.0);
-}
-`;
 
 // on n'eclaire que la zone jouable, inutile de meubler toute la ville
 const AREA = 2600;
@@ -297,7 +257,7 @@ export function Lamps({
       head: new THREE.BoxGeometry(0.8, 0.18, 0.3),
       pool: new THREE.PlaneGeometry(GLOW_R, GLOW_R),
       // x en travers de -0,5 a 0,5, y le long de 0 (pied) a 1 (vers la camera)
-      streak: new THREE.PlaneGeometry(1, 1, 1, 8).translate(0, 0.5, 0),
+      streak: streakGeometry(),
     }),
     [],
   );
@@ -313,19 +273,11 @@ export function Lamps({
         depthWrite: false,
         fog: false,
       }),
-      streak: new THREE.ShaderMaterial({
-        uniforms: {
-          streak: { value: STREAK_LEN },
-          width: { value: STREAK_W },
-          groundY: { value: STREAK_Y },
-          // HDR : juste au dessus du seuil du bloom, pour que le coeur bave
-          color: { value: new THREE.Color(WARM).multiplyScalar(0.75) },
-        },
-        vertexShader: streakVertex,
-        fragmentShader: streakFragment,
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
+      streak: streakMaterial({
+        color: new THREE.Color(WARM).multiplyScalar(0.75),
+        length: STREAK_LEN,
+        width: STREAK_W,
+        groundY: STREAK_Y,
       }),
     }),
     [glowTex],

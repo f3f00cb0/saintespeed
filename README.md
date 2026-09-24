@@ -218,6 +218,9 @@ l'URL le force.
   file vers la caméra, ce que fait le reflet d'une source haute sur un bitume
   mouillé. Pas de passe de réflexion : l'orientation est calculée dans le vertex
   shader, soit un maillage instancié de plus par secteur et zéro mise à jour CPU.
+  Les feux des voitures s'y reflètent de la même façon (rouge qui suit le
+  freinage, phares seulement du côté où ils éclairent), et le bitume lui-même
+  s'assombrit et prend un voile de ciel en incidence rasante.
 - **Graphique.** Une seule passe après le tone mapping. Les contours sortent du
   tampon de profondeur, sans passe de normales : on prend le laplacien de
   l'**inverse** de la distance, qui est nul sur tout plan (façade, toit,
