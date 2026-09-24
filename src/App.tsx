@@ -162,7 +162,7 @@ export default function App() {
         const raw = await loadBuildings();
         if (dead || !raw.length) return;
         const flat = prepareBuildings(raw, g.proj);
-        useStore.getState().setBuildings(flat, buildIndex(flat));
+        useStore.getState().setBuildings(flat, buildIndex(flat), raw.some((b) => b.ign));
       } catch (err: any) {
         if (!dead) useStore.getState().setError(err?.message || String(err));
       }

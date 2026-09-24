@@ -23,6 +23,14 @@ npm run fetch-osm -- features  # sols, arbres, tram, mobilier
 
 Si le fichier manque, l'appli retombe sur un appel Overpass au runtime.
 
+Les vraies hauteurs, matières et toitures des bâtiments viennent de la BD TOPO
+de l'IGN, jointe aux emprises OSM (voir « Le bâti mesuré : la BD TOPO ») :
+
+```bash
+npm run fetch-ign              # télécharge la BD TOPO puis joint
+npm run fetch-ign -- --cache   # rejoint depuis data/ign-batiments.json, sans réseau
+```
+
 ## Commandes
 
 | touche | effet |
@@ -110,6 +118,51 @@ hypercentre est mesuré à 4 niveaux de médiane et 5 au p75 ; viser la médiane
 donnait un cœur de ville qui lisait bas. Le p75 reste une valeur relevée dans
 OSM. Résultat : médiane 5 niveaux et p90 à 6 dans le cœur, contre 3 en
 périphérie.
+
+## Le bâti mesuré : la BD TOPO
+
+L'inférence ci-dessus donne une ville plausible mais **moyenne** : toutes les
+silhouettes d'une même tranche surface × distance se ressemblent, alors que
+c'est justement la silhouette qu'on reconnaît. Le Manhattan de
+somethingbig.ai/world doit l'essentiel de sa ressemblance à ça : chaque
+bâtiment y porte sa hauteur mesurée, son année, sa classe et son usage, tirés du
+cadastre de la ville. L'équivalent français existe, ouvert et sans clé : la
+**BD TOPO de l'IGN**.
+
+`npm run fetch-ign` télécharge la couche `BDTOPO_V3:batiment` par le WFS de la
+Géoplateforme (`data.geopf.fr`) sur la même emprise que les bâtiments OSM, garde
+le brut dans `data/ign-batiments.json` (hors dépôt), puis pose sur chaque
+emprise OSM, en clés courtes dans `public/sainte-buildings.json` :
+
+| clé | attribut BD TOPO | sert à |
+| --- | --- | --- |
+| `ih` | `hauteur`, du sol à la gouttière | la hauteur de mur, avant toute inférence |
+| `il` | `nombre_d_etages` | à défaut de hauteur |
+| `ir` | `altitude_maximale_toit − altitude_minimale_toit` | pente réelle du toit : plat sous 0,8 m, plafonnée à 7 m |
+| `im` | `materiaux_des_murs` | archétype : briques → brique, pierre → pierre (dès 3 niveaux), béton haut → barre |
+| `it` | `materiaux_de_la_toiture` | teinte du toit : tuile, ardoise, zinc ; béton → toit terrasse |
+| `iy` | année (`date_d_apparition`) | avant 1914 → pierre, 1950-1980 en hauteur → barre |
+| `iu` | `usage_1` | industriel → brique, commercial récent → moderne |
+
+**La jointure vote sur l'emprise entière**, pas sur le seul centroïde. OSM et le
+cadastre ne découpent pas les bâtiments pareil, et le centroïde d'une emprise en
+U tombe dans la cour. On échantillonne le centre et chaque sommet tiré à 35 %
+vers le centre ; l'emprise BD TOPO qui en recouvre le plus gagne, à condition
+d'en recouvrir au moins 40 %. Une jointure relancée repart de zéro : elle
+n'hérite pas d'anciens attributs qu'aucune emprise ne porte plus.
+
+**L'ordre des sources de hauteur**, du plus fiable au moins sûr : repère mesuré à
+la main (`LANDMARKS`), `height` OSM, hauteur IGN, `building:levels` OSM, étages
+IGN, et l'inférence en dernier. Dans la cascade d'archétypes, l'IGN passe après
+le type OSM (une maison reste une maison, même en pierre) et avant les
+heuristiques de zone et de centralité : ce sont des mesures, pas des
+probabilités.
+
+**Rien ne casse sans elle.** Sans le cache, `fetch-osm` le signale et les
+bâtiments restent sur l'inférence ; avec le cache, `fetch-osm -- buildings`
+rejoue la jointure, donc régénérer OSM n'efface pas les hauteurs. La mention
+« bâti IGN BD TOPO, Licence Ouverte » n'apparaît dans l'UI que si des données
+IGN sont chargées.
 
 ## Streaming par anneaux de distance
 
@@ -1386,6 +1439,9 @@ la largeur réelle du ruban.
 Données © contributeurs OpenStreetMap, sous [ODbL](https://opendatacommons.org/licenses/odbl/).
 L'attribution est affichée dans l'UI. Pas de tuiles Google, pas de
 photogrammétrie.
+
+Bâti : IGN, BD TOPO, sous [Licence Ouverte Etalab 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence/),
+quand `npm run fetch-ign` a été lancé. L'attribution s'affiche alors dans l'UI.
 
 La ligne de crête du ciel est dérivée des AWS Terrain Tiles (agrégat SRTM,
 EU-DEM et ETOPO). EU-DEM : produit à partir de données et d'informations

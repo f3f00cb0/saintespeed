@@ -222,6 +222,12 @@ export type ArchetypeInput = {
   zone?: string;
   /** Masque commerce : 1 POI, 2 bord d'axe, 4 zone retail. */
   shop?: number;
+  /** Murs selon la BD TOPO, code foncier (voir Ign.walls dans buildings.ts). */
+  walls?: number;
+  /** Annee de construction selon la BD TOPO. */
+  year?: number;
+  /** Usage selon la BD TOPO : r c i g s x a. */
+  usage?: string;
 };
 
 // Seuils de centralite. Le coeur pierre est un degrade doux, pas un mur : au
@@ -292,6 +298,41 @@ export function archetypeFor(b: ArchetypeInput): Archetype {
     case "apartments":
       if (b.area >= BARRE_MIN_AREA && b.dist >= BARRE_MIN_DIST) return Archetype.Barre;
       break;
+  }
+
+  // --- 2 bis. BD TOPO : matiere, age et usage reels -----------------------
+  // Placee apres le type OSM, qui dit ce qu'est le batiment (une maison reste
+  // une maison meme en pierre), mais avant toutes les heuristiques de zone et
+  // de centralite : ce sont des mesures, pas des probabilites.
+  //
+  // Les codes de murs sont ceux des fichiers fonciers : 1 pierre, 2 meuliere,
+  // 3 beton, 4 briques, 5 agglomere, 6 bois.
+  switch (b.walls) {
+    case 4:
+      return Archetype.Brique;
+    case 1:
+    case 2:
+      // La pierre d'un immeuble de rapport lit comme le centre ; celle d'une
+      // maison basse de faubourg est enduite et lit comme le tissu ordinaire.
+      return b.renderedLevels >= 3 ? Archetype.Pierre : Archetype.Faubourg;
+    case 3:
+      if (b.renderedLevels >= 5) return Archetype.Barre;
+      if (b.usage === "i") return Archetype.Brique;
+      if (b.usage === "c" && (b.year ?? 0) >= 1985) return Archetype.Moderne;
+      break;
+    case 5:
+    case 6:
+      return Archetype.Faubourg;
+  }
+  if (b.usage === "i" && b.area >= 90) return Archetype.Brique;
+  if (b.year !== undefined) {
+    // Immeubles de rapport d'avant 1914 : l'essentiel du centre et des axes
+    // (Jacquard, Tarentaize, Bellevue), pierre ou pise enduit sous zinc.
+    if (b.year < 1914 && b.renderedLevels >= 3) return Archetype.Pierre;
+    // Les Trente Glorieuses en hauteur : les grands ensembles, ou qu'ils soient.
+    if (b.year >= 1950 && b.year <= 1980 && b.renderedLevels >= 5) return Archetype.Barre;
+    // Tertiaire recent.
+    if (b.year >= 1990 && b.usage === "c" && b.renderedLevels >= 3) return Archetype.Moderne;
   }
 
   // --- 3. zone (jointure spatiale, calculee a la generation) ----------------

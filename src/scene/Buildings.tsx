@@ -68,7 +68,9 @@ function tintsOf(b: FlatBuilding, style: ArchetypeStyle) {
   // platitude d'un bloc sans casser la coherence de l'archetype
   const shade = 0.95 + hash01(b.id, 29) * 0.1;
   scratchTint.setHex(base).multiplyScalar(shade);
-  scratchRoof.setHex(b.landmark?.roof ?? style.roof).multiplyScalar(shade);
+  // La matiere IGN (tuile, ardoise, zinc) passe avant la toiture generique de
+  // l'archetype : un faubourg n'est pas tout en tuile, un centre pas tout en zinc.
+  scratchRoof.setHex(b.landmark?.roof ?? b.roofColour ?? style.roof).multiplyScalar(shade);
   return { tint: scratchTint, roofTint: scratchRoof };
 }
 
@@ -192,7 +194,7 @@ function emitDetailed(
 
     const hp = sloped ? top![i] : p;
     const hq = sloped ? top![(i + 1) % n] : q;
-    const rise = sloped ? ROOF_RISE : PARAPET;
+    const rise = sloped ? (b.roofRise ?? ROOF_RISE) : PARAPET;
 
     W.pos.push(
       p.x, h, -p.y,
@@ -212,7 +214,7 @@ function emitDetailed(
 
   // --- toiture --------------------------------------------------------------
   const cap = sloped ? top! : ring;
-  const capY = sloped ? h + ROOF_RISE : h;
+  const capY = sloped ? h + (b.roofRise ?? ROOF_RISE) : h;
   scratch.length = 0;
   for (let i = 0; i < n; i++) scratch.push(new THREE.Vector2(ring[i].x, ring[i].y));
   let faces: number[][];

@@ -26,7 +26,7 @@
 
 import { readFileSync } from "node:fs";
 import { makeProjector, type Projector } from "../src/lib/project";
-import { prepareBuildings, CITY_CENTRE, type Building } from "../src/lib/buildings";
+import { fromCompact, prepareBuildings, CITY_CENTRE, type Building } from "../src/lib/buildings";
 import { frameOf, type Frame } from "../src/lib/frame";
 import { newEmit, type Emit } from "../src/lib/landmarkGeometry";
 import { LANDMARK_KITS, SYNTHETIC_LANDMARKS, type KitBuilder } from "../src/lib/landmarks";
@@ -418,10 +418,7 @@ export function releve(racine: string, sortie: string): { sujets: Sujet[]; mesur
   const proj = makeProjector(CITY_CENTRE.lon, CITY_CENTRE.lat);
   const cachePath = `${racine}/public/sainte-buildings.json`;
   const cache = JSON.parse(readFileSync(cachePath, "utf8"));
-  const brut: Building[] = cache.buildings.map((b: any) => ({
-    id: b.i, ring: b.g, levels: b.l, height: b.h, kind: b.k, material: b.m,
-    colour: b.c, roofShape: b.rs, name: b.n, zone: b.z, shop: b.s,
-  }));
+  const brut: Building[] = cache.buildings.map(fromCompact);
   const plat = prepareBuildings(brut, proj);
   const espace = new EspacePublic(
     proj,

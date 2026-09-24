@@ -10,7 +10,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { encode } from "jpeg-js";
 import { makeProjector } from "../src/lib/project";
-import { prepareBuildings, CITY_CENTRE, type Building } from "../src/lib/buildings";
+import { fromCompact, prepareBuildings, CITY_CENTRE, type Building } from "../src/lib/buildings";
 import { frameOf } from "../src/lib/frame";
 import { newEmit, type Buf } from "../src/lib/landmarkGeometry";
 import { LANDMARK_KITS, SYNTHETIC_LANDMARKS } from "../src/lib/landmarks";
@@ -89,10 +89,7 @@ const EXTRA: Record<Side, number> = {
 
 export function render(id: number, cachePath: string, outPath: string, side?: Side): string {
   const cache = JSON.parse(readFileSync(cachePath, "utf8"));
-  const raw: Building[] = cache.buildings.map((b: any) => ({
-    id: b.i, ring: b.g, levels: b.l, height: b.h, kind: b.k, material: b.m,
-    colour: b.c, roofShape: b.rs, name: b.n, zone: b.z, shop: b.s,
-  }));
+  const raw: Building[] = cache.buildings.map(fromCompact);
   const flat = prepareBuildings(raw, makeProjector(CITY_CENTRE.lon, CITY_CENTRE.lat));
   const b = flat.find((x) => x.id === id);
   if (!b) throw new Error(`emprise ${id} absente du cache`);
