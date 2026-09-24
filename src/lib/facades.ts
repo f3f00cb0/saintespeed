@@ -34,7 +34,7 @@ export const PATCH_PX = 12;
 
 export const TILE_V = FLOOR * FLOORS_PER_TILE; // 18,6 m de haut par tuile de texture
 
-function seeded(seed: number): number {
+export function seeded(seed: number): number {
   let x = (seed | 0) ^ 0x85ebca6b;
   x ^= x << 13;
   x ^= x >>> 17;
@@ -68,7 +68,7 @@ const CURTAINS: [string, string][] = [
   ["#e6dde8", "#a99cad"],
 ];
 
-function interior(style: ArchetypeStyle, seed: number): [string, string] {
+export function interior(style: ArchetypeStyle, seed: number): [string, string] {
   const r = seeded(seed * 11);
   if (r < 0.18) return LED;
   if (r < 0.22) return TV;
@@ -77,7 +77,7 @@ function interior(style: ArchetypeStyle, seed: number): [string, string] {
 }
 
 /** Fraction de la baie masquee par un store, 0 si la baie est degagee. */
-function blindOf(seed: number): number {
+export function blindOf(seed: number): number {
   if (seeded(seed * 13) >= 0.22) return 0;
   return 0.3 + seeded(seed * 23) * 0.4;
 }

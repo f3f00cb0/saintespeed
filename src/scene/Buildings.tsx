@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { FLOOR, insetRing, type FlatBuilding } from "../lib/buildings";
-import { Archetype, STYLES, hash01, type ArchetypeStyle } from "../lib/archetypes";
+import { STYLES, hash01, type ArchetypeStyle } from "../lib/archetypes";
 import { car } from "../lib/car";
 import { editView } from "../lib/editView";
 import { useStore } from "../state/store";
 import { Lod, TILE, planStreaming, tileKey, type TileRef } from "../lib/streaming";
-import { TILE_V, SHOP_BAYS, SHOP_TILE_U, SHOP_VARIANTS, FLOORS_PER_TILE } from "../lib/facades";
-import { getFacadeTextures, getShopTexture, type Painted } from "../lib/facadeTextures";
+import { SHOP_BAYS, SHOP_TILE_U, SHOP_VARIANTS } from "../lib/facades";
+import { getFacadeArray, getShopTexture, makeFacadeMaterial } from "../lib/facadeTextures";
+import { LAYER_PATCH_UV, VARIANTS, tileOf, variantFor } from "../lib/facadeVariants";
 import { Family } from "../lib/families";
 import { kitFor } from "../lib/familyKits";
 import { newEmit, type Buf as KitBuf, type Emit } from "../lib/landmarkGeometry";
@@ -28,6 +29,11 @@ import { NOTABLE } from "../lib/notable";
 // du joueur et liberees derriere lui. Voir lib/streaming.ts pour la politique.
 
 const PARAPET = 0.75; // bandeau vertical des toits plats
+// Rez-de-chaussee commercant : plus haut qu'un etage courant, comme les vrais.
+// La jointure IGN mesure les etages a 1,22 fois nos 3,1 m en mediane, et le
+// rez-de-chaussee d'un immeuble de rapport, avec sa devanture et son entresol,
+// monte a 4 m et plus. A 3,1 m la vitrine lisait comme un etage de plus.
+const GF_SHOP = 4.0;
 const ROOF_RISE = 1.9; // hauteur du bandeau incline des toits en pente
 
 // Combien de tuiles au plus on construit par tick de streaming. Sans worker, la
@@ -42,7 +48,8 @@ const STREAM_HZ = 6;
 
 // --- geometrie --------------------------------------------------------------
 
-type Buf = { pos: number[]; norm: number[]; uv: number[]; col: number[] };
+/** fac : (calque de variante, gain emissif) par sommet, murs seulement. */
+type Buf = { pos: number[]; norm: number[]; uv: number[]; col: number[]; fac?: number[] };
 const newBuf = (): Buf => ({ pos: [], norm: [], uv: [], col: [] });
 
 // pied de facade dans l'ombre, couronnement expose
@@ -81,7 +88,6 @@ function emitDetailed(
   W: Buf,
   S: Buf,
   R: { pos: number[]; col: number[] },
-  tex: Painted,
   style: ArchetypeStyle,
   scratch: THREE.Vector2[],
 ): { shop: boolean; sloped: boolean; insetFail: boolean } {
@@ -90,11 +96,27 @@ function emitDetailed(
   const n = ring.length;
   const h = b.height;
 
+  // Variante de facade : tiree par batiment, guidee par sa hauteur, son age et
+  // son emprise (lib/facadeVariants.ts). Deux voisins du meme archetype ne
+  // portent donc plus la meme facade.
+  const layer = variantFor({
+    id: b.id,
+    archetype: b.archetype,
+    levels: Math.max(1, Math.round(h / FLOOR)),
+    year: b.year,
+    area: b.area,
+  });
+  const variant = VARIANTS[layer];
+  const tex = { ...tileOf(variant), patch: LAYER_PATCH_UV };
+  const glowGain = variant.glow ?? style.glow;
+  const W_fac = (W.fac ??= []);
+  const facade = () => W_fac.push(layer, glowGain, layer, glowGain, layer, glowGain, layer, glowGain, layer, glowGain, layer, glowGain);
+
   // Le socle commercant n'existe qu'au plein detail : c'est un signal de vie a
   // hauteur de rue, invisible passe 300 m, donc c'est la premiere chose qu'on
   // laisse tomber.
-  const shop = lod === Lod.Full && b.shopFront && h > FLOOR * 1.35;
-  const base0 = shop ? FLOOR : 0;
+  const shop = lod === Lod.Full && b.shopFront && h > GF_SHOP * 1.3;
+  const base0 = shop ? GF_SHOP : 0;
 
   // Decalage de tuile propre au batiment, en nombres entiers de travees et
   // d'etages : chaque emprise tire sa propre trame de fenetres allumees de la
@@ -102,8 +124,8 @@ function emitDetailed(
   // meme facade repetee tous les 18,6 m, le premier truc qui trahit le procedu-
   // ral. L'offset entier garde les niveaux alignes et les fenetres entieres aux
   // angles ; le RepeatWrapping fait le reste.
-  const du = Math.floor(hash01(b.id, 41) * style.bays) / style.bays;
-  const dv = Math.floor(hash01(b.id, 43) * FLOORS_PER_TILE) / FLOORS_PER_TILE;
+  const du = Math.floor(hash01(b.id, 41) * variant.bays) / variant.bays;
+  const dv = Math.floor(hash01(b.id, 43) * 6) / 6;
   // meme principe pour la devanture : chaque commerce tire sa rangee dans
   // l'atlas des devantures et part d'une travee a lui
   const sdu = Math.floor(hash01(b.id, 47) * SHOP_BAYS) / SHOP_BAYS;
@@ -130,7 +152,7 @@ function emitDetailed(
     if (shop) {
       const su0 = run / SHOP_TILE_U + sdu;
       const su1 = (run + len) / SHOP_TILE_U + sdu;
-      S.pos.push(px, 0, pz, qx, 0, qz, qx, FLOOR, qz, px, 0, pz, qx, FLOOR, qz, px, FLOOR, pz);
+      S.pos.push(px, 0, pz, qx, 0, qz, qx, GF_SHOP, qz, px, 0, pz, qx, GF_SHOP, qz, px, GF_SHOP, pz);
       for (let k = 0; k < 6; k++) {
         S.norm.push(nx, 0, -ny);
         S.col.push(tint.r * 0.5, tint.g * 0.5, tint.b * 0.5);
@@ -141,9 +163,10 @@ function emitDetailed(
     const u0 = run / tex.tileU + du;
     const u1 = (run + len) / tex.tileU + du;
     run += len;
-    const v = dv + (h - base0) / TILE_V;
+    const v = dv + (h - base0) / tex.tileV;
 
     W.pos.push(px, base0, pz, qx, base0, qz, qx, h, qz, px, base0, pz, qx, h, qz, px, h, pz);
+    facade();
 
     // Un clocher ou un chevalement n'a pas de rangees de fenetres allumees :
     // ses murs pointent sur le carre de mur nu, ce qui laisse une masse sombre.
@@ -204,6 +227,7 @@ function emitDetailed(
       hq.x, h + rise, -hq.y,
       hp.x, h + rise, -hp.y,
     );
+    facade();
     for (let k = 0; k < 6; k++) {
       W.norm.push(nx, 0, -ny);
       if (sloped) W.col.push(roofTint.r, roofTint.g, roofTint.b);
@@ -299,6 +323,7 @@ function toGeometry(b: Buf, withUv: boolean): THREE.BufferGeometry {
   g.setAttribute("position", new THREE.Float32BufferAttribute(b.pos, 3));
   g.setAttribute("normal", new THREE.Float32BufferAttribute(b.norm, 3));
   if (withUv) g.setAttribute("uv", new THREE.Float32BufferAttribute(b.uv, 2));
+  if (b.fac) g.setAttribute("aFacade", new THREE.Float32BufferAttribute(b.fac, 2));
   g.setAttribute("color", new THREE.Float32BufferAttribute(b.col, 3));
   g.computeBoundingSphere();
   return g;
@@ -352,7 +377,8 @@ function appendWithNormals(dst: Buf, src: KitBuf) {
 
 export type TileGeometry = {
   lod: Lod;
-  walls: { archetype: Archetype; geometry: THREE.BufferGeometry }[];
+  /** tous les murs de la tuile, toutes variantes confondues : un seul draw call */
+  walls: THREE.BufferGeometry | null;
   shop: THREE.BufferGeometry | null;
   roofs: THREE.BufferGeometry | null;
   /** silhouette : tout l'archetype confondu dans un seul maillage */
@@ -362,11 +388,7 @@ export type TileGeometry = {
   triangles: number;
 };
 
-function buildTile(
-  list: FlatBuilding[],
-  lod: Lod,
-  painted: Painted[],
-): TileGeometry {
+function buildTile(list: FlatBuilding[], lod: Lod): TileGeometry {
   const scratch: THREE.Vector2[] = [];
 
   if (lod === Lod.Silhouette) {
@@ -387,7 +409,7 @@ function buildTile(
     const box = toGeometry(B, false);
     return {
       lod,
-      walls: [],
+      walls: null,
       shop: null,
       roofs: null,
       box,
@@ -396,25 +418,14 @@ function buildTile(
     };
   }
 
-  const walls = new Map<Archetype, Buf>();
+  const wallBuf = newBuf();
   const shopBuf = newBuf();
   const roof = { pos: [] as number[], col: [] as number[] };
   const glowBuf = { pos: [] as number[], col: [] as number[] };
 
   for (const b of list) {
     if (b.landmark?.replaceBase) continue; // rendu par Landmarks.tsx
-    let W = walls.get(b.archetype);
-    if (!W) walls.set(b.archetype, (W = newBuf()));
-    emitDetailed(
-      b,
-      lod,
-      W,
-      shopBuf,
-      roof,
-      painted[b.archetype],
-      STYLES[b.archetype],
-      scratch,
-    );
+    emitDetailed(b, lod, wallBuf, shopBuf, roof, STYLES[b.archetype], scratch);
   }
 
   const near = newEmit();
@@ -428,13 +439,8 @@ function buildTile(
     appendPlain(glowBuf, near.glow);
   }
 
-  const out: TileGeometry["walls"] = [];
-  let triangles = 0;
-  for (const [archetype, buf] of walls) {
-    if (!buf.pos.length) continue;
-    out.push({ archetype, geometry: toGeometry(buf, true) });
-    triangles += buf.pos.length / 9;
-  }
+  const out = wallBuf.pos.length ? toGeometry(wallBuf, true) : null;
+  let triangles = wallBuf.pos.length / 9;
 
   let roofs: THREE.BufferGeometry | null = null;
   if (roof.pos.length) {
@@ -465,7 +471,7 @@ function buildTile(
 }
 
 function disposeTile(t: TileGeometry) {
-  for (const w of t.walls) w.geometry.dispose();
+  t.walls?.dispose();
   t.shop?.dispose();
   t.roofs?.dispose();
   t.box?.dispose();
@@ -475,7 +481,10 @@ function disposeTile(t: TileGeometry) {
 // --- composant --------------------------------------------------------------
 
 export function Buildings({ buildings }: { buildings: FlatBuilding[] }) {
-  const painted = useMemo(() => getFacadeTextures(), []);
+  // Un seul materiau de murs pour toute la ville : ses vingt-quatre variantes
+  // sont les calques d'un tableau de textures.
+  const wallMat = useMemo(() => makeFacadeMaterial(getFacadeArray()), []);
+  useEffect(() => () => wallMat.dispose(), [wallMat]);
   const shopTex = useMemo(() => getShopTexture(), []);
 
   // Index des tuiles : une seule passe sur les emprises, aucune geometrie.
@@ -559,7 +568,7 @@ export function Buildings({ buildings }: { buildings: FlatBuilding[] }) {
     for (const item of plan.load.slice(0, BUILD_BUDGET)) {
       const list = index.map.get(item.key);
       if (!list) continue;
-      const built = buildTile(list, item.lod, painted);
+      const built = buildTile(list, item.lod);
       const old = resident.current.get(item.key);
       resident.current.set(item.key, built);
       if (old) pending.current.push(old);
@@ -583,7 +592,7 @@ export function Buildings({ buildings }: { buildings: FlatBuilding[] }) {
       for (const t of resident.current.values()) {
         tris += t.triangles;
         meshes +=
-          t.walls.length +
+          (t.walls ? 1 : 0) +
           (t.shop ? 1 : 0) +
           (t.roofs ? 1 : 0) +
           (t.box ? 1 : 0) +
@@ -603,18 +612,7 @@ export function Buildings({ buildings }: { buildings: FlatBuilding[] }) {
     <group>
       {tiles.map(([key, t]) => (
         <group key={key}>
-          {t.walls.map((w) => (
-            <mesh key={w.archetype} geometry={w.geometry}>
-              <meshLambertMaterial
-                map={painted[w.archetype].map}
-                emissiveMap={painted[w.archetype].emissiveMap}
-                emissive={0xffffff}
-                emissiveIntensity={STYLES[w.archetype].glow}
-                vertexColors
-                side={THREE.DoubleSide}
-              />
-            </mesh>
-          ))}
+          {t.walls && <mesh geometry={t.walls} material={wallMat} />}
           {t.shop && (
             <mesh geometry={t.shop}>
               <meshLambertMaterial

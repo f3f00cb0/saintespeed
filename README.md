@@ -524,6 +524,55 @@ l'extérieur, ou abandonnée : **1 531 mâts sur 10 085 tombaient sur le bitume*
 Coût mesuré : 871k triangles pour les bâtiments, 243k pour les routes et leurs
 43 301 traits d'axe.
 
+## Vingt-quatre façades, pas cinq
+
+Une texture par archétype donnait cinq façades pour toute la ville, et **74 %
+des bâtiments portaient la même** : l'enduit de faubourg. Deux voisins avaient la
+même fenêtre, le même rythme, et une rue où tout se répète ne ressemble à
+aucune rue. `src/lib/facadeVariants.ts` peint maintenant **24 variantes**,
+réparties dans les cinq archétypes, chacune avec ses propres dimensions de
+hauteur d'étage et de largeur de travée :
+
+| archétype | variantes |
+| --- | --- |
+| pierre | balcon filant, linteau cintré à clef, travées serrées, balconnets en fer forgé, pierre à refends |
+| faubourg | volets verts, volets bruns et rouge basque, volets roulants, encadrements et chaîne d'angle, pavillon, persiennes closes |
+| brique | atelier en arcs à petits carreaux, cité ouvrière, pilastres et corniche en dents d'engrenage, polychrome façon Châteaucreux |
+| barre | loggias, panneaux préfabriqués, allèges de couleur des années 70, fenêtres en bandeau, cage d'escalier éclairée |
+| moderne | mur-rideau éclairé par plateau, bardage, brise-soleil, tôle perforée |
+
+Ce qui fait lire une façade stéphanoise de nuit, et que les variantes peignent :
+**les volets**, battants ou persiennes, ouverts contre le mur ou fermés sur la
+baie avec la lumière qui filtre entre les lames. **Les fenêtres à la
+française**, à deux vantaux et trois carreaux, dont les menuiseries claires se
+voient même éteintes ; sans elles, une vitre éteinte était un trou noir. **Le
+fer forgé**, les linteaux cintrés, les bandeaux d'étage, les coulures sous les
+appuis.
+
+**Le choix est guidé par la donnée**, puis tiré au hash de l'id : un faubourg
+d'un ou deux niveaux tire surtout le pavillon, un immeuble d'avant 1880 les
+travées serrées, une barre de douze niveaux les fenêtres en bandeau, un atelier
+de plus de 400 m² les arcs. Sur toute la ville, aucune variante ne dépasse
+15 %.
+
+**Un seul draw call de murs par tuile**, malgré les 24 textures. Elles sont
+empilées en calques d'un `DataArrayTexture` (512 × 512, 24 Mo avant mipmaps),
+chaque sommet porte son numéro de calque et son gain émissif, et un Lambert
+patché (`makeFacadeMaterial`) lit le bon calque. La lueur des fenêtres passe
+dans l'alpha du calque plutôt que dans une seconde texture ; l'émissif reprend
+la couleur du verre élevée à la puissance 1,7, sinon le tone mapping blanchit
+toutes les fenêtres. Un tableau de textures ne se retourne pas à l'envoi : les
+lignes sont rangées de bas en haut à la main, pour que `v = 1` reste le haut du
+canvas comme partout ailleurs.
+
+Les repères posés à la main (`Landmarks.tsx`) gardent la texture d'archétype
+d'origine : leurs kits sont réglés dessus.
+
+**Le rez-de-chaussée commerçant monte à 4 m**, contre 3,1 m avant. À la hauteur
+d'un étage courant, la vitrine lisait comme un étage de plus ; la jointure IGN
+mesure les vrais étages à 1,22 fois notre étage type, et un rez-de-chaussée de
+commerce plus haut encore.
+
 ## La couche reconnaissance : le caractère du vide
 
 Cible : quelqu'un qui **connaît** Saint-Étienne mais n'arrive pas à raccrocher

@@ -88,6 +88,8 @@ export type FlatBuilding = {
   roofRise?: number;
   /** Teinte de toiture tiree de la matiere IGN (tuile, ardoise, zinc). */
   roofColour?: number;
+  /** Annee de construction, BD TOPO : guide le choix de variante de facade. */
+  year?: number;
   /** Masse sombre sans fenetres allumees : clochers, chevalements. */
   unlit: boolean;
   /** Reglage bespoke si le batiment est un repere pose a la main. */
@@ -531,6 +533,7 @@ export function prepareBuildings(raw: Building[], proj: Projector): FlatBuilding
       sloped: slope.sloped,
       roofRise: slope.rise,
       roofColour,
+      year: ign?.year,
       // Un lieu de culte tague building=yes (mosquees, temples) n'est pas vu
       // par isUnlit, qui ne connait que le tag de batiment. La famille, elle,
       // le sait.

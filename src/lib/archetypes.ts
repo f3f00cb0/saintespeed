@@ -91,7 +91,9 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
     // creme : clusters dominants #918f8c / #73706f sur l'Hotel de Ville et les
     // Nouvelles Galeries (reference/NOTES.md). Le jaune en moins, elle reste
     // distincte du faubourg, maintenant lui aussi rabattu vers le gris.
-    wall: [0xd6d3ca, 0xc2bfb6, 0xe0ddd4],
+    // + deux nuances relevees a cote de la mediane : une pierre plus chaude
+    // (cours Fauriel au couchant) et une plus grise (facades encrassees)
+    wall: [0xd6d3ca, 0xc2bfb6, 0xe0ddd4, 0xd4cab4, 0xbab7b0],
     roof: 0x3a3d42, // zinc, mesure a #2e2e2d sur les photos
     sloped: true,
     litRatio: 0.35,
@@ -113,7 +115,7 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
     // La brique de la Manufacture mesuree sur photos est plus sombre et plus
     // brune que vive : clusters #4c3529 et #684d33. On garde un rouge soutenu
     // pour la lisibilite de nuit, mais la variante brune ancre la palette.
-    wall: [0x8a4636, 0x6e3a2c, 0x9a5242],
+    wall: [0x8a4636, 0x6e3a2c, 0x9a5242, 0x7d4230, 0x94604a],
     roof: 0x2e2a28,
     sloped: false,
     litRatio: 0.12,
@@ -135,7 +137,7 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
     // Le beton mesure sur les panoramas est un gris froid (#b4b4b5, #babcc2),
     // pas le gris chaud d'avant : sous la lumiere bleue de nuit, le chaud
     // convergeait vers le faubourg et les deux quartiers n'en faisaient qu'un.
-    wall: [0x9a9ca0, 0x8e9094, 0xa6a8ac],
+    wall: [0x9a9ca0, 0x8e9094, 0xa6a8ac, 0xb0aba2, 0x98a2a6],
     roof: 0x2b2c2e,
     sloped: false,
     litRatio: 0.5, // residentiel tres habite
@@ -176,7 +178,10 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
     // peine chauds (#908676, #8e8e8e), loin de l'ocre sature d'avant. On garde
     // une pointe de chaleur et on reste plus sombre que la pierre : c'est cet
     // ecart la qui les separe maintenant, plus la saturation.
-    wall: [0xbcae92, 0xaa9d84, 0xc8bb9f],
+    // Une rue de faubourg n'est pas d'un seul enduit : on y croise du sable,
+    // du rose passe, du gris-vert et du creme. Nuances tenues basses en
+    // saturation, comme les mesures : c'est l'alternance qui compte.
+    wall: [0xbcae92, 0xaa9d84, 0xc8bb9f, 0xc4a898, 0xcbb894, 0xa9ab9c, 0xd2c7b0, 0xb89c8c],
     roof: 0x4a3f38, // tuile assombrie
     sloped: true,
     litRatio: 0.3,
