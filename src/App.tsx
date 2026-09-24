@@ -85,6 +85,10 @@ export default function App() {
   }, [checkpoints, graph]);
   const showBuildings = useStore((s) => s.showBuildings);
   const look = useStore((s) => s.look);
+  // le HUD s'habille selon le look : les regles CSS lisent body[data-look]
+  useEffect(() => {
+    document.body.dataset.look = look;
+  }, [look]);
   const [stats, setStats] = useState("");
   // Qualite de rendu : part au maximum et ne descend que sur mesure, voir
   // src/lib/quality.ts. Mesure a l'origine de ce reglage : un Intel Iris Xe
@@ -302,10 +306,16 @@ export default function App() {
       )}
 
       {phase === "loading" && (
-        <div className="overlay">
-          <h1>
-            Sain<b>té</b>
-          </h1>
+        <div className="overlay loading">
+          <div className="title">
+            <h1>
+              Sain<b>té</b>
+            </h1>
+            <span className="sub">speed</span>
+          </div>
+          <div className="loadbar">
+            <i />
+          </div>
           <p>chargement du réseau routier…</p>
         </div>
       )}

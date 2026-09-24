@@ -55,35 +55,67 @@ canvas { display: block; }
 .row .lbl { color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em; }
 .row .val { color: var(--bone); margin-left: 8px; font-variant-numeric: tabular-nums; }
 
-.speedo { display: flex; align-items: baseline; justify-content: flex-end; gap: 6px; }
-.speedo .n {
-  font: 200 68px/0.9 var(--disp);
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-}
-.speedo .u {
-  font: 600 10px/1 var(--mono);
-  letter-spacing: 0.22em;
-  color: var(--dim);
-  text-transform: uppercase;
-}
-
 .fps {
-  margin-top: 6px;
   font: 500 10px/1 var(--mono);
   color: #55574a;
   letter-spacing: 0.1em;
 }
 
+/* --- compteur en arc, en bas au centre ------------------------------------ */
+.bc { left: 50%; bottom: 14px; transform: translateX(-50%); text-align: center; }
+.gauge { position: relative; width: 150px; height: 150px; margin: 0 auto -18px; }
+.gauge svg { width: 100%; height: 100%; overflow: visible; }
+.gauge circle { fill: none; stroke-linecap: round; }
+.gauge .track { stroke: rgba(242, 237, 224, 0.12); stroke-width: 5; }
+.gauge .fill { stroke: var(--ochre); stroke-width: 5; transition: stroke-dasharray 0.08s linear; }
+.gauge .fill.hot { stroke: var(--signal); }
+.gauge .tick { stroke: rgba(242, 237, 224, 0.35); stroke-width: 1.2; }
+.gauge .tick.red { stroke: var(--signal); }
+.gauge-n {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 44px;
+  font: 200 50px/1 var(--disp);
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.gauge-u {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 98px;
+  font: 600 9px/1 var(--mono);
+  letter-spacing: 0.24em;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
 .road {
-  margin-top: 6px;
   font: 500 11px/1.4 var(--mono);
   color: var(--moss);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  max-width: 30ch;
+  max-width: 34ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .road.off { color: var(--signal); }
+
+/* --- plots de progression, en haut au centre ------------------------------- */
+.tc { top: 18px; left: 50%; transform: translateX(-50%); }
+.pips { display: flex; gap: 8px; align-items: center; }
+.pip {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(242, 237, 224, 0.4);
+  transition: background 0.2s, transform 0.2s;
+}
+.pip.done { background: var(--ochre); border-color: var(--ochre); }
+.pip.cur { border-color: var(--signal); transform: scale(1.35); }
+.pip.fin { border-radius: 2px; }
 
 .cpwrap { display: flex; align-items: center; gap: 14px; }
 .arrow { width: 62px; height: 62px; }
@@ -101,7 +133,8 @@ canvas { display: block; }
   font-variant-numeric: tabular-nums;
 }
 
-.keys { font: 500 10px/1.6 var(--mono); color: var(--dim); }
+.keys { font: 500 10px/1.6 var(--mono); color: var(--dim); transition: opacity 0.6s; }
+.keys.quiet { opacity: 0; }
 .keys b { color: var(--bone); font-weight: 700; }
 .keys .link {
   pointer-events: auto;
@@ -320,3 +353,133 @@ canvas { display: block; }
 .editor-lib .librow { display: flex; gap: 4px; align-items: center; }
 .editor-lib .librow .ghost { flex: 1; }
 .editor .keys { margin-top: 12px; }
+
+/* --- chargement ------------------------------------------------------------ */
+.loading .title { display: flex; align-items: baseline; gap: 10px; }
+.loading .sub {
+  font: 700 12px/1 var(--mono);
+  letter-spacing: 0.5em;
+  color: var(--ochre);
+  text-transform: uppercase;
+}
+.loadbar {
+  width: 220px;
+  height: 2px;
+  margin: 18px 0 10px;
+  background: rgba(242, 237, 224, 0.1);
+  overflow: hidden;
+}
+.loadbar i {
+  display: block;
+  width: 35%;
+  height: 100%;
+  background: var(--ochre);
+  animation: load 1.3s ease-in-out infinite;
+}
+@keyframes load {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(290%); }
+}
+
+/* ===== look cine : panneaux fins, verre fume ================================ */
+body[data-look="cine"] .tl,
+body[data-look="cine"] .cpwrap {
+  background: linear-gradient(180deg, rgba(14, 18, 30, 0.55), rgba(14, 18, 30, 0.25));
+  border: 1px solid rgba(242, 237, 224, 0.08);
+  border-radius: 12px;
+  padding: 12px 16px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+/* halo : un second arc large et translucide sous l'arc plein (un filtre CSS
+   drop-shadow sur l'arc le faisait disparaitre dans Chromium) */
+.gauge .halo { stroke: var(--ochre); stroke-width: 11; opacity: 0; }
+.gauge .halo.hot { stroke: var(--signal); }
+body[data-look="cine"] .gauge .halo { opacity: 0.18; }
+body[data-look="cine"] .chrono { text-shadow: 0 0 18px rgba(242, 237, 224, 0.25); }
+
+/* ===== look graphique : cases de BD, encre et italique ===================== */
+body[data-look="graphique"] {
+  --gdisp: "Arial Black", "Helvetica Neue", Impact, system-ui, sans-serif;
+  --gink: #07080d;
+}
+body[data-look="graphique"] .tl,
+body[data-look="graphique"] .cpwrap {
+  background: var(--bone);
+  color: var(--gink);
+  border: 3px solid var(--gink);
+  box-shadow: 5px 5px 0 var(--gink);
+  padding: 10px 14px;
+  transform: skewX(-6deg);
+}
+body[data-look="graphique"] .tl > *,
+body[data-look="graphique"] .cpwrap > * { transform: skewX(6deg); }
+body[data-look="graphique"] .kicker { color: var(--signal); }
+body[data-look="graphique"] .chrono {
+  font: italic 900 44px/1 var(--gdisp);
+  letter-spacing: -0.03em;
+}
+body[data-look="graphique"] .row .lbl,
+body[data-look="graphique"] .cpinfo .lbl { color: #5b5c52; }
+body[data-look="graphique"] .row .val,
+body[data-look="graphique"] .peers li { color: var(--gink); font-weight: 700; }
+body[data-look="graphique"] .cpinfo .name { font: italic 900 18px/1.1 var(--gdisp); }
+body[data-look="graphique"] .arrow circle { stroke: var(--gink); stroke-width: 4; }
+body[data-look="graphique"] .arrow path { stroke: var(--gink); stroke-width: 4; stroke-linejoin: round; }
+body[data-look="graphique"] .go-btn {
+  background: var(--signal);
+  color: var(--bone);
+  border: 2px solid var(--gink);
+  border-radius: 0;
+  box-shadow: 3px 3px 0 var(--gink);
+}
+body[data-look="graphique"] .gauge .track { stroke: rgba(7, 8, 13, 0.75); stroke-width: 11; stroke-linecap: butt; }
+body[data-look="graphique"] .gauge .fill { stroke-width: 7; stroke-linecap: butt; }
+body[data-look="graphique"] .gauge .tick { stroke: var(--bone); stroke-width: 2; }
+body[data-look="graphique"] .gauge-n {
+  font: italic 900 46px/1 var(--gdisp);
+  color: var(--bone);
+  -webkit-text-stroke: 2px var(--gink);
+  paint-order: stroke fill;
+  text-shadow: 3px 3px 0 var(--gink);
+}
+body[data-look="graphique"] .gauge-u { color: var(--bone); text-shadow: 1px 1px 0 var(--gink); }
+body[data-look="graphique"] .road {
+  display: inline-block;
+  background: var(--gink);
+  color: var(--ochre);
+  padding: 3px 10px;
+  font-weight: 700;
+  transform: skewX(-6deg);
+}
+body[data-look="graphique"] .road.off { background: var(--signal); color: var(--bone); }
+body[data-look="graphique"] .pip {
+  width: 14px;
+  height: 14px;
+  border: 3px solid var(--gink);
+  background: var(--bone);
+  border-radius: 0;
+  transform: rotate(45deg);
+  box-shadow: 2px 2px 0 var(--gink);
+}
+body[data-look="graphique"] .pip.done { background: var(--ochre); }
+body[data-look="graphique"] .pip.cur { background: var(--signal); transform: rotate(45deg) scale(1.3); }
+body[data-look="graphique"] .start {
+  background: var(--bone);
+  color: var(--gink);
+  border: 3px solid var(--gink);
+  border-radius: 0;
+  box-shadow: 4px 4px 0 var(--gink);
+  font-weight: 700;
+}
+body[data-look="graphique"] .start b { color: var(--signal); }
+body[data-look="graphique"] .go {
+  font: italic 900 150px/1 var(--gdisp);
+  color: var(--ochre);
+  -webkit-text-stroke: 5px var(--gink);
+  paint-order: stroke fill;
+  text-shadow: 8px 8px 0 var(--gink);
+}
+body[data-look="graphique"] .keys b { color: var(--bone); }
+body[data-look="graphique"] .overlay h1 { font: italic 900 52px/1 var(--gdisp); }
+body[data-look="graphique"] .loadbar { height: 8px; border: 2px solid var(--bone); background: none; }

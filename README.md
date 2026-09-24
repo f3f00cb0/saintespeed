@@ -255,6 +255,12 @@ depuis le point de fuite, et le look graphique des lignes de vitesse de manga.
 Le flou est une convolution, donc une passe à lui : il saute à la première
 descente de qualité, avec le MSAA.
 
+**Le HUD** s'habille selon le look (`body[data-look]`). Le compteur est un arc
+en bas au centre, avec le nom de la rue dessous ; une rangée de plots en haut
+montre la progression du tour ; l'aide des touches s'efface pendant la course.
+En ciné, panneaux fins sur verre fumé ; en graphique, cases de BD crème
+cernées d'encre, italiques et penchées.
+
 **La voiture** est commune aux deux looks. Elle reste procédurale : la caisse et
 le vitrage sont des profils latéraux extrudés et chanfreinés, avec les passages
 de roue creusés dans le profil. Les roues tournent avec la vitesse et les roues
@@ -1290,7 +1296,7 @@ src/lib/quality.ts      niveaux de rendu et descente sur frame médiane mesurée
 src/scene/              rendu three.js (routes, sols, bâtiments, arbres, tram,
                         voiture, portiques, caméra)
 src/state/store.ts      zustand
-src/ui/Hud.tsx          chrono, compteur, boussole checkpoint
+src/ui/Hud.tsx          chrono, compteur en arc, plots de tour, boussole checkpoint
 ```
 
 ## Notes techniques
