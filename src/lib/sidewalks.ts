@@ -77,6 +77,9 @@ const GUTTER = 0.34;
 /** Vue de bordure, en metres : une bordure T2 fait 14 cm. */
 export const CURB = 0.14;
 
+/** Comblement de chaussee garde entier sous cette surface, en m2. */
+const SMALL_FILLET = 30;
+
 /** Surface en dessous de laquelle un morceau de trottoir est un eclat, pas un trottoir. */
 const MIN_AREA = 1.5;
 
@@ -92,11 +95,16 @@ type Paths = Path[];
 type WayRec = { half: number; pts: { x: number; y: number }[]; minx: number; miny: number; maxx: number; maxy: number; want: number; sides: number };
 type BldRec = { ring: { x: number; y: number }[]; minx: number; miny: number; maxx: number; maxy: number };
 
+/** Noeud de carrefour : trois incidences ou plus, et la plus large demi-chaussee. */
+type JunctionRec = { x: number; y: number; half: number; minx: number; miny: number; maxx: number; maxy: number };
+
 export type SidewalkWorld = {
   ways: WayRec[];
   buildings: BldRec[];
+  junctions: JunctionRec[];
   wayGrid: Map<string, number[]>;
   bldGrid: Map<string, number[]>;
+  junctionGrid: Map<string, number[]>;
   graph: RoadGraph;
 };
 
@@ -171,7 +179,35 @@ export function prepareSidewalks(
     }
     B.push({ ring: b.ring, minx, miny, maxx, maxy });
   }
-  return { ways: W, buildings: B, wayGrid: index(W), bldGrid: index(B), graph };
+  // Carrefours : un sommet partage par trois incidences ou plus (une extremite
+  // compte pour une, un sommet interieur pour deux). Quantifie a 10 cm, comme
+  // graph.ts.
+  const deg = new Map<string, { x: number; y: number; n: number; half: number }>();
+  for (const w of W) {
+    const n = w.pts.length;
+    w.pts.forEach((p, i) => {
+      const key = Math.round(p.x * 10) + ":" + Math.round(p.y * 10);
+      let e = deg.get(key);
+      if (!e) deg.set(key, (e = { x: p.x, y: p.y, n: 0, half: 0 }));
+      e.n += i === 0 || i === n - 1 ? 1 : 2;
+      e.half = Math.max(e.half, w.half);
+    });
+  }
+  const J: JunctionRec[] = [];
+  for (const e of deg.values()) {
+    if (e.n < 3) continue;
+    const r = e.half + KERB_R * 2;
+    J.push({ x: e.x, y: e.y, half: e.half, minx: e.x - r, miny: e.y - r, maxx: e.x + r, maxy: e.y + r });
+  }
+  return {
+    ways: W,
+    buildings: B,
+    junctions: J,
+    wayGrid: index(W),
+    bldGrid: index(B),
+    junctionGrid: index(J),
+    graph,
+  };
 }
 
 // --- operations ------------------------------------------------------------------
@@ -244,6 +280,8 @@ export type SidewalkTile = {
   trimColor: Float32Array;
   /** Contours du trottoir en metres du plan, pour les plans et le harnais. */
   outlines: { x: number; y: number }[][];
+  /** Contours des arrondis de chaussee ajoutes au carrefour, pour les plans. */
+  filletOutlines: { x: number; y: number }[][];
   triangles: number;
   ms: number;
 };
@@ -328,8 +366,32 @@ export function buildSidewalkTile(world: SidewalkWorld, tx: number, ty: number):
   for (const [half, paths] of byHalf) {
     road0 = union(road0, offset(paths, half, C.JoinType.jtRound, C.EndType.etOpenRound));
   }
-  // fermeture : les angles rentrants des carrefours deviennent des arrondis
-  const road = offset(offset(road0, KERB_R, C.JoinType.jtRound, C.EndType.etClosedPolygon), -KERB_R, C.JoinType.jtRound, C.EndType.etClosedPolygon);
+  // Fermeture : les angles rentrants des carrefours deviennent des arrondis.
+  // Mais seulement AUTOUR D'UN CARREFOUR : partout ailleurs, la fermeture
+  // remplissait aussi l'espace entre deux chaussees proches (un terre-plein
+  // de 4 m devenait de l'asphalte sur toute sa longueur) et le coin en pointe
+  // entre deux rues qui se rejoignent en angle aigu, ou la bordure traversait
+  // alors l'entree de la rue. L'ajout est donc borne a un disque par noeud.
+  const closed = offset(offset(road0, KERB_R, C.JoinType.jtRound, C.EndType.etClosedPolygon), -KERB_R, C.JoinType.jtRound, C.EndType.etClosedPolygon);
+  const discs: Paths = [];
+  for (const i of query(world.junctionGrid, ex0, ey0, ex1, ey1)) {
+    const j = world.junctions[i];
+    const r = j.half + KERB_R * 1.5;
+    const disc: Path = [];
+    for (let k = 0; k < 20; k++) {
+      const a = (k / 20) * Math.PI * 2;
+      disc.push(ip(j.x + Math.cos(a) * r, j.y + Math.sin(a) * r));
+    }
+    discs.push(disc);
+  }
+  // Un petit comblement (coin arrondi, pointe entre deux rubans qui
+  // convergent) reste entier : borne au disque, il laissait des triangles
+  // vides entre les chaussees. Seuls les grands sont coupes au disque.
+  const added = minus(closed, road0);
+  const small = added.filter((p) => Math.abs(areaM2(p)) <= SMALL_FILLET);
+  const large = added.filter((p) => Math.abs(areaM2(p)) > SMALL_FILLET);
+  const fillet = union(small, inter(large, union(discs)));
+  const road = union(road0, fillet);
 
   // --- batiments ---
   const bld: Paths = [];
@@ -355,7 +417,7 @@ export function buildSidewalkTile(world: SidewalkWorld, tx: number, ty: number):
   const kerb = inter(S, roadGrow);
   const paving = minus(S, roadGrow);
   const gutter = inter(inter(road, offset(S, GUTTER, C.JoinType.jtRound, C.EndType.etClosedPolygon)), rect);
-  const fillets = inter(minus(road, road0), rect);
+  const fillets = inter(fillet, rect);
 
   // --- maillages ---
   const h = (x: number, y: number) => roadHeight(world.graph, x, y);
@@ -393,6 +455,7 @@ export function buildSidewalkTile(world: SidewalkWorld, tx: number, ty: number):
     trim: new Float32Array(trim.pos),
     trimColor: new Float32Array(trim.col!),
     outlines,
+    filletOutlines: fillets.map((p) => p.map((q) => ({ x: q.X / K, y: q.Y / K }))),
     triangles: (pave.pos.length + trim.pos.length) / 9,
     ms: Date.now() - t0,
   };

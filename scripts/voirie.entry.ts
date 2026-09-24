@@ -229,6 +229,13 @@ export function plan(c: Charge, lon: number, lat: number, rayon: number, sortie:
       .join("");
     out.push(`<path d="${d}" fill="#6a6c62" fill-rule="evenodd" stroke="#b4b8aa" stroke-width="1"/>`);
   }
+  // arrondis de chaussee ajoutes par la fermeture : en rouge, c'est la ou une
+  // fermeture trop genereuse remplit un coin qui n'est pas un carrefour
+  for (const t of tiles) {
+    for (const r of t.filletOutlines) {
+      out.push(`<polygon points="${r.map((p) => `${X(p.x)},${Y(p.y)}`).join(" ")}" fill="#c0392b" fill-opacity="0.8"/>`);
+    }
+  }
   // passages pietons : les vraies bandes, pas un reperage
   const cross = buildCrossings(c.voirie.crossings, c.graph, c.centre, Infinity);
   let nc = 0;
@@ -245,7 +252,7 @@ export function plan(c: Charge, lon: number, lat: number, rayon: number, sortie:
   }
   out.push(
     `<text x="12" y="26" fill="#cfd6e6" font-family="monospace" font-size="15">${lon}, ${lat} · rayon ${rayon} m · ${nb} emprises, ${ns} contours de trottoir, ${nc} bandes de passage pieton, ${sols.length} sols</text>`,
-    `<text x="12" y="46" fill="#9aa094" font-family="monospace" font-size="12">gris clair = trottoir · blanc = passage pieton releve dans OSM</text>`,
+    `<text x="12" y="46" fill="#9aa094" font-family="monospace" font-size="12">gris clair = trottoir · rouge = arrondi de chaussee au carrefour · blanc = passage pieton releve dans OSM</text>`,
     `</svg>`,
   );
   writeFileSync(sortie, out.join("\n"));
