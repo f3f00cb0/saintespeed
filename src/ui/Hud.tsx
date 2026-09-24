@@ -202,7 +202,7 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
           <b>Y</b> replacer · <b>Select</b> bâtiments
         </div>
         <div className="attrib">
-          données © contributeurs OpenStreetMap, ODbL · {source}
+          données © contributeurs OpenStreetMap, ODbL · {source} · relief SRTM, Copernicus EU-DEM
         </div>
       </div>
 
