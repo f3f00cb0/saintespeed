@@ -32,13 +32,16 @@ export type QualityLevel = {
   dprMax: number;
   /** Grain photographique : une passe plein ecran de plus. */
   grain: boolean;
+  /** Flou de vitesse du look cine : une convolution, donc une passe a part. */
+  speedBlur: boolean;
 };
 
 // L'ordre des renoncements n'est pas arbitraire, il suit le cout mesure :
 //   1. le MSAA d'abord. C'est le plus cher (une cible multi-echantillons de
 //      1,3 Mpx resolue a chaque frame) et le moins identitaire : de nuit, sur
 //      une scene majoritairement sombre avec du grain, l'escalier d'arete se
-//      voit beaucoup moins que sur un rendu diurne a plat.
+//      voit beaucoup moins que sur un rendu diurne a plat. Le flou de vitesse
+//      part avec lui : c'est un luxe, visible seulement au dessus de 90 km/h.
 //   2. la densite de pixels ensuite, qui divise le remplissage sans rien
 //      changer a la composition.
 //   3. le grain en dernier, parce qu'il ne coute qu'une passe et qu'il fait
@@ -47,9 +50,9 @@ export type QualityLevel = {
 // les feux de balisage ne sont plus que des taches plates, et c'est ce qui porte
 // la lecture nocturne de la ville.
 export const LEVELS: QualityLevel[] = [
-  { multisampling: 4, dprMax: 2, grain: true },
-  { multisampling: 0, dprMax: 1.5, grain: true },
-  { multisampling: 0, dprMax: 1, grain: false },
+  { multisampling: 4, dprMax: 2, grain: true, speedBlur: true },
+  { multisampling: 0, dprMax: 1.5, grain: true, speedBlur: false },
+  { multisampling: 0, dprMax: 1, grain: false, speedBlur: false },
 ];
 
 /** Budget de frame, en ms. 21 ms vaut 47 fps : on descend avant de tomber a 30. */

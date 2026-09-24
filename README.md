@@ -245,6 +245,16 @@ enseigne une travée sur deux : néon à lettres, caisson lumineux, ou croix
 verte de pharmacie. La séquence des enseignes est fixée à la main : sur huit
 travées, un tirage au hasard ne sortait aucune pharmacie.
 
+**Les retours de conduite.** La physique arcade ne modélise pas le glissement,
+on le déduit donc de ce que fait le pilote : frein à main lancé, gros freinage
+à vitesse, braquage fort au-dessus de 80 km/h, plein gaz presque à l'arrêt.
+Cette glisse laisse des traces de pneus (un anneau de 1 800 segments qui écrase
+les plus vieux) et de la fumée (un pool de 160 bouffées), sans aucune
+allocation par frame. Au-dessus de 90 km/h, le look ciné ajoute un flou radial
+depuis le point de fuite, et le look graphique des lignes de vitesse de manga.
+Le flou est une convolution, donc une passe à lui : il saute à la première
+descente de qualité, avec le MSAA.
+
 **La voiture** est commune aux deux looks. Elle reste procédurale : la caisse et
 le vitrage sont des profils latéraux extrudés et chanfreinés, avec les passages
 de roue creusés dans le profil. Les roues tournent avec la vitesse et les roues

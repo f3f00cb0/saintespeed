@@ -1,9 +1,12 @@
 import { useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
 import { EffectComposer, Bloom, ToneMapping, Vignette, Noise } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
 import type { QualityLevel } from "../lib/quality";
 import type { Look } from "../lib/look";
 import { GraphicEffect } from "./GraphicEffect";
+import { SpeedBlurEffect, SpeedLinesEffect, speedAmount } from "./SpeedEffects";
+import { car } from "../lib/car";
 
 // Chaine de post-traitement, isolee du reste de la scene parce qu'elle change
 // avec le niveau de qualite (src/lib/quality.ts) et avec la direction
@@ -22,14 +25,30 @@ import { GraphicEffect } from "./GraphicEffect";
 // vignette : la passe de dessin prend sa place dans le budget, une passe pour
 // une passe.
 //
+// La sensation de vitesse change aussi avec le look : flou radial en cine (une
+// convolution, donc une passe a elle, coupee des la premiere descente de
+// qualite), lignes de vitesse en graphique (fondues dans la passe de dessin).
+//
 // Le `key` sur le composer est volontaire : changer `multisampling` doit
 // reconstruire les cibles de rendu, un simple changement de prop ne le fait pas.
 
 export function Post({ level, look }: { level: QualityLevel; look: Look }) {
   const graphic = useMemo(() => new GraphicEffect(), []);
+  const blur = useMemo(() => new SpeedBlurEffect(), []);
+  const lines = useMemo(() => new SpeedLinesEffect(), []);
   const drawn = look === "graphique";
   const grain = level.grain && !drawn;
-  const key = `${level.multisampling}-${grain}-${look}`;
+  const speedBlur = level.speedBlur && !drawn;
+  const key = `${level.multisampling}-${grain}-${speedBlur}-${look}`;
+
+  // la sensation de vitesse suit la voiture, lissee pour ne pas pomper
+  useFrame((_, dt) => {
+    const want = speedAmount(car.speed);
+    for (const e of [blur, lines]) {
+      const u = e.uniforms.get("amount")!;
+      u.value += (want - u.value) * Math.min(1, dt * 4);
+    }
+  });
   // les enfants du composer sont types en elements stricts : pas de `&&`
   const passes = [
     <Bloom
@@ -41,7 +60,11 @@ export function Post({ level, look }: { level: QualityLevel; look: Look }) {
     />,
     <ToneMapping key="tone" mode={ToneMappingMode.ACES_FILMIC} />,
   ];
-  if (drawn) passes.push(<primitive key="drawn" object={graphic} />);
+  if (drawn) {
+    passes.push(<primitive key="drawn" object={graphic} />);
+    passes.push(<primitive key="lines" object={lines} />);
+  }
+  if (speedBlur) passes.push(<primitive key="blur" object={blur} />);
   passes.push(<Vignette key="vignette" opacity={drawn ? 0 : 1} offset={0.3} darkness={drawn ? 0.35 : 0.62} />);
   if (grain) passes.push(<Noise key="grain" opacity={0.045} />);
   return (

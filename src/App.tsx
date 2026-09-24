@@ -40,6 +40,7 @@ import { EditorTools } from "./scene/EditorTools";
 import { Hud } from "./ui/Hud";
 import { EditorHud } from "./ui/EditorHud";
 import { Post } from "./scene/Post";
+import { DriveFx } from "./scene/DriveFx";
 import { LEVELS, Quality } from "./lib/quality";
 
 const SKY = 0x0e1526; // fond et brouillard partagent la meme couleur
@@ -285,6 +286,7 @@ export default function App() {
             {editing && <EditorTools graph={graph!} />}
             <RemoteCars />
             {!editing && <Car graph={graph!} />}
+            {!editing && <DriveFx />}
             {editing ? <EditorCamera /> : <ChaseCamera walls={walls} />}
             <NetSync />
             <Post level={level} look={look} />

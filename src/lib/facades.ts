@@ -61,9 +61,10 @@ export type FacadeCanvas = {
 const LED: [string, string] = ["#eef3f8", "#c4d6ea"];
 const TV: [string, string] = ["#c9d3f5", "#7188e8"];
 const CURTAINS: [string, string][] = [
-  ["#ffb4a0", "#ff6a4a"],
-  ["#d4f5c0", "#7fd65a"],
-  ["#ecc4ff", "#b36cff"],
+  // rabattus : un rideau filtre, il ne brille pas comme un neon
+  ["#f6cdbd", "#d98466"],
+  ["#dcebcf", "#9cc281"],
+  ["#e7d6f0", "#ae8fcc"],
 ];
 
 function interior(style: ArchetypeStyle, seed: number): [string, string] {
