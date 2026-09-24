@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { specFor, type Way } from "../lib/osm";
 import type { Projector } from "../lib/project";
 import type { RoadGraph } from "../lib/graph";
+import { streakGeometry, streakMaterial } from "./wetStreak";
 
 // Lampadaires le long des axes. Trois maillages instancies : le mat, la tete
 // lumineuse, et une flaque de lumiere additive au sol. C'est la flaque qui fait
@@ -22,6 +23,12 @@ const SPACING = 38; // un lampadaire tous les 38 m, alternes d'un cote a l'autre
 const POST_H = 8;
 const GLOW_R = 11;
 const WARM = 0xd49a52;
+
+// Reflet sur chaussee mouillee (look cine) : voir wetStreak.ts. Un seul
+// maillage instancie de plus par secteur.
+const STREAK_LEN = 26;
+const STREAK_W = 1.5;
+const STREAK_Y = 0.46; // juste au dessus de la flaque, sous la voiture
 
 // on n'eclaire que la zone jouable, inutile de meubler toute la ville
 const AREA = 2600;
@@ -159,12 +166,14 @@ type LampGeo = {
   post: THREE.BufferGeometry;
   head: THREE.BufferGeometry;
   pool: THREE.BufferGeometry;
+  streak: THREE.BufferGeometry;
 };
 
 type LampMats = {
   post: THREE.MeshLambertMaterial;
   head: THREE.MeshBasicMaterial;
   pool: THREE.MeshBasicMaterial;
+  streak: THREE.ShaderMaterial;
 };
 
 function LampSector({
@@ -173,16 +182,19 @@ function LampSector({
   geo,
   materials,
   radii,
+  wet,
 }: {
   indices: number[];
   lamps: { x: number; y: number }[];
   geo: LampGeo;
   materials: LampMats;
   radii: { post: number; head: number; pool: number };
+  wet: boolean;
 }) {
   const posts = useRef<THREE.InstancedMesh>(null);
   const heads = useRef<THREE.InstancedMesh>(null);
   const pools = useRef<THREE.InstancedMesh>(null);
+  const streaks = useRef<THREE.InstancedMesh>(null);
 
   useLayoutEffect(() => {
     const m = new THREE.Matrix4();
@@ -195,14 +207,17 @@ function LampSector({
         m.copy(flat).setPosition(l.x, 0.45, -l.y);
         pools.current.setMatrixAt(instIdx, m);
       }
+      streaks.current?.setMatrixAt(instIdx, m.makeTranslation(l.x, 0, -l.y));
     });
-    for (const r of [posts, heads, pools]) {
+    for (const r of [posts, heads, pools, streaks]) {
       if (r.current) r.current.instanceMatrix.needsUpdate = true;
     }
     if (posts.current) fitInstancedBounds(posts.current, radii.post);
     if (heads.current) fitInstancedBounds(heads.current, radii.head);
     if (pools.current) fitInstancedBounds(pools.current, radii.pool);
-  }, [indices, lamps, radii]);
+    // la trainee tourne avec la camera : sa borne est sa longueur entiere
+    if (streaks.current) fitInstancedBounds(streaks.current, STREAK_LEN);
+  }, [indices, lamps, radii, wet]);
 
   const count = indices.length;
   return (
@@ -210,6 +225,9 @@ function LampSector({
       <instancedMesh ref={posts} args={[geo.post, materials.post, count]} frustumCulled />
       <instancedMesh ref={heads} args={[geo.head, materials.head, count]} frustumCulled />
       <instancedMesh ref={pools} args={[geo.pool, materials.pool, count]} frustumCulled />
+      {wet && (
+        <instancedMesh ref={streaks} args={[geo.streak, materials.streak, count]} frustumCulled />
+      )}
     </>
   );
 }
@@ -219,11 +237,14 @@ export function Lamps({
   proj,
   centre,
   graph,
+  wet = false,
 }: {
   ways: Way[];
   proj: Projector;
   centre: { x: number; y: number };
   graph: RoadGraph;
+  /** Chaussee mouillee : les lampadaires s'y refletent en trainees. */
+  wet?: boolean;
 }) {
   const glowTex = useMemo(makeGlowTexture, []);
   const lamps = useMemo(() => placeLamps(ways, proj, centre, graph), [ways, proj, centre, graph]);
@@ -235,6 +256,8 @@ export function Lamps({
       post: new THREE.BoxGeometry(0.22, POST_H, 0.22),
       head: new THREE.BoxGeometry(0.8, 0.18, 0.3),
       pool: new THREE.PlaneGeometry(GLOW_R, GLOW_R),
+      // x en travers de -0,5 a 0,5, y le long de 0 (pied) a 1 (vers la camera)
+      streak: streakGeometry(),
     }),
     [],
   );
@@ -249,6 +272,12 @@ export function Lamps({
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         fog: false,
+      }),
+      streak: streakMaterial({
+        color: new THREE.Color(WARM).multiplyScalar(0.75),
+        length: STREAK_LEN,
+        width: STREAK_W,
+        groundY: STREAK_Y,
       }),
     }),
     [glowTex],
@@ -277,6 +306,7 @@ export function Lamps({
           geo={geo}
           materials={materials}
           radii={radii}
+          wet={wet}
         />
       ))}
     </group>

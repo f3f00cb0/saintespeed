@@ -40,6 +40,7 @@ import { EditorTools } from "./scene/EditorTools";
 import { Hud } from "./ui/Hud";
 import { EditorHud } from "./ui/EditorHud";
 import { Post } from "./scene/Post";
+import { DriveFx } from "./scene/DriveFx";
 import { LEVELS, Quality } from "./lib/quality";
 
 const SKY = 0x0e1526; // fond et brouillard partagent la meme couleur
@@ -83,6 +84,11 @@ export default function App() {
     return null;
   }, [checkpoints, graph]);
   const showBuildings = useStore((s) => s.showBuildings);
+  const look = useStore((s) => s.look);
+  // le HUD s'habille selon le look : les regles CSS lisent body[data-look]
+  useEffect(() => {
+    document.body.dataset.look = look;
+  }, [look]);
   const [stats, setStats] = useState("");
   // Qualite de rendu : part au maximum et ne descend que sur mesure, voir
   // src/lib/quality.ts. Mesure a l'origine de ce reglage : un Intel Iris Xe
@@ -204,7 +210,9 @@ export default function App() {
     else enterEdit();
   }, [enterDrive, enterEdit]);
 
-  useInput(onReset, onToggleBuildings, onToggleEdit, !editing);
+  const onToggleLook = useCallback(() => useStore.getState().toggleLook(), []);
+
+  useInput(onReset, onToggleBuildings, onToggleEdit, !editing, onToggleLook);
 
   const ready = phase === "ready" && !!graph;
 
@@ -234,13 +242,21 @@ export default function App() {
             {/* le decor passe avant les routes : les surfaces sont sous la
                 chaussee, qui doit rester lisible par dessus une place */}
             {features && <Ground areas={features.areas} paths={features.paths} />}
-            <Roads ways={ways} proj={graph!.proj} />
+            <Roads ways={ways} proj={graph!.proj} wet={look === "cine"} />
             {features && <Tram lines={features.tram} />}
             {features && <Trees trees={features.trees} />}
             {features && <Fountains points={features.fountains} />}
             {/* la ceinture d'un jardin est ce qui le separe d'un parc de loin */}
             {features && <Fences fences={features.fences} />}
-            {centre && <Lamps ways={ways} proj={graph!.proj} centre={centre} graph={graph!} />}
+            {centre && (
+              <Lamps
+                ways={ways}
+                proj={graph!.proj}
+                centre={centre}
+                graph={graph!}
+                wet={look === "cine"}
+              />
+            )}
             {/* le trottoir se pose une fois l'index des murs la : c'est lui qui
                 borne sa largeur sur la facade reelle */}
             {/* les passages pietons se posent dans le trou que les trottoirs
@@ -274,9 +290,10 @@ export default function App() {
             {editing && <EditorTools graph={graph!} />}
             <RemoteCars />
             {!editing && <Car graph={graph!} />}
+            {!editing && <DriveFx />}
             {editing ? <EditorCamera /> : <ChaseCamera walls={walls} />}
             <NetSync />
-            <Post level={level} />
+            <Post level={level} look={look} />
           </>
         )}
       </Canvas>
@@ -289,10 +306,16 @@ export default function App() {
       )}
 
       {phase === "loading" && (
-        <div className="overlay">
-          <h1>
-            Sain<b>té</b>
-          </h1>
+        <div className="overlay loading">
+          <div className="title">
+            <h1>
+              Sain<b>té</b>
+            </h1>
+            <span className="sub">speed</span>
+          </div>
+          <div className="loadbar">
+            <i />
+          </div>
           <p>chargement du réseau routier…</p>
         </div>
       )}

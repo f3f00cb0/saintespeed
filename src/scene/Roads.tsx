@@ -245,7 +245,33 @@ function buildRibbons(ways: Way[], proj: Projector): Layer[] {
   return out;
 }
 
-export function Roads({ ways, proj }: { ways: Way[]; proj: Projector }) {
+// Bitume mouille (look cine) : plus sombre, et un voile de ciel qui monte en
+// incidence rasante, comme sur une chaussee apres la pluie. Un uniforme partage
+// par toutes les couches, donc basculer de look ne recompile rien.
+const wet = { value: 0 };
+
+function wetShader(shader: THREE.WebGLProgramParametersWithUniforms) {
+  shader.uniforms.wet = wet;
+  shader.vertexShader = shader.vertexShader
+    .replace("void main() {", "varying vec3 vWetPos;\nvoid main() {")
+    .replace(
+      "#include <project_vertex>",
+      "#include <project_vertex>\nvWetPos = (modelMatrix * vec4(transformed, 1.0)).xyz;",
+    );
+  shader.fragmentShader = shader.fragmentShader
+    .replace("void main() {", "uniform float wet;\nvarying vec3 vWetPos;\nvoid main() {")
+    .replace(
+      "#include <opaque_fragment>",
+      `float wetCos = clamp(normalize(cameraPosition - vWetPos).y, 0.0, 1.0);
+      float wetFres = pow(1.0 - wetCos, 4.0);
+      outgoingLight *= 1.0 - 0.2 * wet;
+      outgoingLight += wet * wetFres * vec3(0.09, 0.11, 0.17);
+      #include <opaque_fragment>`,
+    );
+}
+
+export function Roads({ ways, proj, wet: isWet = false }: { ways: Way[]; proj: Projector; wet?: boolean }) {
+  wet.value = isWet ? 1 : 0;
   const asphaltMap = useMemo(makeAsphaltTexture, []);
   const layers = useMemo(() => {
     const l = buildRibbons(ways, proj);
@@ -273,6 +299,7 @@ export function Roads({ ways, proj }: { ways: Way[]; proj: Projector }) {
             color={l.color}
             map={l.textured ? asphaltMap : undefined}
             side={THREE.DoubleSide}
+            onBeforeCompile={l.textured ? wetShader : undefined}
           />
         </mesh>
       ))}

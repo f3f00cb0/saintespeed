@@ -61,7 +61,10 @@ export function Headlights() {
       // a plat sur la chaussee, decale vers l'avant de la voiture.
       // Le plan est cree en X = longueur et Y = largeur, puis bascule a plat :
       // Y devient Z, donc l'axe U de la texture suit bien l'avant du vehicule.
-      position={[LENGTH / 2 + 1.6, -0.31, 0]}
+      // 0,47 m dans le monde (la voiture est posee a 0,35) : au dessus de la
+      // plus haute couche de chaussee (0,36 m, plus les marquages), sinon un
+      // boulevard avalait le faisceau
+      position={[LENGTH / 2 + 1.6, 0.12, 0]}
       rotation={[-Math.PI / 2, 0, 0]}
     >
       <planeGeometry args={[LENGTH, WIDTH]} />

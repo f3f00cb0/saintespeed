@@ -33,6 +33,7 @@ Si le fichier manque, l'appli retombe sur un appel Overpass au runtime.
 | `espace` | frein à main |
 | `R` | replacer la voiture au dernier checkpoint |
 | `B` | afficher ou masquer les bâtiments |
+| `V` | changer de look : ciné ou graphique |
 
 Manette (mapping standard Xbox / DualSense) :
 
@@ -44,6 +45,7 @@ Manette (mapping standard Xbox / DualSense) :
 | `X` / `RB` | frein à main |
 | `Y` / `△` | replacer la voiture au dernier checkpoint |
 | `Select` / `Share` | afficher ou masquer les bâtiments |
+| `LB` / `L1` | changer de look |
 
 Le chrono démarre au premier coup d'accélérateur. Le clavier est mappé sur
 `event.code`, donc AZERTY et QWERTY marchent tous les deux.
@@ -204,6 +206,68 @@ toutes les deux secondes est pire qu'un cran de qualité en moins. Le niveau se
 réévalue au rechargement. La politique est pure (`src/lib/quality.ts`) et
 vérifiée dans Node : descente sur régime lent, aucune descente sur un hoquet de
 streaming isolé (la médiane l'absorbe), jamais de remontée.
+
+## Deux looks : la nuit ciné et la nuit dessinée
+
+La même ville se regarde de deux façons, basculées à chaud avec `V` (`LB` à la
+manette). Le choix est mémorisé dans le navigateur, et `?look=graphique` dans
+l'URL le force.
+
+- **Ciné.** La chaîne photographique décrite ci-dessus, plus la **chaussée
+  mouillée** : chaque lampadaire pose au sol une traînée qui part de son pied et
+  file vers la caméra, ce que fait le reflet d'une source haute sur un bitume
+  mouillé. Pas de passe de réflexion : l'orientation est calculée dans le vertex
+  shader, soit un maillage instancié de plus par secteur et zéro mise à jour CPU.
+  Les feux des voitures s'y reflètent de la même façon (rouge qui suit le
+  freinage, phares seulement du côté où ils éclairent), et le bitume lui-même
+  s'assombrit et prend un voile de ciel en incidence rasante.
+- **Graphique.** Une seule passe après le tone mapping. Les contours sortent du
+  tampon de profondeur, sans passe de normales : on prend le laplacien de
+  l'**inverse** de la distance, qui est nul sur tout plan (façade, toit,
+  chaussée) et ne s'allume que sur les plis et les silhouettes. La lumière est
+  quantifiée en aplats sur la racine de la luminance, en gardant la teinte : la
+  palette des façades survit au dessin. Le grain est coupé, il salirait les
+  aplats, et la passe de dessin prend sa place dans le budget.
+
+Un correctif accompagne le look graphique : sous three 0.169, le composer de
+postprocessing 6.39 clonait ses trois textures de profondeur sur la **même image
+GPU**, la copie de profondeur échouait à chaque frame et tout effet de
+profondeur lisait un tampon vide. Chacune reçoit maintenant sa propre source
+(`src/scene/GraphicEffect.ts`).
+
+**Les fenêtres** ne sont plus un seul tungstène. Les teintes chaudes de
+l'archétype restent la majorité, mais une baie allumée sur cinq environ est une
+LED blanche, le bleu d'une télé ou un rideau coloré, et une sur cinq a un store
+à demi baissé dont les lames laissent filtrer un peu de lumière. Le socle
+commerçant passe de 3 à 8 travées avec un décalage par bâtiment, donc deux
+commerces voisins n'ont plus la même devanture, et le bandeau porte une
+enseigne une travée sur deux : néon à lettres, caisson lumineux, ou croix
+verte de pharmacie. La séquence des enseignes est fixée à la main : sur huit
+travées, un tirage au hasard ne sortait aucune pharmacie.
+
+**Les retours de conduite.** La physique arcade ne modélise pas le glissement,
+on le déduit donc de ce que fait le pilote : frein à main lancé, gros freinage
+à vitesse, braquage fort au-dessus de 80 km/h, plein gaz presque à l'arrêt.
+Cette glisse laisse des traces de pneus (un anneau de 1 800 segments qui écrase
+les plus vieux) et de la fumée (un pool de 160 bouffées), sans aucune
+allocation par frame. Au-dessus de 90 km/h, le look ciné ajoute un flou radial
+depuis le point de fuite, et le look graphique des lignes de vitesse de manga.
+Le flou est une convolution, donc une passe à lui : il saute à la première
+descente de qualité, avec le MSAA.
+
+**Le HUD** s'habille selon le look (`body[data-look]`). Le compteur est un arc
+en bas au centre, avec le nom de la rue dessous ; une rangée de plots en haut
+montre la progression du tour ; l'aide des touches s'efface pendant la course.
+En ciné, panneaux fins sur verre fumé ; en graphique, cases de BD crème
+cernées d'encre, italiques et penchées.
+
+**La voiture** est commune aux deux looks. Elle reste procédurale : la caisse et
+le vitrage sont des profils latéraux extrudés et chanfreinés, avec les passages
+de roue creusés dans le profil. Les roues tournent avec la vitesse et les roues
+avant braquent. Le vernis et le vitrage reflètent une petite carte
+d'environnement de nuit, peinte une fois puis préfiltrée (halo urbain, bandes
+de lampadaires), et réservée aux matériaux de la voiture. Une ombre de contact
+la pose sur la chaussée.
 
 ## Les archétypes de façade
 
@@ -1232,7 +1296,7 @@ src/lib/quality.ts      niveaux de rendu et descente sur frame médiane mesurée
 src/scene/              rendu three.js (routes, sols, bâtiments, arbres, tram,
                         voiture, portiques, caméra)
 src/state/store.ts      zustand
-src/ui/Hud.tsx          chrono, compteur, boussole checkpoint
+src/ui/Hud.tsx          chrono, compteur en arc, plots de tour, boussole checkpoint
 ```
 
 ## Notes techniques

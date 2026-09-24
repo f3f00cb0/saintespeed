@@ -3,6 +3,7 @@ import { useStore } from "../state/store";
 import { onPeers, peerListKey, peers } from "../lib/peers";
 import { countdownLeft } from "../lib/session";
 import { launchRace } from "../lib/net";
+import { LOOK_NAMES } from "../lib/look";
 
 function fmt(t: number) {
   const m = Math.floor(t / 60);
@@ -13,6 +14,72 @@ function fmt(t: number) {
 
 function hex(n: number) {
   return "#" + n.toString(16).padStart(6, "0");
+}
+
+// Compteur en arc : 270 degres, l'ouverture en bas. L'arc plein est un seul
+// trait pointille (stroke-dasharray), rien a recalculer que sa longueur.
+const GAUGE_MAX = 200;
+const GAUGE_R = 52;
+const GAUGE_C = 2 * Math.PI * GAUGE_R;
+const GAUGE_ARC = 0.75 * GAUGE_C;
+
+function Gauge({ speed, road, offroad }: { speed: number; road: string; offroad: boolean }) {
+  const frac = Math.min(1, speed / GAUGE_MAX);
+  const ticks = [];
+  for (let k = 0; k <= 10; k++) {
+    const a = ((135 + k * 27) * Math.PI) / 180;
+    const r0 = k % 5 === 0 ? 40 : 44;
+    ticks.push(
+      <line
+        key={k}
+        x1={Math.cos(a) * r0}
+        y1={Math.sin(a) * r0}
+        x2={Math.cos(a) * 47}
+        y2={Math.sin(a) * 47}
+        className={k >= 9 ? "tick red" : "tick"}
+      />,
+    );
+  }
+  return (
+    <div className="hud bc">
+      <div className="gauge">
+        <svg viewBox="-60 -60 120 120">
+          <circle r={GAUGE_R} className="track" strokeDasharray={`${GAUGE_ARC} ${GAUGE_C}`} transform="rotate(135)" />
+          <circle
+            r={GAUGE_R}
+            className={"halo" + (frac > 0.85 ? " hot" : "")}
+            strokeDasharray={`${GAUGE_ARC * frac} ${GAUGE_C}`}
+            transform="rotate(135)"
+          />
+          <circle
+            r={GAUGE_R}
+            className={"fill" + (frac > 0.85 ? " hot" : "")}
+            strokeDasharray={`${GAUGE_ARC * frac} ${GAUGE_C}`}
+            transform="rotate(135)"
+          />
+          {ticks}
+        </svg>
+        <div className="gauge-n">{speed}</div>
+        <div className="gauge-u">km/h</div>
+      </div>
+      <div className={"road" + (offroad ? " off" : "")}>{offroad ? "hors piste" : road || "—"}</div>
+    </div>
+  );
+}
+
+// Progression du tour : un plot par checkpoint, l'arrivee en dernier.
+function Pips({ count, next, running }: { count: number; next: number; running: boolean }) {
+  if (count < 2) return null;
+  const pips = [];
+  for (let i = 1; i <= count; i++) {
+    const id = i % count; // l'arrivee (0) ferme la liste
+    const passed = running && (next === 0 ? id !== 0 : id !== 0 && id < next);
+    const current = id === next;
+    pips.push(
+      <span key={i} className={"pip" + (passed ? " done" : "") + (current ? " cur" : "") + (id === 0 ? " fin" : "")} />,
+    );
+  }
+  return <div className="hud tc pips">{pips}</div>;
 }
 
 function Countdown({ gen }: { gen: number }) {
@@ -43,6 +110,7 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
   const netStatus = useStore((s) => s.netStatus);
   const netCount = useStore((s) => s.netCount);
   const goGen = useStore((s) => s.goGen);
+  const look = useStore((s) => s.look);
   const peerKey = useSyncExternalStore(onPeers, peerListKey, peerListKey);
   const [tick, setTick] = useState(0);
 
@@ -98,15 +166,12 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
       </div>
 
       <div className="hud tr">
-        <div className="speedo">
-          <span className="n">{speed}</span>
-          <span className="u">km/h</span>
-        </div>
         <div className="fps">{Math.round(tele.fps)} fps</div>
-        <div className={"road" + (tele.offroad ? " off" : "")}>
-          {tele.offroad ? "HORS PISTE" : tele.roadName || tele.roadType || "—"}
-        </div>
       </div>
+
+      <Pips count={checkpoints.length} next={nextCp} running={running} />
+
+      <Gauge speed={speed} road={tele.roadName || tele.roadType} offroad={tele.offroad} />
 
       {cp && (
         <div className="hud br">
@@ -119,7 +184,7 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
             </svg>
             <div className="cpinfo">
               <div className="lbl">
-                checkpoint {nextCp === 0 ? "arrivée" : `${nextCp}/${checkpoints.length - 1}`}
+                {nextCp === 0 ? "" : "checkpoint "} {nextCp === 0 ? "arrivée" : `${nextCp}/${checkpoints.length - 1}`}
               </div>
               <div className="name">{cp.label}</div>
               <div className="dist">
@@ -133,15 +198,16 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
       )}
 
       <div className="hud bl">
-        <div className="keys">
+        {/* l'aide s'efface pendant la course : le decor a besoin de la place */}
+        <div className={"keys" + (running ? " quiet" : "")}>
           <b>Z/↑</b> accélérer · <b>S/↓</b> freiner · <b>Q D</b> tourner · <b>espace</b> frein à main ·{" "}
-          <b>R</b> replacer · <b>B</b> bâtiments ·{" "}
+          <b>R</b> replacer · <b>B</b> bâtiments · <b>V</b> look {LOOK_NAMES[look]} ·{" "}
           <button type="button" className="link" onClick={onEdit}>
             E éditeur
           </button>
           <br />
           manette : <b>RT</b> accélérer · <b>LT</b> freiner · <b>stick</b> tourner · <b>X</b> frein à main ·{" "}
-          <b>Y</b> replacer · <b>Select</b> bâtiments
+          <b>Y</b> replacer · <b>Select</b> bâtiments · <b>LB</b> look
         </div>
         <div className="attrib">
           données © contributeurs OpenStreetMap, ODbL · {source}
