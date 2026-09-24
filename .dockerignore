@@ -24,3 +24,6 @@ sainte-reseau.html
 # committe : rien de tout ca n'entre dans le bundle.
 reference
 export.geojson
+
+# Cache brut de la BD TOPO, jamais dans le build.
+data

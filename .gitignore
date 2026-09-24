@@ -24,3 +24,8 @@ reference/field
 # mais le manifeste est versionne : il porte la position, le cap, la focale et
 # l'ecart au poste calcule, c'est-a-dire tout ce qui se raisonne sans l'image.
 reference/terrain/*.jpg
+
+# Telechargement brut de la BD TOPO (`npm run fetch-ign`) : plusieurs dizaines de
+# Mo, retelechargeables. Seule la jointure, dans public/sainte-buildings.json,
+# est versionnee.
+data/

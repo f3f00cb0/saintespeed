@@ -16,6 +16,12 @@
 // bande ajoutee a exactement la meme distribution que l'ancienne emprise
 // (p25 1, mediane 3, p75 4, p90 6), la table tient donc telle quelle et les
 // hauteurs sont inchangees au chiffre pres.
+//
+// Tout ca n'est plus que le dernier recours. `npm run fetch-ign` joint la BD
+// TOPO de l'IGN aux emprises (scripts/ign.mjs) : hauteur mesuree a la
+// gouttiere, hauteur de toiture, matiere des murs et du toit, annee. Quand
+// elle est la, c'est elle qui fait la silhouette ; la table ci-dessous ne
+// couvre plus que les emprises que la jointure n'a pas trouvees.
 
 import type { Projector } from "./project";
 import { archetypeFor, hasShopFront, isUnlit, LANDMARKS, Archetype, type Landmark } from "./archetypes";
@@ -34,7 +40,34 @@ export type Building = {
   name?: string;
   zone?: string; // "i" si dans un landuse industriel, calcule a la generation
   shop?: number; // masque commerce : 1 POI, 2 bord d'axe, 4 zone retail
+  ign?: Ign; // BD TOPO, si la jointure l'a trouve
 };
+
+/** Ce que la BD TOPO sait d'une emprise (scripts/ign.mjs). */
+export type Ign = {
+  /** Hauteur mesuree du sol a la gouttiere, en metres. */
+  height?: number;
+  /** Etages, fichiers fonciers. */
+  floors?: number;
+  /** Hauteur de la toiture elle-meme (faitage moins gouttiere), en metres. */
+  roofRise?: number;
+  /** Annee de construction. */
+  year?: number;
+  /** Murs, code foncier : 1 pierre, 2 meuliere, 3 beton, 4 briques, 5 agglomere, 6 bois, 9 autres. */
+  walls?: number;
+  /** Toiture, code foncier : 1 tuiles, 2 ardoises, 3 zinc alu, 4 beton, 9 autres. */
+  roof?: number;
+  /** Usage : r residentiel, c commercial, i industriel, g religieux, s sportif, x agricole, a annexe. */
+  usage?: string;
+};
+
+/** Codes fonciers des toitures, tels que la BD TOPO les sert. */
+export const enum Toit {
+  Tuile = 1,
+  Ardoise = 2,
+  Zinc = 3,
+  Beton = 4,
+}
 
 export type FlatBuilding = {
   id: number;
@@ -49,8 +82,14 @@ export type FlatBuilding = {
   shopFront: boolean;
   /** Couleur OSM explicite, si le batiment en porte une. */
   colour?: string;
-  /** Toit en pente : archetype, ou roof:shape OSM quand il est tague. */
+  /** Toit en pente : roof:shape OSM, sinon la toiture IGN, sinon l'archetype. */
   sloped: boolean;
+  /** Hauteur de la pente, mesuree par l'IGN quand elle est connue. */
+  roofRise?: number;
+  /** Teinte de toiture tiree de la matiere IGN (tuile, ardoise, zinc). */
+  roofColour?: number;
+  /** Annee de construction, BD TOPO : guide le choix de variante de facade. */
+  year?: number;
   /** Masse sombre sans fenetres allumees : clochers, chevalements. */
   unlit: boolean;
   /** Reglage bespoke si le batiment est un repere pose a la main. */
@@ -63,25 +102,42 @@ export type FlatBuilding = {
 
 export const FLOOR = 3.1; // hauteur d'etage retenue
 
+/** Un batiment du JSON compact (scripts/fetch-osm.mjs, scripts/ign.mjs). */
+export function fromCompact(b: any): Building {
+  const out: Building = {
+    id: b.i,
+    ring: b.g,
+    levels: b.l,
+    height: b.h,
+    kind: b.k,
+    material: b.m,
+    colour: b.c,
+    roofShape: b.rs,
+    name: b.n,
+    zone: b.z,
+    shop: b.s,
+  };
+  if (b.ih !== undefined || b.il !== undefined || b.im !== undefined || b.it !== undefined || b.iy !== undefined) {
+    out.ign = {
+      height: b.ih,
+      floors: b.il,
+      roofRise: b.ir,
+      year: b.iy,
+      walls: b.im,
+      roof: b.it,
+      usage: b.iu,
+    };
+  }
+  return out;
+}
+
 export async function loadBuildings(): Promise<Building[]> {
   try {
     const res = await fetch("/sainte-buildings.json");
     if (!res.ok) return [];
     const data = await res.json();
     if (!Array.isArray(data?.buildings)) return [];
-    return data.buildings.map((b: any) => ({
-      id: b.i,
-      ring: b.g,
-      levels: b.l,
-      height: b.h,
-      kind: b.k,
-      material: b.m,
-      colour: b.c,
-      roofShape: b.rs,
-      name: b.n,
-      zone: b.z,
-      shop: b.s,
-    }));
+    return data.buildings.map(fromCompact);
   } catch (err) {
     console.warn("batiments indisponibles", err);
     return [];
@@ -341,6 +397,36 @@ function signedArea(ring: { x: number; y: number }[]): number {
   return a / 2;
 }
 
+// Teintes de toiture par matiere IGN, en albedo de base comme les palettes
+// d'archetypes (la nuit les refroidit). La tuile est celle qui compte : vue du
+// Cret de Roch ou de la colline des Peres, Saint-Etienne est une mer de tuile
+// rouge-brun trouee de zinc au centre, et c'est cette alternance, pas une
+// teinte moyenne, qui fait reconnaitre la ville d'en haut.
+const ROOF_TINTS: Partial<Record<Toit, number[]>> = {
+  [Toit.Tuile]: [0x6e4535, 0x7a4c3a, 0x634034],
+  [Toit.Ardoise]: [0x33373d, 0x3a3e45],
+  [Toit.Zinc]: [0x4a4f55, 0x3f4449],
+};
+
+/** Toiture plus basse que ca : un toit terrasse avec son acrotere, pas une pente. */
+const MIN_RISE = 0.8;
+/** Au dela, la pente est reelle mais ecraserait la facade en jeu. */
+const MAX_RISE = 7;
+
+function slopeOf(b: Building, archetypeSloped: boolean): { sloped: boolean; rise?: number } {
+  const rs = b.roofShape;
+  // roof:shape, tague a la main, reste le signal le plus sur
+  if (rs) return { sloped: !/^(flat|skillion)$/.test(rs) };
+  const ign = b.ign;
+  if (ign?.roofRise !== undefined) {
+    if (ign.roofRise < MIN_RISE) return { sloped: false };
+    return { sloped: true, rise: Math.min(MAX_RISE, ign.roofRise) };
+  }
+  if (ign?.roof === Toit.Beton) return { sloped: false };
+  if (ign?.roof === Toit.Tuile || ign?.roof === Toit.Ardoise) return { sloped: true };
+  return { sloped: archetypeSloped };
+}
+
 export function prepareBuildings(raw: Building[], proj: Projector): FlatBuilding[] {
   const out: FlatBuilding[] = [];
   const centre = proj.project(CITY_CENTRE.lon, CITY_CENTRE.lat);
@@ -371,8 +457,13 @@ export function prepareBuildings(raw: Building[], proj: Projector): FlatBuilding
     const landmark = LANDMARKS.get(b.id);
     // La hauteur mesuree d'un monument prime sur l'inference : la table
     // inferLevels est calee sur du logement et ecraserait une cathedrale.
-    let height =
-      landmark?.height ?? b.height ?? (b.levels ?? inferLevels(b.id, area, dist)) * FLOOR;
+    // Ordre des sources, de la plus fiable a la moins sure : repere mesure a la
+    // main, "height" OSM (rarissime mais mesure), hauteur IGN mesuree, niveaux
+    // OSM, etages fonciers IGN, et enfin l'inference.
+    const ign = b.ign;
+    const levels = b.levels ?? ign?.floors;
+    const measured = landmark?.height ?? b.height ?? ign?.height;
+    let height = measured ?? (levels ?? inferLevels(b.id, area, dist)) * FLOOR;
 
     // Les niveaux rendus servent a la cascade d'archetypes. Un batiment tague
     // "height" sans "levels" doit quand meme peser dans la decision, on le
@@ -381,13 +472,16 @@ export function prepareBuildings(raw: Building[], proj: Projector): FlatBuilding
     const input = {
       id: b.id,
       kind: b.kind,
-      levels: b.levels,
+      levels,
       material: b.material,
       renderedLevels,
       area,
       dist,
       zone: b.zone,
       shop: b.shop,
+      walls: ign?.walls,
+      year: ign?.year,
+      usage: ign?.usage,
     };
 
     const archetype = landmark ? landmark.archetype : archetypeFor(input);
@@ -408,7 +502,7 @@ export function prepareBuildings(raw: Building[], proj: Projector): FlatBuilding
     // culte sortaient a la hauteur que la table inferLevels donne a du logement
     // de meme emprise, soit 9 m pour une eglise de 1 500 m2. Un "height" tague
     // en metres reste prioritaire, il est mesure.
-    if (family === Family.Culte && landmark?.height === undefined && b.height === undefined) {
+    if (family === Family.Culte && measured === undefined) {
       height = culteHeight(area);
     }
     if (family !== Family.None) lazyFrame().height = height;
@@ -417,14 +511,14 @@ export function prepareBuildings(raw: Building[], proj: Projector): FlatBuilding
     // prime sur la silhouette deduite de l'archetype. Les familles qui posent
     // leur propre couverture (nef a deux pentes, sheds) coupent la coiffe
     // generique, sinon deux toits se superposent.
-    const rs = b.roofShape;
+    // La toiture IGN vient ensuite : sa hauteur de toit mesuree dit a la fois
+    // si le toit est en pente et de combien.
     const covered = family === Family.Culte || family === Family.Halle;
-    const sloped =
-      covered
-        ? false
-        : rs
-          ? !/^(flat|skillion)$/.test(rs)
-          : archetype === Archetype.Pierre || archetype === Archetype.Faubourg;
+    const slope = covered
+      ? { sloped: false }
+      : slopeOf(b, archetype === Archetype.Pierre || archetype === Archetype.Faubourg);
+    const tints = ign?.roof !== undefined ? ROOF_TINTS[ign.roof as Toit] : undefined;
+    const roofColour = tints ? tints[Math.floor(rand01(b.id * 31 + 7) * tints.length) % tints.length] : undefined;
 
     out.push({
       id: b.id,
@@ -436,7 +530,10 @@ export function prepareBuildings(raw: Building[], proj: Projector): FlatBuilding
       archetype,
       shopFront: hasShopFront(input),
       colour: b.colour,
-      sloped,
+      sloped: slope.sloped,
+      roofRise: slope.rise,
+      roofColour,
+      year: ign?.year,
       // Un lieu de culte tague building=yes (mosquees, temples) n'est pas vu
       // par isUnlit, qui ne connait que le tag de batiment. La famille, elle,
       // le sait.

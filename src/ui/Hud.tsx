@@ -100,6 +100,7 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
   const checkpoints = useStore((s) => s.checkpoints);
   const running = useStore((s) => s.running);
   const source = useStore((s) => s.source);
+  const ign = useStore((s) => s.ign);
   const netStatus = useStore((s) => s.netStatus);
   const netCount = useStore((s) => s.netCount);
   const goGen = useStore((s) => s.goGen);
@@ -202,7 +203,8 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
           <b>Y</b> replacer · <b>Select</b> bâtiments
         </div>
         <div className="attrib">
-          données © contributeurs OpenStreetMap, ODbL · {source} · relief SRTM, Copernicus EU-DEM
+          données © contributeurs OpenStreetMap, ODbL · {source}
+          {ign && " · bâti IGN BD TOPO, Licence Ouverte"} · relief SRTM, Copernicus EU-DEM
         </div>
       </div>
 

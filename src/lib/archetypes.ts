@@ -91,7 +91,9 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
     // creme : clusters dominants #918f8c / #73706f sur l'Hotel de Ville et les
     // Nouvelles Galeries (reference/NOTES.md). Le jaune en moins, elle reste
     // distincte du faubourg, maintenant lui aussi rabattu vers le gris.
-    wall: [0xd6d3ca, 0xc2bfb6, 0xe0ddd4],
+    // + deux nuances relevees a cote de la mediane : une pierre plus chaude
+    // (cours Fauriel au couchant) et une plus grise (facades encrassees)
+    wall: [0xd6d3ca, 0xc2bfb6, 0xe0ddd4, 0xd4cab4, 0xbab7b0],
     roof: 0x3a3d42, // zinc, mesure a #2e2e2d sur les photos
     sloped: true,
     litRatio: 0.35,
@@ -113,7 +115,7 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
     // La brique de la Manufacture mesuree sur photos est plus sombre et plus
     // brune que vive : clusters #4c3529 et #684d33. On garde un rouge soutenu
     // pour la lisibilite de nuit, mais la variante brune ancre la palette.
-    wall: [0x8a4636, 0x6e3a2c, 0x9a5242],
+    wall: [0x8a4636, 0x6e3a2c, 0x9a5242, 0x7d4230, 0x94604a],
     roof: 0x2e2a28,
     sloped: false,
     litRatio: 0.12,
@@ -135,7 +137,7 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
     // Le beton mesure sur les panoramas est un gris froid (#b4b4b5, #babcc2),
     // pas le gris chaud d'avant : sous la lumiere bleue de nuit, le chaud
     // convergeait vers le faubourg et les deux quartiers n'en faisaient qu'un.
-    wall: [0x9a9ca0, 0x8e9094, 0xa6a8ac],
+    wall: [0x9a9ca0, 0x8e9094, 0xa6a8ac, 0xb0aba2, 0x98a2a6],
     roof: 0x2b2c2e,
     sloped: false,
     litRatio: 0.5, // residentiel tres habite
@@ -176,7 +178,10 @@ export const STYLES: Record<Archetype, ArchetypeStyle> = {
     // peine chauds (#908676, #8e8e8e), loin de l'ocre sature d'avant. On garde
     // une pointe de chaleur et on reste plus sombre que la pierre : c'est cet
     // ecart la qui les separe maintenant, plus la saturation.
-    wall: [0xbcae92, 0xaa9d84, 0xc8bb9f],
+    // Une rue de faubourg n'est pas d'un seul enduit : on y croise du sable,
+    // du rose passe, du gris-vert et du creme. Nuances tenues basses en
+    // saturation, comme les mesures : c'est l'alternance qui compte.
+    wall: [0xbcae92, 0xaa9d84, 0xc8bb9f, 0xc4a898, 0xcbb894, 0xa9ab9c, 0xd2c7b0, 0xb89c8c],
     roof: 0x4a3f38, // tuile assombrie
     sloped: true,
     litRatio: 0.3,
@@ -222,6 +227,12 @@ export type ArchetypeInput = {
   zone?: string;
   /** Masque commerce : 1 POI, 2 bord d'axe, 4 zone retail. */
   shop?: number;
+  /** Murs selon la BD TOPO, code foncier (voir Ign.walls dans buildings.ts). */
+  walls?: number;
+  /** Annee de construction selon la BD TOPO. */
+  year?: number;
+  /** Usage selon la BD TOPO : r c i g s x a. */
+  usage?: string;
 };
 
 // Seuils de centralite. Le coeur pierre est un degrade doux, pas un mur : au
@@ -292,6 +303,49 @@ export function archetypeFor(b: ArchetypeInput): Archetype {
     case "apartments":
       if (b.area >= BARRE_MIN_AREA && b.dist >= BARRE_MIN_DIST) return Archetype.Barre;
       break;
+  }
+
+  // --- 2 bis. BD TOPO : matiere, age et usage reels -----------------------
+  // Placee apres le type OSM, qui dit ce qu'est le batiment (une maison reste
+  // une maison meme en pierre), mais avant toutes les heuristiques de zone et
+  // de centralite : ce sont des mesures, pas des probabilites.
+  //
+  // Les codes de murs sont ceux des fichiers fonciers : 1 pierre, 2 meuliere,
+  // 3 beton, 4 briques, 5 agglomere, 6 bois.
+  //
+  // Sauf en hauteur : la matiere fonciere d'une tour est peu fiable. Mesure a
+  // la premiere jointure, les tours de 13 a 17 etages de 1970-1975 (Le Cervin,
+  // Les Dolomites, Le Brevent) sont codees meuliere ou agglomere, et sortaient
+  // en pierre de centre-ville a 50 m. Au dela de 8 niveaux, ou en hauteur pendant
+  // les Trente Glorieuses, c'est un grand ensemble quelle que soit la matiere.
+  const trenteGlorieuses = b.year !== undefined && b.year >= 1950 && b.year <= 1980;
+  if (b.walls !== undefined || b.year !== undefined) {
+    if (b.renderedLevels >= 8 || (trenteGlorieuses && b.renderedLevels >= 5)) return Archetype.Barre;
+  }
+  switch (b.walls) {
+    case 4:
+      return Archetype.Brique;
+    case 1:
+    case 2:
+      // La pierre d'un immeuble de rapport lit comme le centre ; celle d'une
+      // maison basse de faubourg est enduite et lit comme le tissu ordinaire.
+      return b.renderedLevels >= 3 ? Archetype.Pierre : Archetype.Faubourg;
+    case 3:
+      if (b.renderedLevels >= 5) return Archetype.Barre;
+      if (b.usage === "i") return Archetype.Brique;
+      if (b.usage === "c" && (b.year ?? 0) >= 1985) return Archetype.Moderne;
+      break;
+    case 5:
+    case 6:
+      return Archetype.Faubourg;
+  }
+  if (b.usage === "i" && b.area >= 90) return Archetype.Brique;
+  if (b.year !== undefined) {
+    // Immeubles de rapport d'avant 1914 : l'essentiel du centre et des axes
+    // (Jacquard, Tarentaize, Bellevue), pierre ou pise enduit sous zinc.
+    if (b.year < 1914 && b.renderedLevels >= 3) return Archetype.Pierre;
+    // Tertiaire recent.
+    if (b.year >= 1990 && b.usage === "c" && b.renderedLevels >= 3) return Archetype.Moderne;
   }
 
   // --- 3. zone (jointure spatiale, calculee a la generation) ----------------

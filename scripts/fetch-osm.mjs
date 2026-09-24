@@ -12,6 +12,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { joinIgnFromCache } from "./ign.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = resolve(HERE, "../public");
@@ -1081,6 +1082,11 @@ if (doBuildings) {
     console.log(`    case ${i + 1} : ${els.length} elements, ${fresh} nouveaux, ${elements.length} cumules`);
   }
   const data = buildingsToCompact({ elements });
+  // Les hauteurs IGN tiennent a ces emprises : si le cache BD TOPO existe, on
+  // rejoue la jointure, sinon regenerer OSM les effacerait sans bruit.
+  const ign = joinIgnFromCache(data);
+  if (ign) console.log(`  BD TOPO rejointe depuis le cache : ${ign.joined} batiments, ${ign.height} hauteurs`);
+  else console.log("  pas de cache BD TOPO : npm run fetch-ign pour les vraies hauteurs");
   const body = JSON.stringify(data);
   await writeFile(resolve(PUBLIC, "sainte-buildings.json"), body);
   const pts = data.buildings.reduce((a, b) => a + b.g.length, 0);

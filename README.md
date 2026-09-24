@@ -23,6 +23,14 @@ npm run fetch-osm -- features  # sols, arbres, tram, mobilier
 
 Si le fichier manque, l'appli retombe sur un appel Overpass au runtime.
 
+Les vraies hauteurs, matières et toitures des bâtiments viennent de la BD TOPO
+de l'IGN, jointe aux emprises OSM (voir « Le bâti mesuré : la BD TOPO ») :
+
+```bash
+npm run fetch-ign              # télécharge la BD TOPO puis joint
+npm run fetch-ign -- --cache   # rejoint depuis data/ign-batiments.json, sans réseau
+```
+
 ## Commandes
 
 | touche | effet |
@@ -110,6 +118,68 @@ hypercentre est mesuré à 4 niveaux de médiane et 5 au p75 ; viser la médiane
 donnait un cœur de ville qui lisait bas. Le p75 reste une valeur relevée dans
 OSM. Résultat : médiane 5 niveaux et p90 à 6 dans le cœur, contre 3 en
 périphérie.
+
+## Le bâti mesuré : la BD TOPO
+
+L'inférence ci-dessus donne une ville plausible mais **moyenne** : toutes les
+silhouettes d'une même tranche surface × distance se ressemblent, alors que
+c'est justement la silhouette qu'on reconnaît. Le Manhattan de
+somethingbig.ai/world doit l'essentiel de sa ressemblance à ça : chaque
+bâtiment y porte sa hauteur mesurée, son année, sa classe et son usage, tirés du
+cadastre de la ville. L'équivalent français existe, ouvert et sans clé : la
+**BD TOPO de l'IGN**.
+
+`npm run fetch-ign` télécharge la couche `BDTOPO_V3:batiment` par le WFS de la
+Géoplateforme (`data.geopf.fr`) sur la même emprise que les bâtiments OSM, garde
+le brut dans `data/ign-batiments.json` (hors dépôt), puis pose sur chaque
+emprise OSM, en clés courtes dans `public/sainte-buildings.json` :
+
+| clé | attribut BD TOPO | sert à |
+| --- | --- | --- |
+| `ih` | `hauteur`, du sol à la gouttière | la hauteur de mur, avant toute inférence |
+| `il` | `nombre_d_etages` | à défaut de hauteur |
+| `ir` | `altitude_maximale_toit − altitude_minimale_toit` | pente réelle du toit : plat sous 0,8 m, plafonnée à 7 m |
+| `im` | `materiaux_des_murs` | archétype : briques → brique, pierre → pierre (dès 3 niveaux), béton haut → barre |
+| `it` | `materiaux_de_la_toiture` | teinte du toit : tuile, ardoise, zinc ; béton → toit terrasse |
+| `iy` | année (`date_d_apparition`) | avant 1914 → pierre, 1950-1980 en hauteur → barre |
+| `iu` | `usage_1` | industriel → brique, commercial récent → moderne |
+
+**Mesuré à la première jointure** (57 430 emprises BD TOPO servies sur la
+bbox) : 92,7 % des bâtiments OSM trouvent leur emprise, 89,4 % prennent une
+hauteur mesurée, 43,8 % une matière de murs et de toit, 52,8 % une année. Au
+rendu, le p90 des hauteurs passe de 12,4 à 13,7 m et le p99 de 18,6 à 25,2 m :
+les tours de Montreynaud, Beaulieu et La Métare (50 à 60 m, 17 à 22 étages)
+existent enfin. La pierre passe de 5 % à 16 % des emprises et la pente de toit
+tombe de 92 % à 80 % : ce sont les toits terrasses que l'archétype seul ne
+voyait pas. Là où OSM et l'IGN donnent tous deux une hauteur, l'IGN mesure en
+médiane 1,22 fois `building:levels × 3,1 m` : les étages réels sont plus hauts
+que notre étage type, et le rez-de-chaussée plus encore.
+
+**La matière foncière ne dit rien d'une tour.** Les tours de 13 à 17 étages de
+1970-1975 (Le Cervin, Les Dolomites, Le Brévent) sont codées meulière ou
+aggloméré et sortaient en pierre de centre-ville à 50 m. Au-delà de 8 niveaux,
+ou à partir de 5 niveaux entre 1950 et 1980, la cascade conclut au grand
+ensemble avant de lire la matière.
+
+**La jointure vote sur l'emprise entière**, pas sur le seul centroïde. OSM et le
+cadastre ne découpent pas les bâtiments pareil, et le centroïde d'une emprise en
+U tombe dans la cour. On échantillonne le centre et chaque sommet tiré à 35 %
+vers le centre ; l'emprise BD TOPO qui en recouvre le plus gagne, à condition
+d'en recouvrir au moins 40 %. Une jointure relancée repart de zéro : elle
+n'hérite pas d'anciens attributs qu'aucune emprise ne porte plus.
+
+**L'ordre des sources de hauteur**, du plus fiable au moins sûr : repère mesuré à
+la main (`LANDMARKS`), `height` OSM, hauteur IGN, `building:levels` OSM, étages
+IGN, et l'inférence en dernier. Dans la cascade d'archétypes, l'IGN passe après
+le type OSM (une maison reste une maison, même en pierre) et avant les
+heuristiques de zone et de centralité : ce sont des mesures, pas des
+probabilités.
+
+**Rien ne casse sans elle.** Sans le cache, `fetch-osm` le signale et les
+bâtiments restent sur l'inférence ; avec le cache, `fetch-osm -- buildings`
+rejoue la jointure, donc régénérer OSM n'efface pas les hauteurs. La mention
+« bâti IGN BD TOPO, Licence Ouverte » n'apparaît dans l'UI que si des données
+IGN sont chargées.
 
 ## Streaming par anneaux de distance
 
@@ -470,6 +540,55 @@ l'extérieur, ou abandonnée : **1 531 mâts sur 10 085 tombaient sur le bitume*
 
 Coût mesuré : 871k triangles pour les bâtiments, 243k pour les routes et leurs
 43 301 traits d'axe.
+
+## Vingt-quatre façades, pas cinq
+
+Une texture par archétype donnait cinq façades pour toute la ville, et **74 %
+des bâtiments portaient la même** : l'enduit de faubourg. Deux voisins avaient la
+même fenêtre, le même rythme, et une rue où tout se répète ne ressemble à
+aucune rue. `src/lib/facadeVariants.ts` peint maintenant **24 variantes**,
+réparties dans les cinq archétypes, chacune avec ses propres dimensions de
+hauteur d'étage et de largeur de travée :
+
+| archétype | variantes |
+| --- | --- |
+| pierre | balcon filant, linteau cintré à clef, travées serrées, balconnets en fer forgé, pierre à refends |
+| faubourg | volets verts, volets bruns et rouge basque, volets roulants, encadrements et chaîne d'angle, pavillon, persiennes closes |
+| brique | atelier en arcs à petits carreaux, cité ouvrière, pilastres et corniche en dents d'engrenage, polychrome façon Châteaucreux |
+| barre | loggias, panneaux préfabriqués, allèges de couleur des années 70, fenêtres en bandeau, cage d'escalier éclairée |
+| moderne | mur-rideau éclairé par plateau, bardage, brise-soleil, tôle perforée |
+
+Ce qui fait lire une façade stéphanoise de nuit, et que les variantes peignent :
+**les volets**, battants ou persiennes, ouverts contre le mur ou fermés sur la
+baie avec la lumière qui filtre entre les lames. **Les fenêtres à la
+française**, à deux vantaux et trois carreaux, dont les menuiseries claires se
+voient même éteintes ; sans elles, une vitre éteinte était un trou noir. **Le
+fer forgé**, les linteaux cintrés, les bandeaux d'étage, les coulures sous les
+appuis.
+
+**Le choix est guidé par la donnée**, puis tiré au hash de l'id : un faubourg
+d'un ou deux niveaux tire surtout le pavillon, un immeuble d'avant 1880 les
+travées serrées, une barre de douze niveaux les fenêtres en bandeau, un atelier
+de plus de 400 m² les arcs. Sur toute la ville, aucune variante ne dépasse
+15 %.
+
+**Un seul draw call de murs par tuile**, malgré les 24 textures. Elles sont
+empilées en calques d'un `DataArrayTexture` (512 × 512, 24 Mo avant mipmaps),
+chaque sommet porte son numéro de calque et son gain émissif, et un Lambert
+patché (`makeFacadeMaterial`) lit le bon calque. La lueur des fenêtres passe
+dans l'alpha du calque plutôt que dans une seconde texture ; l'émissif reprend
+la couleur du verre élevée à la puissance 1,7, sinon le tone mapping blanchit
+toutes les fenêtres. Un tableau de textures ne se retourne pas à l'envoi : les
+lignes sont rangées de bas en haut à la main, pour que `v = 1` reste le haut du
+canvas comme partout ailleurs.
+
+Les repères posés à la main (`Landmarks.tsx`) gardent la texture d'archétype
+d'origine : leurs kits sont réglés dessus.
+
+**Le rez-de-chaussée commerçant monte à 4 m**, contre 3,1 m avant. À la hauteur
+d'un étage courant, la vitrine lisait comme un étage de plus ; la jointure IGN
+mesure les vrais étages à 1,22 fois notre étage type, et un rez-de-chaussée de
+commerce plus haut encore.
 
 ## La couche reconnaissance : le caractère du vide
 
@@ -1403,6 +1522,9 @@ la largeur réelle du ruban.
 Données © contributeurs OpenStreetMap, sous [ODbL](https://opendatacommons.org/licenses/odbl/).
 L'attribution est affichée dans l'UI. Pas de tuiles Google, pas de
 photogrammétrie.
+
+Bâti : IGN, BD TOPO, sous [Licence Ouverte Etalab 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence/),
+quand `npm run fetch-ign` a été lancé. L'attribution s'affiche alors dans l'UI.
 
 La ligne de crête du ciel est dérivée des AWS Terrain Tiles (agrégat SRTM,
 EU-DEM et ETOPO). EU-DEM : produit à partir de données et d'informations

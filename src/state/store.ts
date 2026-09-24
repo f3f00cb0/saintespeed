@@ -54,6 +54,8 @@ type Store = {
   ways: Way[];
   checkpoints: Checkpoint[];
   buildings: FlatBuilding[];
+  /** Au moins un batiment porte les mesures BD TOPO : l'IGN est a citer. */
+  ign: boolean;
   walls: WallIndex | null;
   showBuildings: boolean;
   features: FlatFeatures | null;
@@ -83,7 +85,7 @@ type Store = {
   goGen: number;
 
   setLoaded(graph: RoadGraph, ways: Way[], checkpoints: Checkpoint[], source: string, track: Track): void;
-  setBuildings(buildings: FlatBuilding[], walls: WallIndex): void;
+  setBuildings(buildings: FlatBuilding[], walls: WallIndex, ign: boolean): void;
   setFeatures(features: FlatFeatures): void;
   setRail(rail: FlatRail[]): void;
   setVoirie(voirie: Voirie): void;
@@ -120,6 +122,7 @@ export const useStore = create<Store>((set, get) => ({
   ways: [],
   checkpoints: [],
   buildings: [],
+  ign: false,
   walls: null,
   showBuildings: true,
   features: null,
@@ -148,7 +151,7 @@ export const useStore = create<Store>((set, get) => ({
   setLoaded: (graph, ways, checkpoints, source, track) =>
     set({ phase: "ready", graph, ways, checkpoints, source, track }),
 
-  setBuildings: (buildings, walls) => set({ buildings, walls }),
+  setBuildings: (buildings, walls, ign) => set({ buildings, walls, ign }),
 
   setFeatures: (features) => set({ features }),
 
