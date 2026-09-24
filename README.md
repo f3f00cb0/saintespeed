@@ -1239,6 +1239,16 @@ Le trottoir est maintenant construit **en surfaces**, par opérations booléenne
 | zone Z | une bande de chaque côté autorisé, large de la cible de la classe (2,4 m en résidentiel, 4 m en primaire), plus une bande élargie de 5 m qui ne vaut **que près d'une façade** |
 | trottoir S | Z − C − emprises des bâtiments |
 
+La fermeture ne vaut **qu'autour d'un carrefour**. Appliquée partout, elle
+remplissait aussi l'espace entre deux chaussées proches (un terre-plein de 4 m
+devenait de l'asphalte sur toute sa longueur) et le coin en pointe entre deux
+rues qui se rejoignent en angle aigu : la bordure traversait alors l'entrée de
+la rue, et c'est ce qui s'est vu en roulant. Le comblement est donc borné à un
+disque par nœud de carrefour (demi-chaussée + 3,3 m), sauf les petits morceaux
+de moins de 30 m², gardés entiers pour ne pas laisser de triangle vide entre
+deux rubans qui convergent. Au-delà, le coin redevient un îlot de trottoir. Les
+plans (`npm run voirie -- plan`) montrent ces arrondis en rouge.
+
 Les coins se raccordent tout seuls, puisque les bandes de deux rues se
 recouvrent au coin et que l'union les fond. Rien ne chevauche la chaussée, par
 construction. Le trottoir va jusqu'au mur quand le mur est proche, sans inonder
