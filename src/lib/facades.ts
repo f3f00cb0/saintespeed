@@ -61,10 +61,11 @@ export type FacadeCanvas = {
 const LED: [string, string] = ["#eef3f8", "#c4d6ea"];
 const TV: [string, string] = ["#c9d3f5", "#7188e8"];
 const CURTAINS: [string, string][] = [
-  // rabattus : un rideau filtre, il ne brille pas comme un neon
-  ["#f6cdbd", "#d98466"],
-  ["#dcebcf", "#9cc281"],
-  ["#e7d6f0", "#ae8fcc"],
+  // rabattus, et plus encore depuis le dessin : les aplats du rendu remontent
+  // la saturation, et le violet ressortait comme un neon
+  ["#f3d6c8", "#c99a84"],
+  ["#dfe8d6", "#a9b89a"],
+  ["#e6dde8", "#a99cad"],
 ];
 
 function interior(style: ArchetypeStyle, seed: number): [string, string] {

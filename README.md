@@ -281,6 +281,19 @@ italiques et penchées. Le compteur est un arc en bas au centre, avec le nom de
 la rue dessous ; une rangée de plots en haut montre la progression du tour ;
 l'aide des touches s'efface pendant la course.
 
+**Les onomatopées.** Les événements de course s'écrivent à l'écran en grosses
+lettres encrées dans une bulle éclatée : VROOOM au départ, CHECK au passage d'un
+portique, TOUR ou RECORD à la ligne, SKRRRT sur un dérapage franc, ZOOOOM au
+passage des 150 km/h, BONK en sortant de la chaussée. Un petit bus
+(`src/lib/bangs.ts`) reçoit les événements du store et de la scène, avec un
+délai minimal par genre pour qu'un dérapage tenu ne s'écrive pas à chaque
+frame ; l'animation est en CSS.
+
+**Les portiques** sont dessinés : poteaux rayés comme une barrière de chantier,
+banderole à damier qui porte le nom du checkpoint lettré à l'encre, lisible des
+deux côtés. Celui à passer est rouge, sa banderole se dandine et une colonne le
+signale par-dessus les toits.
+
 **La voiture** reste procédurale : la caisse et
 le vitrage sont des profils latéraux extrudés et chanfreinés, avec les passages
 de roue creusés dans le profil. Les roues tournent avec la vitesse et les roues

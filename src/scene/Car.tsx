@@ -6,6 +6,7 @@ import type { RoadGraph } from "../lib/graph";
 import { countdownLeft, session } from "../lib/session";
 import { useStore } from "../state/store";
 import { CarMesh, pulseBrake, useCarLights } from "./CarMesh";
+import { bang } from "../lib/bangs";
 
 const PUSH_INTERVAL = 0.06;
 const LOCAL_COLOR = 0xff5d3b;
@@ -23,6 +24,10 @@ export function Car({ graph }: { graph: RoadGraph }) {
   const acc = useRef(0);
   const lap = useRef(0);
   const frames = useRef(0);
+  // onomatopees : ZOOOM au passage des 150 km/h, rearme sous 120 ; BONK en
+  // sortant de la chaussee a vitesse
+  const zoomArmed = useRef(true);
+  const wasOff = useRef(false);
   const { headMat, tailMat } = useCarLights();
 
   useFrame((_, rawDt) => {
@@ -67,6 +72,14 @@ export function Car({ graph }: { graph: RoadGraph }) {
       body.current.rotation.y = car.heading;
       body.current.rotation.x = -car.steer * Math.min(1, Math.abs(car.speed) / 30) * 0.12;
     }
+
+    const kmh = Math.abs(car.speed) * 3.6;
+    if (zoomArmed.current && kmh > 150) {
+      bang("zoom");
+      zoomArmed.current = false;
+    } else if (kmh < 120) zoomArmed.current = true;
+    if (car.offroad && !wasOff.current && kmh > 40) bang("offroad");
+    wasOff.current = car.offroad;
 
     pulseBrake(tailMat, input.brake > 0 || (input.handbrake && Math.abs(car.speed) > 1), dt);
 

@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { car, input } from "../lib/car";
+import { bang } from "../lib/bangs";
 
 // Retours de conduite : traces de pneus et fumee. La physique est arcade et ne
 // modelise pas le glissement ; on le deduit donc de ce que fait le pilote, ce
@@ -242,6 +243,9 @@ export function DriveFx() {
   // priorite -1 : avant leurs propres useFrame
   useFrame(() => {
     slip.current = slipOf();
+    // un derapage franc s'ecrit a l'ecran ; le demarrage en trombe, non : il a
+    // deja son VROOOM
+    if (slip.current > 0.6 && Math.abs(car.speed) > 12) bang("drift");
   }, -1);
   return (
     <>
