@@ -5,6 +5,7 @@ import type { FlatBuilding, WallIndex } from "../lib/buildings";
 import type { FlatFeatures } from "../lib/features";
 import type { FlatRail, RoadProbe } from "../lib/rail";
 import type { Voirie } from "../lib/voirie";
+import { bang } from "../lib/bangs";
 import type { Checkpoint } from "../lib/race";
 import { makeCheckpoints, snapCheckpoint, trackFromCheckpoints } from "../lib/race";
 import {
@@ -163,7 +164,10 @@ export const useStore = create<Store>((set, get) => ({
 
   setTele: (tele, lapTime) => set({ tele, lapTime }),
 
-  startRace: () => set({ running: true, nextCp: 1, lapTime: 0 }),
+  startRace: () => {
+    bang("go");
+    set({ running: true, nextCp: 1, lapTime: 0 });
+  },
 
   passCheckpoint: () => {
     const { nextCp, checkpoints, lapTime, bestLap, laps, running } = get();
@@ -171,8 +175,10 @@ export const useStore = create<Store>((set, get) => ({
     const last = nextCp === 0; // on repasse la ligne de depart
     if (last) {
       const best = bestLap === null || lapTime < bestLap ? lapTime : bestLap;
+      bang(bestLap !== null && lapTime < bestLap ? "record" : "lap");
       set({ laps: [...laps, lapTime], bestLap: best, lapTime: 0, nextCp: 1 });
     } else {
+      bang("check");
       set({ nextCp: (nextCp + 1) % checkpoints.length });
     }
   },

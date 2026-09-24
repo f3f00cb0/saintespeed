@@ -38,6 +38,7 @@ import { ChaseCamera } from "./scene/Camera";
 import { EditorCamera } from "./scene/EditorCamera";
 import { EditorTools } from "./scene/EditorTools";
 import { Hud } from "./ui/Hud";
+import { Bangs } from "./ui/Bangs";
 import { EditorHud } from "./ui/EditorHud";
 import { Post } from "./scene/Post";
 import { DriveFx } from "./scene/DriveFx";
@@ -286,6 +287,7 @@ export default function App() {
       {ready && (
         <>
           {editing ? <EditorHud onPlay={enterDrive} /> : <Hud onEdit={enterEdit} />}
+          {!editing && <Bangs />}
           <div className="hud stats">{stats}</div>
         </>
       )}
