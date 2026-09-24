@@ -215,6 +215,32 @@ chaussée) et ne s'allume que sur les plis et les silhouettes. La lumière est
 quantifiée en aplats sur la racine de la luminance, en gardant la teinte : la
 palette des façades survit au dessin. Pas de grain, il salirait les aplats.
 
+**Le trait a une épaisseur.** L'écart entre les échantillons de profondeur suit
+la distance du pixel : 2,8 px au premier plan, 1 px au fond (sur une image de
+800 px de haut, rapporté à la résolution réelle). La voiture et les portiques
+proches sont cernés gras, la ville lointaine au trait fin, comme à l'encre.
+
+**La trame.** Dans les ombres, une trame de points à 45 degrés, alignée sur
+l'écran, dont le rayon grandit avec l'obscurité : la signature des comics, et ce
+qui donne de la matière aux grands murs de nuit. Le ciel n'est pas tramé, et
+ses noirs ne sont pas relevés vers le bleu de nuit, sinon la silhouette des
+collines s'y confondrait. Il garde aussi son dégradé lisse : ses écarts de
+teinte sont si faibles que les aplats y tombaient au hasard des facettes.
+
+**Le ciel.** La cuvette stéphanoise se reconnaît à ses collines, pas à un ciel
+générique. La ligne de crête est **mesurée** : `npm run skyline` lance, depuis
+le centre-ville, un rayon tous les 0,5 degré d'azimut dans le relief des AWS
+Terrain Tiles (55 m par pixel, courbure et réfraction retirées) et garde
+l'angle d'élévation maximal en deux bandes, les collines proches (2,5 à 9 km)
+et les massifs lointains (9 à 60 km). Le Pilat, au sud-est, monte à 3,5 degrés ;
+le nord-ouest est presque plat. Le jeu lit le résultat, 7 ko de JSON, sans
+appel réseau. Les angles sont grossis de 1,6 pour la lecture, l'ordre des
+sommets reste le vrai. Les collines proches sont une silhouette presque noire
+semée de lumières de villages, les massifs lointains un plan plus clair
+derrière, chacun cerné d'un trait d'encre, sur un halo urbain resserré contre
+l'horizon. Au-dessus, des étoiles et une lune de BD, volontairement grande,
+posée sur le Pilat. Tout le ciel suit la caméra : il est à l'infini.
+
 Un premier jet proposait à côté un look « ciné » (grain, chaussée mouillée,
 flou de vitesse) basculé à la touche `V`. Il a été retiré : le dessin est le
 style du jeu, tout le temps.
@@ -1263,6 +1289,7 @@ scripts/fetch-osm.mjs   Overpass -> public/sainte.geojson + sainte-buildings.jso
                         + sainte-features.json
 scripts/build-notable.mjs  export.geojson -> src/lib/notable.ts (notabilité)
 scripts/elevation.mjs   élévation d'un repère en JPEG, sans GPU (+ .entry.ts)
+scripts/skyline.mjs     relief AWS Terrain Tiles -> public/sainte-skyline.json
 src/lib/rail.ts         voies ferrées, profil en long du viaduc et rampes
 src/lib/monuments.ts    objets de place et typologies de l'espace public
 src/lib/monumentPoints.ts  GÉNÉRÉ : les 49 objets ponctuels retenus
@@ -1346,3 +1373,7 @@ la largeur réelle du ruban.
 Données © contributeurs OpenStreetMap, sous [ODbL](https://opendatacommons.org/licenses/odbl/).
 L'attribution est affichée dans l'UI. Pas de tuiles Google, pas de
 photogrammétrie.
+
+La ligne de crête du ciel est dérivée des AWS Terrain Tiles (agrégat SRTM,
+EU-DEM et ETOPO). EU-DEM : produit à partir de données et d'informations
+Copernicus financées par l'Union européenne. L'attribution est aussi dans l'UI.
