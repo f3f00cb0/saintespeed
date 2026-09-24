@@ -207,6 +207,39 @@ réévalue au rechargement. La politique est pure (`src/lib/quality.ts`) et
 vérifiée dans Node : descente sur régime lent, aucune descente sur un hoquet de
 streaming isolé (la médiane l'absorbe), jamais de remontée.
 
+## Deux looks : la nuit ciné et la nuit dessinée
+
+La même ville se regarde de deux façons, basculées à chaud avec `V` (`LB` à la
+manette). Le choix est mémorisé dans le navigateur, et `?look=graphique` dans
+l'URL le force.
+
+- **Ciné.** La chaîne photographique décrite ci-dessus, plus la **chaussée
+  mouillée** : chaque lampadaire pose au sol une traînée qui part de son pied et
+  file vers la caméra, ce que fait le reflet d'une source haute sur un bitume
+  mouillé. Pas de passe de réflexion : l'orientation est calculée dans le vertex
+  shader, soit un maillage instancié de plus par secteur et zéro mise à jour CPU.
+- **Graphique.** Une seule passe après le tone mapping. Les contours sortent du
+  tampon de profondeur, sans passe de normales : on prend le laplacien de
+  l'**inverse** de la distance, qui est nul sur tout plan (façade, toit,
+  chaussée) et ne s'allume que sur les plis et les silhouettes. La lumière est
+  quantifiée en aplats sur la racine de la luminance, en gardant la teinte : la
+  palette des façades survit au dessin. Le grain est coupé, il salirait les
+  aplats, et la passe de dessin prend sa place dans le budget.
+
+Un correctif accompagne le look graphique : sous three 0.169, le composer de
+postprocessing 6.39 clonait ses trois textures de profondeur sur la **même image
+GPU**, la copie de profondeur échouait à chaque frame et tout effet de
+profondeur lisait un tampon vide. Chacune reçoit maintenant sa propre source
+(`src/scene/GraphicEffect.ts`).
+
+**La voiture** est commune aux deux looks. Elle reste procédurale : la caisse et
+le vitrage sont des profils latéraux extrudés et chanfreinés, avec les passages
+de roue creusés dans le profil. Les roues tournent avec la vitesse et les roues
+avant braquent. Le vernis et le vitrage reflètent une petite carte
+d'environnement de nuit, peinte une fois puis préfiltrée (halo urbain, bandes
+de lampadaires), et réservée aux matériaux de la voiture. Une ombre de contact
+la pose sur la chaussée.
+
 ## Les archétypes de façade
 
 Cinq strates architecturales stéphanoises, assignées par une cascade de tags OSM

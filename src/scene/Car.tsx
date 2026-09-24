@@ -10,6 +10,8 @@ import { CarMesh, pulseBrake, useCarLights } from "./CarMesh";
 const PUSH_INTERVAL = 0.06;
 const LOCAL_COLOR = 0xff5d3b;
 
+const carMotion = () => car;
+
 function wrap(a: number) {
   while (a > Math.PI) a -= Math.PI * 2;
   while (a < -Math.PI) a += Math.PI * 2;
@@ -91,7 +93,7 @@ export function Car({ graph }: { graph: RoadGraph }) {
 
   return (
     <group ref={body}>
-      <CarMesh color={LOCAL_COLOR} headMat={headMat} tailMat={tailMat} headlights />
+      <CarMesh color={LOCAL_COLOR} headMat={headMat} tailMat={tailMat} headlights motion={carMotion} />
     </group>
   );
 }
