@@ -51,6 +51,35 @@ export type FacadeCanvas = {
   patch: [number, number];
 };
 
+// --- la lumiere des interieurs ----------------------------------------------
+//
+// Les teintes chaudes de l'archetype restent la majorite : c'est ce qui fait
+// la lecture nocturne, et le froid de la Moderne ne vient que de lui. Mais une
+// ville de nuit n'est pas un seul tungstene : on y voit des LED blanches, le
+// bleu d'une tele, quelques rideaux colores. Tire par fenetre, seede, donc la
+// meme a chaque chargement.
+const LED: [string, string] = ["#eef3f8", "#c4d6ea"];
+const TV: [string, string] = ["#c9d3f5", "#7188e8"];
+const CURTAINS: [string, string][] = [
+  ["#ffb4a0", "#ff6a4a"],
+  ["#d4f5c0", "#7fd65a"],
+  ["#ecc4ff", "#b36cff"],
+];
+
+function interior(style: ArchetypeStyle, seed: number): [string, string] {
+  const r = seeded(seed * 11);
+  if (r < 0.18) return LED;
+  if (r < 0.22) return TV;
+  if (r < 0.26) return CURTAINS[Math.floor(seeded(seed * 19) * CURTAINS.length) % CURTAINS.length];
+  return style.warm[Math.floor(seeded(seed * 5) * style.warm.length) % style.warm.length];
+}
+
+/** Fraction de la baie masquee par un store, 0 si la baie est degagee. */
+function blindOf(seed: number): number {
+  if (seeded(seed * 13) >= 0.22) return 0;
+  return 0.3 + seeded(seed * 23) * 0.4;
+}
+
 /** Facade d'un archetype, en canvas purs. */
 export function paintFacade(style: ArchetypeStyle): FacadeCanvas {
   const w = style.bays * CELL_PX;
@@ -94,10 +123,19 @@ export function paintFacade(style: ArchetypeStyle): FacadeCanvas {
       a.fillRect(wx - CELL_PX * 0.03, wy - CELL_PX * 0.04, ww + CELL_PX * 0.06, wh + CELL_PX * 0.08);
       a.globalAlpha = 1;
 
-      const [glass, halo] =
-        style.warm[Math.floor(seeded(seed * 5) * style.warm.length) % style.warm.length];
+      const [glass, halo] = interior(style, seed);
       a.fillStyle = lit ? glass : style.dark;
       a.fillRect(wx, wy, ww, wh);
+
+      // store a demi baisse : le haut de la baie reste sombre, rayé de lames
+      const blind = lit ? blindOf(seed) : 0;
+      if (blind > 0) {
+        const bh = wh * blind;
+        a.fillStyle = "rgba(20,16,12,0.55)";
+        a.fillRect(wx, wy, ww, bh);
+        a.fillStyle = "rgba(255,255,255,0.08)";
+        for (let k = 0; k < bh - 2; k += 4) a.fillRect(wx, wy + k, ww, 1);
+      }
 
       a.fillStyle = lit ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0.45)";
       a.fillRect(wx + ww / 2 - CELL_PX * 0.012, wy, CELL_PX * 0.024, wh);
@@ -107,7 +145,12 @@ export function paintFacade(style: ArchetypeStyle): FacadeCanvas {
       if (lit) {
         g.fillStyle = halo;
         g.globalAlpha = 0.4 + seeded(seed * 17) * 0.45;
-        g.fillRect(wx, wy, ww, wh);
+        g.fillRect(wx, wy + wh * blind, ww, wh * (1 - blind));
+        if (blind > 0) {
+          // la lumiere filtre encore un peu a travers les lames
+          g.globalAlpha *= 0.18;
+          g.fillRect(wx, wy, ww, wh * blind);
+        }
         g.globalAlpha = 1;
       }
     }
@@ -127,8 +170,83 @@ export function paintFacade(style: ArchetypeStyle): FacadeCanvas {
 }
 
 // --- socle commercant -------------------------------------------------------
-export const SHOP_BAYS = 3;
+//
+// Huit travees, et chaque batiment tire son decalage de tuile : deux commerces
+// voisins ne montrent plus la meme devanture. Le bandeau au dessus de la vitrine
+// porte une enseigne une fois sur deux, lumineuse, donc dans les deux canvas :
+// neon a lettres, caisson colore, ou la croix verte de pharmacie, le repere de
+// nuit le plus francais qui soit.
+export const SHOP_BAYS = 8;
 export const SHOP_TILE_U = SHOP_BAYS * FLOOR;
+
+const NEON = ["#ff3d6e", "#3de0ff", "#ffd23d", "#ff7a2e", "#b86bff", "#f2efe6"];
+
+type Sign = "neon" | "caisson" | "pharmacie" | null;
+// Sur huit travees seulement, un tirage au hasard ne sortait aucune pharmacie :
+// la sequence est donc fixee, une enseigne sur deux environ, et c'est le
+// decalage par batiment qui la fait tourner.
+const SIGNS: Sign[] = ["neon", null, "caisson", "pharmacie", null, "neon", null, "caisson"];
+
+/** Enseigne dans le bandeau [x, y, w, h], peinte dans l'albedo et la lueur. */
+function paintSign(
+  a: CanvasRenderingContext2D,
+  g: CanvasRenderingContext2D,
+  kind: Exclude<Sign, null>,
+  seed: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) {
+  if (kind === "pharmacie") {
+    // croix de pharmacie : elle deborde du bandeau, comme les vraies
+    const c = h * 2;
+    const t = c / 3;
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    for (const ctx of [a, g]) {
+      ctx.fillStyle = "#35ff7a";
+      ctx.fillRect(cx - c / 2, cy - t / 2, c, t);
+      ctx.fillRect(cx - t / 2, cy - c / 2, t, c);
+    }
+    return;
+  }
+  const color = NEON[Math.floor(seeded(seed * 31) * NEON.length) % NEON.length];
+  if (kind === "neon") {
+    // lettres au neon : une suite de traits de largeurs variees
+    let cx = x + w * (0.08 + seeded(seed * 37) * 0.12);
+    const end = x + w * 0.92;
+    let k = 0;
+    while (cx < end) {
+      const lw = h * (0.35 + seeded(seed * 41 + k) * 0.45);
+      if (cx + lw > end) break;
+      for (const ctx of [a, g]) {
+        ctx.fillStyle = color;
+        ctx.fillRect(cx, y + h * 0.18, lw, h * 0.64);
+      }
+      // l'evidement de la lettre
+      a.fillStyle = "#211d18";
+      g.fillStyle = "#000000";
+      a.fillRect(cx + lw * 0.3, y + h * 0.36, lw * 0.4, h * 0.28);
+      g.fillRect(cx + lw * 0.3, y + h * 0.36, lw * 0.4, h * 0.28);
+      cx += lw + h * (0.15 + (seeded(seed * 43 + k) < 0.2 ? 0.5 : 0));
+      k++;
+    }
+    return;
+  }
+  // caisson lumineux : fond colore, texte sombre
+  for (const ctx of [a, g]) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x + w * 0.1, y, w * 0.8, h);
+  }
+  a.fillStyle = "rgba(20,18,14,0.75)";
+  g.fillStyle = "rgba(0,0,0,0.75)";
+  for (let k = 0; k < 5; k++) {
+    const bx = x + w * (0.2 + k * 0.12);
+    a.fillRect(bx, y + h * 0.3, w * 0.08, h * 0.4);
+    g.fillRect(bx, y + h * 0.3, w * 0.08, h * 0.4);
+  }
+}
 
 export function paintShopFront(): { albedo: HTMLCanvasElement; glow: HTMLCanvasElement } {
   const w = SHOP_BAYS * CELL_PX;
@@ -153,8 +271,10 @@ export function paintShopFront(): { albedo: HTMLCanvasElement; glow: HTMLCanvasE
     const wy = h * 0.28;
     const ww = CELL_PX * 0.8;
     const wh = h * 0.5;
+    // vitrines : la plupart tungstene, quelques unes en LED froide
+    const glass = seeded(seed * 3) < 0.3 ? "#e6eef6" : "#ffca7a";
 
-    a.fillStyle = lit ? "#ffca7a" : "#1b1913";
+    a.fillStyle = lit ? glass : "#1b1913";
     a.fillRect(wx, wy, ww, wh);
     a.fillStyle = "rgba(0,0,0,0.35)";
     a.fillRect(wx + ww / 2 - CELL_PX * 0.015, wy, CELL_PX * 0.03, wh);
@@ -162,10 +282,14 @@ export function paintShopFront(): { albedo: HTMLCanvasElement; glow: HTMLCanvasE
     a.fillRect(ox, h * 0.06, CELL_PX, h * 0.16);
 
     if (lit) {
-      g.fillStyle = "#ffca7a";
+      g.fillStyle = glass;
       g.globalAlpha = 0.7 + seeded(seed * 7) * 0.3;
       g.fillRect(wx, wy, ww, wh);
       g.globalAlpha = 1;
+    }
+    const sign = SIGNS[ix];
+    if (sign) {
+      paintSign(a, g, sign, seed, ox + CELL_PX * 0.04, h * 0.075, CELL_PX * 0.92, h * 0.13);
     }
   }
 

@@ -235,6 +235,16 @@ GPU**, la copie de profondeur échouait à chaque frame et tout effet de
 profondeur lisait un tampon vide. Chacune reçoit maintenant sa propre source
 (`src/scene/GraphicEffect.ts`).
 
+**Les fenêtres** ne sont plus un seul tungstène. Les teintes chaudes de
+l'archétype restent la majorité, mais une baie allumée sur cinq environ est une
+LED blanche, le bleu d'une télé ou un rideau coloré, et une sur cinq a un store
+à demi baissé dont les lames laissent filtrer un peu de lumière. Le socle
+commerçant passe de 3 à 8 travées avec un décalage par bâtiment, donc deux
+commerces voisins n'ont plus la même devanture, et le bandeau porte une
+enseigne une travée sur deux : néon à lettres, caisson lumineux, ou croix
+verte de pharmacie. La séquence des enseignes est fixée à la main : sur huit
+travées, un tirage au hasard ne sortait aucune pharmacie.
+
 **La voiture** est commune aux deux looks. Elle reste procédurale : la caisse et
 le vitrage sont des profils latéraux extrudés et chanfreinés, avec les passages
 de roue creusés dans le profil. Les roues tournent avec la vitesse et les roues

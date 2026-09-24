@@ -8,7 +8,7 @@ import { car } from "../lib/car";
 import { editView } from "../lib/editView";
 import { useStore } from "../state/store";
 import { Lod, TILE, planStreaming, tileKey, type TileRef } from "../lib/streaming";
-import { TILE_V, SHOP_TILE_U, FLOORS_PER_TILE } from "../lib/facades";
+import { TILE_V, SHOP_BAYS, SHOP_TILE_U, FLOORS_PER_TILE } from "../lib/facades";
 import { getFacadeTextures, getShopTexture, type Painted } from "../lib/facadeTextures";
 import { Family } from "../lib/families";
 import { kitFor } from "../lib/familyKits";
@@ -148,6 +148,8 @@ function emitDetailed(
   // angles ; le RepeatWrapping fait le reste.
   const du = Math.floor(hash01(b.id, 41) * style.bays) / style.bays;
   const dv = Math.floor(hash01(b.id, 43) * FLOORS_PER_TILE) / FLOORS_PER_TILE;
+  // meme principe pour la devanture : chaque commerce part d'une travee a lui
+  const sdu = Math.floor(hash01(b.id, 47) * SHOP_BAYS) / SHOP_BAYS;
 
   let run = 0;
   for (let i = 0; i < n; i++) {
@@ -166,8 +168,8 @@ function emitDetailed(
     const qz = -q.y;
 
     if (shop) {
-      const su0 = run / SHOP_TILE_U;
-      const su1 = (run + len) / SHOP_TILE_U;
+      const su0 = run / SHOP_TILE_U + sdu;
+      const su1 = (run + len) / SHOP_TILE_U + sdu;
       S.pos.push(px, 0, pz, qx, 0, qz, qx, FLOOR, qz, px, 0, pz, qx, FLOOR, qz, px, FLOOR, pz);
       for (let k = 0; k < 6; k++) {
         S.norm.push(nx, 0, -ny);
