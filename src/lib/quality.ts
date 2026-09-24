@@ -1,9 +1,9 @@
 // Niveaux de qualite et descente automatique, decidee sur la duree de frame
 // reellement mesuree.
 //
-// Pourquoi ce module existe : la scene de nuit tient son aspect de quatre passes
-// plein ecran (bloom a flou mipmap, tone mapping ACES, vignette, grain) posees
-// sur une cible HDR en MSAA 4x. Sur un GPU dedie ca passe ; sur un GPU integre
+// Pourquoi ce module existe : la scene de nuit dessinee tient son aspect de
+// passes plein ecran (bloom a flou mipmap, tone mapping ACES, dessin a l'encre,
+// lignes de vitesse, vignette) posees sur une cible HDR en MSAA 4x. Sur un GPU dedie ca passe ; sur un GPU integre
 // c'est la bande passante qui plafonne, pas la geometrie. Mesure sur un Intel
 // Iris Xe en 1389x945 a dpr 1 : 36 fps, alors que la geometrie residente ne
 // represente que 200 draw calls et 76 000 triangles, soit trois pour cent de
@@ -30,26 +30,21 @@ export type QualityLevel = {
   multisampling: number;
   /** Plafond de densite de pixels. */
   dprMax: number;
-  /** Grain photographique : une passe plein ecran de plus. */
-  grain: boolean;
 };
 
 // L'ordre des renoncements n'est pas arbitraire, il suit le cout mesure :
 //   1. le MSAA d'abord. C'est le plus cher (une cible multi-echantillons de
-//      1,3 Mpx resolue a chaque frame) et le moins identitaire : de nuit, sur
-//      une scene majoritairement sombre avec du grain, l'escalier d'arete se
-//      voit beaucoup moins que sur un rendu diurne a plat.
+//      1,3 Mpx resolue a chaque frame). Les contours encres, tires de la
+//      profondeur, restent nets sans lui : ils sont traces au pixel.
 //   2. la densite de pixels ensuite, qui divise le remplissage sans rien
 //      changer a la composition.
-//   3. le grain en dernier, parce qu'il ne coute qu'une passe et qu'il fait
-//      beaucoup pour l'aspect photographique.
-// Le bloom n'est jamais coupe : sans lui les fenetres allumees, les beffrois et
+// La passe de dessin n'est jamais coupee, c'est le style meme. Le bloom non plus : sans lui les fenetres allumees, les beffrois et
 // les feux de balisage ne sont plus que des taches plates, et c'est ce qui porte
 // la lecture nocturne de la ville.
 export const LEVELS: QualityLevel[] = [
-  { multisampling: 4, dprMax: 2, grain: true },
-  { multisampling: 0, dprMax: 1.5, grain: true },
-  { multisampling: 0, dprMax: 1, grain: false },
+  { multisampling: 4, dprMax: 2 },
+  { multisampling: 0, dprMax: 1.5 },
+  { multisampling: 0, dprMax: 1 },
 ];
 
 /** Budget de frame, en ms. 21 ms vaut 47 fps : on descend avant de tomber a 30. */

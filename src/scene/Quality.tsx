@@ -42,8 +42,7 @@ export function AutoQuality({
     console.log(
       `qualite: ${QUALITY_NAMES[quality]} -> ${QUALITY_NAMES[next]} ` +
         `(frame mediane ${med.toFixed(1)} ms, budget depasse) ` +
-        `msaa ${LEVELS[next].multisampling}, dpr max ${LEVELS[next].dprMax}, ` +
-        `grain ${LEVELS[next].grain ? "oui" : "non"}`,
+        `msaa ${LEVELS[next].multisampling}, dpr max ${LEVELS[next].dprMax}`,
     );
     warm.current = 0; // la bascule elle-meme coute quelques frames
     setDpr(Math.min(window.devicePixelRatio, LEVELS[next].dprMax));
