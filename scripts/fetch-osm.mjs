@@ -162,6 +162,7 @@ const VOIRIE_QUERY =
   `way["highway"~"^(${HIGHWAYS}|${LINKS})$"]["sidewalk"]${bb(BBOX)};` +
   `way["highway"~"^(${HIGHWAYS}|${LINKS})$"]["sidewalk:left"]${bb(BBOX)};` +
   `way["highway"~"^(${HIGHWAYS}|${LINKS})$"]["sidewalk:right"]${bb(BBOX)};` +
+  `way["highway"~"^(${HIGHWAYS}|${LINKS})$"]["sidewalk:both"]${bb(BBOX)};` +
   `);out tags;` +
   // Les passages pietons, eux, ne se devinent pas : ils sont soit un noeud sur
   // la chaussee, soit une ligne qui la traverse. La LIGNE porte l'orientation,
@@ -988,12 +989,23 @@ function featuresToCompact(json) {
 
 // --- voirie : cote du trottoir et passages pietons -------------------------
 
-/** yes/both -> les deux, left, right, no/separate -> aucun. Bitmask 1=gauche, 2=droite. */
+/**
+ * yes/both/separate -> les deux, left, right, no/none -> aucun. Bitmask
+ * 1=gauche, 2=droite.
+ *
+ * "separate" ne veut PAS dire qu'il n'y a pas de trottoir : il existe, mais il
+ * est cartographie comme un chemin a part (highway=footway, footway=sidewalk).
+ * Le compter comme une absence retirait leurs trottoirs a des axes entiers,
+ * l'avenue de la Liberation en tete. Pour le rendu, un trottoir separe est un
+ * trottoir des deux cotes.
+ */
 function sidewalkCode(t) {
-  const val = (v) => (v === "both" || v === "yes" ? 3 : v === "left" ? 1 : v === "right" ? 2 : 0);
+  const val = (v) =>
+    v === "both" || v === "yes" || v === "separate" ? 3 : v === "left" ? 1 : v === "right" ? 2 : 0;
   if (t.sidewalk) return val(t.sidewalk);
+  if (t["sidewalk:both"]) return val(t["sidewalk:both"]);
   let code = 0;
-  const side = (v) => v === "yes" || v === "both" || v === "left" || v === "right";
+  const side = (v) => v === "yes" || v === "both" || v === "left" || v === "right" || v === "separate";
   if (side(t["sidewalk:left"])) code |= 1;
   if (side(t["sidewalk:right"])) code |= 2;
   return code;
@@ -1034,7 +1046,9 @@ function voirieToCompact(json) {
       crossings.push([r6(el.lon), r6(el.lat), marked]);
     }
   }
-  return { attribution: ATTRIBUTION, bbox: BBOX, sidewalks, crossWays, crossings, tagged };
+  // separate: 1 marque les fichiers ou "separate" est encode comme un trottoir
+  // (voir sidewalkCode) ; le jeu ne fait confiance a un 0 que dans ceux-la
+  return { attribution: ATTRIBUTION, bbox: BBOX, separate: 1, sidewalks, crossWays, crossings, tagged };
 }
 
 // --- pilotage --------------------------------------------------------------

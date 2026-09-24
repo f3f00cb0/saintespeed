@@ -1221,79 +1221,55 @@ Le manifeste garde l'**écart entre le poste calculé et le poste réel**. C'est
 seule façon de savoir si un poste tenait debout sur le terrain, et donc si ce
 relevé vaut quelque chose.
 
-## Les trottoirs : ce qu'OSM en dit, et ce que la place permet
+## Les trottoirs : l'espace négatif de la chaussée
 
-Première idée à écarter, parce qu'elle était fausse : « OSM ne contient que les
-chaussées, il faudra inventer les trottoirs ». C'est ce que dit `src/lib/osm.ts`,
-mais ce fichier ne décrit que les tags **que le parseur garde**. Comptage fait
-sur la vraie base : **1 440 rues sur 5 842 portent un tag `sidewalk`**, dont 917
-des deux côtés, 229 à droite, 89 à gauche, et **205 qui disent explicitement
-qu'il n'y a pas de trottoir**. Le tag apporte ce qu'aucune géométrie ne donne :
-le **côté**. Il est tiré par `npm run fetch-osm -- voirie` dans son propre
-fichier, clé par id de way, donc sans toucher à `sainte.geojson` ni au réseau
-roulable.
+La première version posait deux bandes par rue, découpées au carrefour et
+rabotées par des rayons lancés vers les façades. Regardée sur plan puis en
+roulant, elle rendait mal, et pour des raisons de structure qu'aucun réglage ne
+rattrapait : des bandes étroites qui s'arrêtaient loin du mur en laissant un
+vide sombre, des coins raccordés un cas sur deux, des bandes de rues voisines
+qui se chevauchaient, et des bordures en angle vif.
 
-Pour les 75 % de rues sans tag, la largeur vient de la place réellement
-disponible. Mesure sur 10 073 milieux de segment dans 2,5 km du centre, distance
-à la façade la plus proche **de chaque côté**, au-delà du bord de chaussée :
+Le trottoir est maintenant construit **en surfaces**, par opérations booléennes
+(Clipper) :
 
-| classe | p10 | médiane | sous 1,5 m |
-| --- | --- | --- | --- |
-| residential | 2,1 m | 9,5 m | 6 % |
-| secondary | 4,7 m | 16,0 m | 3 % |
-| tertiary | 3,9 m | 16,5 m | 1 % |
-| unclassified | 6,6 m | 17,5 m | 1 % |
-| living_street | 1,8 m | 9,3 m | 7 % |
+| surface | construction |
+| --- | --- |
+| chaussée C | union des rubans de chaussée, puis **fermeture** de 2,2 m (dilatation puis érosion) : les angles rentrants des carrefours deviennent des arrondis, comme une bordure posée |
+| zone Z | une bande de chaque côté autorisé, large de la cible de la classe (2,4 m en résidentiel, 4 m en primaire), plus une bande élargie de 5 m qui ne vaut **que près d'une façade** |
+| trottoir S | Z − C − emprises des bâtiments |
 
-Une largeur fixe par classe rentrerait donc dans la façade une fois sur quinze en
-rue résidentielle. Chaque côté est raboté sur un rayon lancé dans **l'index des
-murs déjà construit pour la caméra**, ce qui ne coûte aucune structure nouvelle.
+Les coins se raccordent tout seuls, puisque les bandes de deux rues se
+recouvrent au coin et que l'union les fond. Rien ne chevauche la chaussée, par
+construction. Le trottoir va jusqu'au mur quand le mur est proche, sans inonder
+un parc quand il ne l'est pas. Sur S on dérive la pierre de bordure (18 cm contre
+la chaussée), le caniveau (34 cm de chaussée contre le trottoir), les faces
+verticales de bordure (14 cm, une T2) et les arrondis de chaussée ajoutés par la
+fermeture. La dalle est texturée de pierres de 60 × 40 cm posées en quinconce,
+en coordonnées du plan : les joints suivent le monde, pas la rue.
 
-**Le rayon part de l'axe, pas du bord de chaussée.** La largeur de chaussée est
-une convention de dessin et une façade tombe parfois dedans : parti du bord, le
-rayon démarrait déjà dans le mur et ne voyait rien. Mesuré au harnais, **256
-bandes finissaient dans une emprise ; il en reste 1** sur la ville entière.
+**Le côté vient toujours d'OSM quand OSM le dit** (tag `sidewalk`, 1 440 rues).
+Une erreur d'encodage est corrigée au passage : `sidewalk=separate` veut dire que
+le trottoir existe mais qu'il est cartographié comme un chemin à part, et
+l'extraction l'encodait comme « pas de trottoir ». L'avenue de la Libération,
+entre autres, n'avait donc aucun trottoir. Le script le compte désormais comme
+un trottoir des deux côtés et marque son fichier (`separate: 1`). Tant que
+`sainte-voirie.json` n'a pas été régénéré, le jeu ne fait pas confiance à un
+« aucun » qui peut vouloir dire « à part », et la règle par classe s'applique.
 
-### Le trottoir fait le tour du pâté de maisons
+**Coût.** Le calcul se fait par tuiles de 200 m, sur une fenêtre élargie de
+40 m pour voir les rues voisines, coupée au bord exact de la tuile. Mesuré au
+harnais sur la boîte jouable : **28 ms par tuile en médiane, 74 ms au p95,
+128 ms au pire** dans le centre dense. Sur le fil de rendu, chaque nouvelle tuile
+se serait vue comme un à-coup ; les tuiles sont donc calculées dans un **Web
+Worker** (`src/lib/sidewalkWorker.ts`), qui reconstruit son propre graphe depuis
+le même réseau (même projection, mêmes mètres) et renvoie ses tableaux sans
+copie. Elles sont chargées dans un rayon de 520 m autour du joueur et libérées
+au-delà de 760 m.
 
-Première version : couper la bande à chaque carrefour et s'arrêter là. Résultat
-regardé sur plan, et jugé à juste titre inutilisable, **le réseau se lisait en
-pointillés**. Quatre défauts distincts, tous corrigés :
-
-1. **Le trou de carrefour était deux fois trop grand.** Reculer de la
-   demi-chaussée croisée plus un trottoir ouvrait près de 10 m de vide pour une
-   rue de 5 m. Le trottoir s'arrête au bord de la chaussée qu'il traverse, et
-   c'est tout : le reste du carrefour lui appartient.
-2. **Il manquait le raccord d'angle.** Un trottoir tourne le coin. Les bouts qui
-   arrivent à un même carrefour sont rangés par angle autour du nœud : deux
-   bouts séparés de quelques degrés sont les deux moitiés d'un même coin, deux
-   bouts séparés de 80 degrés sont les deux rives d'une chaussée et il doit
-   rester le vide du passage piéton entre eux. **2 269 raccords** dans la zone
-   jouable, 2,9 m² en moyenne.
-3. **Une façade serrée coupait toute la bande.** Le seuil de largeur est passé
-   de 0,80 m à 0,35 m, sans plancher de dessin : une bande de 40 cm au pied d'un
-   immeuble est ce qui existe réellement, une rupture tous les 30 m ne l'est pas.
-4. **Les coudes laissaient une encoche.** Des quads posés segment par segment ne
-   raccordent pas leurs bords extérieurs dans un virage, et le résultat
-   ressemblait à des dalles isolées. Le ruban est maintenant à onglets : le
-   décalage se calcule sur la bissectrice au sommet, plafonné à 1,43 pour qu'un
-   angle aigu ne déborde pas dans la façade.
-
-Cinquième défaut, que le plan ne pouvait pas montrer parce qu'il ignore
-l'enroulement : **une face sur deux était invisible en 3D**. Les bandes de gauche
-et de droite s'enroulent en sens inverse et le matériau était en `FrontSide`.
-
-La place libre est mesurée par **échantillons tous les 5 m le long de chaque
-segment**, puis ramenée aux sommets pour que le bord extérieur reste continu.
-Trois versions ont été nécessaires : par segment, le bord sortait en dents de
-scie ; par sommet sur la normale moyenne, la mesure ne s'appliquait pas à la
-direction réellement tracée et **74 bandes finissaient dans une emprise** ; par
-échantillons, il en reste 9 sur 21 000.
-
-Cette mesure lance 130 000 rayons dans l'index des murs à la construction, et
-`WallIndex.clear` allouait un `Set` par appel : **1,6 s de construction, ramenée
-à 0,57 s** en réutilisant un marqueur. La caméra, qui interroge le même index à
-chaque frame, y gagne aussi.
+**Vérification.** Sur la boîte jouable, 197 ha de dalle ; au centre de chaque
+triangle, **1 sur une chaussée** et 165 dans une emprise (0,09 %), contre des
+bandes qui laissaient la moitié de la place vide avant.
 
 ### Les passages piétons ne sont pas déduits, ils sont relevés
 
@@ -1334,10 +1310,10 @@ npm run voirie -- plan             # trois plans SVG dans reference/
 npm run voirie -- plan 4.3874 45.4397 90   # un plan ailleurs, rayon en mètres
 ```
 
-Les chiffres disent ce qu'aucune capture ne montre (combien de bandes tombent sur
-une chaussée voisine, combien finissent dans une emprise), le plan dit où. C'est
-le plan qui a révélé les dalles de carrefour, et les chiffres qui ont prouvé que
-le rayon de rabotage partait du mauvais point.
+Les chiffres disent ce qu'aucune capture ne montre (combien de triangles de
+dalle tombent sur une chaussée ou dans une emprise, et combien coûte une tuile),
+le plan dit où. C'est le plan qui a montré que l'ancienne méthode laissait la
+moitié de la place vide entre la bande et la façade.
 
 ## L'usage du sol : le vide n'est pas du vide
 
@@ -1451,7 +1427,8 @@ src/lib/input.ts        clavier
 src/lib/buildings.ts    emprises OSM, déduction des hauteurs, retrait de toit
 src/lib/archetypes.ts   cascade d'archétypes de façade et palettes
 src/lib/features.ts     décor OSM : sols triangulés, arbres, tram, mobilier
-src/lib/sidewalks.ts    trottoirs et bordures : côté OSM, largeur bornée sur la façade
+src/lib/sidewalks.ts    trottoirs, bordures, caniveaux : espace négatif de la chaussée
+src/lib/sidewalkWorker.ts  tuiles de trottoir calculées hors du fil de rendu
 src/lib/voirie.ts       côté du trottoir et passages piétons relevés dans OSM
 src/lib/places.ts       caractère des espaces ouverts : minéral / jardin / parc
 src/lib/frame.ts        repère local d'une emprise (axe principal, bbox locale)

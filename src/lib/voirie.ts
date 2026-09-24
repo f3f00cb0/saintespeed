@@ -38,6 +38,11 @@ export type Voirie = {
 
 type RawVoirie = {
   sidewalks: Record<string, number>;
+  /**
+   * 1 quand "sidewalk=separate" est encode comme un trottoir. Absent dans les
+   * fichiers plus anciens, ou separate valait 0 comme "no".
+   */
+  separate?: number;
   crossings: [number, number, number][];
   crossWays: { g: [number, number][]; m: number }[];
 };
@@ -57,7 +62,14 @@ export function prepareVoirie(raw: RawVoirie | null, proj: Projector): Voirie {
   const crossings: Crossing[] = [];
   if (!raw) return { sidewalks, crossings };
 
-  for (const [id, code] of Object.entries(raw.sidewalks)) sidewalks.set(Number(id), code);
+  // Dans un fichier ancien, 0 melange "pas de trottoir" et "trottoir
+  // cartographie a part" (separate) : ce 0 ne dit donc rien, et la regle par
+  // classe s'applique. Il privait des axes entiers de leurs trottoirs.
+  const trustNone = raw.separate === 1;
+  for (const [id, code] of Object.entries(raw.sidewalks)) {
+    if (code === 0 && !trustNone) continue;
+    sidewalks.set(Number(id), code);
+  }
 
   // Les lignes d'abord : elles portent l'orientation de la traversee, donc le
   // sens des bandes du zebre. Un noeud ne donne que la position, et il faudra
