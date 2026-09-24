@@ -243,20 +243,17 @@ export default function App() {
             {/* la ceinture d'un jardin est ce qui le separe d'un parc de loin */}
             {features && <Fences fences={features.fences} />}
             {centre && <Lamps ways={ways} proj={graph!.proj} centre={centre} graph={graph!} />}
-            {/* le trottoir se pose une fois l'index des murs la : c'est lui qui
-                borne sa largeur sur la facade reelle */}
+            {/* le trottoir se pose une fois les emprises chargees : il va
+                jusqu'a la facade reelle et s'y arrete */}
             {/* les passages pietons se posent dans le trou que les trottoirs
                 laissent au carrefour : c'est la meme histoire, vue au sol */}
             {centre && voirie && voirie.crossings.length > 0 && (
               <Crossings crossings={voirie.crossings} graph={graph!} centre={centre} />
             )}
-            {centre && walls && (
+            {buildings.length > 0 && (
               <Sidewalks
                 ways={ways}
-                proj={graph!.proj}
-                graph={graph!}
-                walls={walls}
-                centre={centre}
+                buildings={buildings}
                 sides={voirie?.sidewalks ?? null}
               />
             )}

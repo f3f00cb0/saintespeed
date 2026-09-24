@@ -19,7 +19,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { parseNetwork, specFor, type Way } from "../src/lib/osm";
 import { buildGraph, type RoadGraph } from "../src/lib/graph";
 import { prepareBuildings, buildWallIndex, type Building, type FlatBuilding } from "../src/lib/buildings";
-import { buildSidewalks } from "../src/lib/sidewalks";
+import { buildSidewalks, prepareSidewalks, type SidewalkWorld } from "../src/lib/sidewalks";
 import { prepareVoirie, type Voirie } from "../src/lib/voirie";
 import { AREAS, type AreaKind } from "../src/lib/features";
 import { buildCrossings } from "../src/lib/crossings";
@@ -33,6 +33,8 @@ type Charge = {
   centre: { x: number; y: number };
   /** surfaces au sol brutes, pour que le plan montre aussi de quoi est fait le sol */
   areas: { k: AreaKind; pts: { x: number; y: number }[] }[];
+  /** index des trottoirs, prepare une fois */
+  trottoirs: SidewalkWorld;
 };
 
 export function charger(pub: string): Charge {
@@ -63,7 +65,8 @@ export function charger(pub: string): Charge {
   } catch {
     console.log("  (pas de sainte-features.json : plan sans les sols)");
   }
-  return { ways, graph, buildings, walls, voirie, areas, centre: graph.proj.project(4.39, 45.4397) };
+  const trottoirs = prepareSidewalks(ways, graph.proj, graph, buildings, voirie.sidewalks);
+  return { ways, graph, buildings, walls, voirie, areas, trottoirs, centre: graph.proj.project(4.39, 45.4397) };
 }
 
 /** Point dans une emprise : le seul test qui reponde vraiment "dans un mur". */
@@ -102,23 +105,47 @@ function indexEmprises(buildings: FlatBuilding[]) {
   };
 }
 
+/** Boite de la ville entiere, d'apres le reseau. */
+function bornes(c: Charge): [number, number, number, number] {
+  const b = c.graph.bounds;
+  return [b.minx, b.miny, b.maxx, b.maxy];
+}
+
 /** Les chiffres : cout, et les deux fautes qu'aucune capture ne montre. */
 export function verifier(c: Charge, area: number): string {
-  const m = buildSidewalks(c.ways, c.graph.proj, c.graph, c.walls, c.centre, area, c.voirie.sidewalks);
-  const s = m.stats;
+  const r = area === Infinity ? 1e9 : area;
+  const tiles =
+    area === Infinity
+      ? buildSidewalks(c.trottoirs, ...bornes(c))
+      : buildSidewalks(c.trottoirs, c.centre.x - r, c.centre.y - r, c.centre.x + r, c.centre.y + r);
   const dans = indexEmprises(c.buildings);
-  const top = m.top;
+  // Les deux fautes se testent au centre de chaque triangle de dalle : sur une
+  // chaussee (plus loin de l'axe que le demi-profil moins 10 cm, donc bien
+  // dedans) ou dans une emprise.
   let surChaussee = 0;
   let dansMur = 0;
-  let bandes = 0;
-  for (let i = 0; i + 17 < top.length; i += 18) {
-    bandes++;
-    const cx = (top[i] + top[i + 12]) / 2;
-    const cy = -(top[i + 2] + top[i + 14]) / 2;
-    const hit = c.graph.nearestEdge(cx, cy, 30);
-    if (hit && hit.dist < hit.edge.halfWidth - 0.1) surChaussee++;
-    if (dans(top[i + 12], -top[i + 14])) dansMur++;
+  let tris = 0;
+  let surface = 0;
+  let ms = 0;
+  let triangles = 0;
+  let vides = 0;
+  for (const t of tiles) {
+    ms += t.ms;
+    triangles += t.triangles;
+    if (!t.paving.length) vides++;
+    const p = t.paving;
+    for (let i = 0; i + 8 < p.length; i += 9) {
+      tris++;
+      const ax = p[i], ay = -p[i + 2], bx = p[i + 3], by = -p[i + 5], cx = p[i + 6], cy = -p[i + 8];
+      surface += Math.abs((bx - ax) * (cy - ay) - (cx - ax) * (by - ay)) / 2;
+      const mx = (ax + bx + cx) / 3;
+      const my = (ay + by + cy) / 3;
+      const hit = c.graph.nearestEdge(mx, my, 30);
+      if (hit && hit.dist < hit.edge.halfWidth - 0.1) surChaussee++;
+      if (dans(mx, my)) dansMur++;
+    }
   }
+  const pct = (n: number) => `${((n / Math.max(1, tris)) * 100).toFixed(2)} %`;
   // --- passages pietons ------------------------------------------------------
   // Une bande qui deborde de la chaussee ne se voit pas sur un plan de loin,
   // mais se voit tres bien en roulant.
@@ -134,20 +161,14 @@ export function verifier(c: Charge, area: number): string {
     if (!hit || hit.dist > hit.edge.halfWidth) bandeHors++;
   }
 
-  const L = s.runLengths.slice().sort((a, b) => a - b);
-  const q = (f: number) => L[Math.floor(L.length * f)] ?? 0;
-  const pct = (n: number) => `${((n / Math.max(1, bandes)) * 100).toFixed(2)} %`;
+  const lent = tiles.map((t) => t.ms).sort((a, b) => a - b);
   return (
     `${area === Infinity ? "ville entiere" : `boite ${area} m`}\n` +
-    `  ${s.posed} cotes poses sur ${s.segments} segments · ${s.fromTag} cotes decides par OSM, ` +
-    `${s.deniedByTag} refuses par OSM\n` +
-    `  ${s.skippedNoRoom} sans place · ${s.skippedJunction} au carrefour · ` +
-    `${s.skippedOverlap} chevauchement chaussee · ${s.narrowed} rabotes sur la facade · ` +
-    `${s.droppedShort} bandes trop courtes\n` +
-    `  ${s.runs} bandes continues : p10 ${q(0.1).toFixed(1)} m, mediane ${q(0.5).toFixed(1)} m, ` +
-    `${(L.reduce((a, b) => a + b, 0) / 1000).toFixed(0)} km cumules\n` +
-    `  ${Math.round(s.triangles / 1000)}k triangles, ${s.ms} ms\n` +
-    `  VERIFICATION (bandes seules)  sur une chaussee : ${surChaussee} (${pct(surChaussee)}) · ` +
+    `  ${tiles.length} tuiles de trottoir (${vides} sans trottoir) · ${(surface / 10000).toFixed(1)} ha de dalle\n` +
+    `  ${Math.round(triangles / 1000)}k triangles, ${ms} ms au total · par tuile : mediane ` +
+    `${lent[Math.floor(lent.length / 2)] ?? 0} ms, p95 ${lent[Math.floor(lent.length * 0.95)] ?? 0} ms, ` +
+    `max ${lent[lent.length - 1] ?? 0} ms\n` +
+    `  VERIFICATION (triangles de dalle)  sur une chaussee : ${surChaussee} (${pct(surChaussee)}) · ` +
     `dans une emprise : ${dansMur} (${pct(dansMur)})\n` +
     `  passages pietons : ${cs.posed} poses sur ${cs.marked} marques ` +
     `(${cs.outsideArea} hors boite, ${cs.offRoad} hors chaussee, ${cs.merged} doublons), ` +
@@ -159,8 +180,8 @@ export function verifier(c: Charge, area: number): string {
 
 /** Le plan : chaussee, trottoirs et passages pietons vus de dessus. */
 export function plan(c: Charge, lon: number, lat: number, rayon: number, sortie: string): string {
-  const m = buildSidewalks(c.ways, c.graph.proj, c.graph, c.walls, c.centre, Infinity, c.voirie.sidewalks);
   const o = c.graph.proj.project(lon, lat);
+  const tiles = buildSidewalks(c.trottoirs, o.x - rayon, o.y - rayon, o.x + rayon, o.y + rayon);
   const S = 900 / (2 * rayon);
   const X = (x: number) => ((x - o.x + rayon) * S).toFixed(1);
   const Y = (y: number) => ((rayon - (y - o.y)) * S).toFixed(1);
@@ -198,15 +219,15 @@ export function plan(c: Charge, lon: number, lat: number, rayon: number, sortie:
       out.push(`<line x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}" stroke="#31342e" stroke-width="${(spec.w * S).toFixed(1)}"/>`);
     }
   }
-  const top = m.top;
+  // trottoirs : les contours reels, trous compris (evenodd)
   let ns = 0;
-  for (let i = 0; i + 17 < top.length; i += 18) {
-    const pts = [[top[i], -top[i + 2]], [top[i + 3], -top[i + 5]], [top[i + 6], -top[i + 8]], [top[i + 15], -top[i + 17]]];
-    if (Math.abs(pts[0][0] - o.x) > rayon + 20 || Math.abs(pts[0][1] - o.y) > rayon + 20) continue;
-    ns++;
-    out.push(
-      `<polygon points="${pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(" ")}" fill="#5c6058" stroke="#9aa094" stroke-width="0.7"/>`,
-    );
+  for (const t of tiles) {
+    if (!t.outlines.length) continue;
+    ns += t.outlines.length;
+    const d = t.outlines
+      .map((r) => "M" + r.map((p) => `${X(p.x)},${Y(p.y)}`).join("L") + "Z")
+      .join("");
+    out.push(`<path d="${d}" fill="#6a6c62" fill-rule="evenodd" stroke="#b4b8aa" stroke-width="1"/>`);
   }
   // passages pietons : les vraies bandes, pas un reperage
   const cross = buildCrossings(c.voirie.crossings, c.graph, c.centre, Infinity);
@@ -223,10 +244,10 @@ export function plan(c: Charge, lon: number, lat: number, rayon: number, sortie:
     out.push(`<polygon points="${q.map((p) => `${X(p[0])},${Y(p[1])}`).join(" ")}" fill="#b9b39f"/>`);
   }
   out.push(
-    `<text x="12" y="26" fill="#cfd6e6" font-family="monospace" font-size="15">${lon}, ${lat} · rayon ${rayon} m · ${nb} emprises, ${ns} bandes, ${nc} bandes de passage pieton, ${sols.length} sols</text>`,
+    `<text x="12" y="26" fill="#cfd6e6" font-family="monospace" font-size="15">${lon}, ${lat} · rayon ${rayon} m · ${nb} emprises, ${ns} contours de trottoir, ${nc} bandes de passage pieton, ${sols.length} sols</text>`,
     `<text x="12" y="46" fill="#9aa094" font-family="monospace" font-size="12">gris clair = trottoir · blanc = passage pieton releve dans OSM</text>`,
     `</svg>`,
   );
   writeFileSync(sortie, out.join("\n"));
-  return `  ecrit ${sortie} : ${nb} emprises, ${ns} bandes, ${nc} passages pietons`;
+  return `  ecrit ${sortie} : ${nb} emprises, ${ns} contours de trottoir, ${nc} passages pietons`;
 }
