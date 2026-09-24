@@ -83,6 +83,7 @@ export default function App() {
     return null;
   }, [checkpoints, graph]);
   const showBuildings = useStore((s) => s.showBuildings);
+  const look = useStore((s) => s.look);
   const [stats, setStats] = useState("");
   // Qualite de rendu : part au maximum et ne descend que sur mesure, voir
   // src/lib/quality.ts. Mesure a l'origine de ce reglage : un Intel Iris Xe
@@ -204,7 +205,9 @@ export default function App() {
     else enterEdit();
   }, [enterDrive, enterEdit]);
 
-  useInput(onReset, onToggleBuildings, onToggleEdit, !editing);
+  const onToggleLook = useCallback(() => useStore.getState().toggleLook(), []);
+
+  useInput(onReset, onToggleBuildings, onToggleEdit, !editing, onToggleLook);
 
   const ready = phase === "ready" && !!graph;
 
@@ -276,7 +279,7 @@ export default function App() {
             {!editing && <Car graph={graph!} />}
             {editing ? <EditorCamera /> : <ChaseCamera walls={walls} />}
             <NetSync />
-            <Post level={level} />
+            <Post level={level} look={look} />
           </>
         )}
       </Canvas>

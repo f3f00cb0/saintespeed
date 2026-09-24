@@ -3,6 +3,7 @@ import { useStore } from "../state/store";
 import { onPeers, peerListKey, peers } from "../lib/peers";
 import { countdownLeft } from "../lib/session";
 import { launchRace } from "../lib/net";
+import { LOOK_NAMES } from "../lib/look";
 
 function fmt(t: number) {
   const m = Math.floor(t / 60);
@@ -43,6 +44,7 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
   const netStatus = useStore((s) => s.netStatus);
   const netCount = useStore((s) => s.netCount);
   const goGen = useStore((s) => s.goGen);
+  const look = useStore((s) => s.look);
   const peerKey = useSyncExternalStore(onPeers, peerListKey, peerListKey);
   const [tick, setTick] = useState(0);
 
@@ -135,13 +137,13 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
       <div className="hud bl">
         <div className="keys">
           <b>Z/↑</b> accélérer · <b>S/↓</b> freiner · <b>Q D</b> tourner · <b>espace</b> frein à main ·{" "}
-          <b>R</b> replacer · <b>B</b> bâtiments ·{" "}
+          <b>R</b> replacer · <b>B</b> bâtiments · <b>V</b> look {LOOK_NAMES[look]} ·{" "}
           <button type="button" className="link" onClick={onEdit}>
             E éditeur
           </button>
           <br />
           manette : <b>RT</b> accélérer · <b>LT</b> freiner · <b>stick</b> tourner · <b>X</b> frein à main ·{" "}
-          <b>Y</b> replacer · <b>Select</b> bâtiments
+          <b>Y</b> replacer · <b>Select</b> bâtiments · <b>LB</b> look
         </div>
         <div className="attrib">
           données © contributeurs OpenStreetMap, ODbL · {source}
