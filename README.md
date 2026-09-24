@@ -31,6 +31,13 @@ npm run fetch-ign              # télécharge la BD TOPO puis joint
 npm run fetch-ign -- --cache   # rejoint depuis data/ign-batiments.json, sans réseau
 ```
 
+Le relief (grille d'altitude IGN) et les ponts et tunnels des routes :
+
+```bash
+npm run fetch-relief           # public/sainte-relief.json + .bin
+npm run fetch-osm -- ouvrages  # tags bridge/tunnel/layer posés sur sainte.geojson
+```
+
 ## Commandes
 
 | touche | effet |
@@ -180,6 +187,44 @@ bâtiments restent sur l'inférence ; avec le cache, `fetch-osm -- buildings`
 rejoue la jointure, donc régénérer OSM n'efface pas les hauteurs. La mention
 « bâti IGN BD TOPO, Licence Ouverte » n'apparaît dans l'UI que si des données
 IGN sont chargées.
+
+## Le relief : la cuvette stéphanoise
+
+Le jeu était plat. Saint-Étienne est une cuvette : la bbox va de **414 m** au
+fond de la vallée du Furan à **1 065 m** sur les contreforts du Pilat, et la
+moitié du terrain y dépasse 14 % de pente. Même le circuit, qu'on croyait de
+plaine, monte de 531 m place Anatole France à 571 m à La Métare. Cette section
+décrit les données ; le rendu vient ensuite, par étapes.
+
+**La grille.** `npm run fetch-relief` lit le RGE ALTI de l'IGN (WMS raster de la
+Géoplateforme, flottants 32 bits) et cuit une grille de **860 × 1 225 cellules
+de 10 m**, régulière en degrés pour ne pas dépendre de l'origine du repère
+métrique du jeu. `src/lib/relief.ts` la lit et l'interpole bilinéairement, en
+lon/lat ou en mètres du jeu.
+
+- **Lue à 2 m, moyennée par 5 × 5.** Le service choisit son niveau de pyramide
+  sur l'échelle demandée : à 5 m par pixel sur des tuiles de 5 km, il servait
+  un niveau plus grossier en latitude, en pixels dupliqués. La première cuisson
+  avait 555 lignes sur 1 225 identiques à leur voisine, un relief en escalier.
+  À 2 m par pixel il sert sa vraie résolution, et la moyenne à 10 m gomme
+  bordures, murets et voitures garées.
+- **Contrôlée contre la BD TOPO** : aux 52 609 bâtiments de la bbox, l'écart à
+  l'altitude du sol mesurée par l'IGN est de 0,22 m en médiane, 0,86 m au p90,
+  1,77 m au p99, pour un biais de −0,04 m.
+- **Codée en écarts.** Pas de 5 cm (bien en dessous de l'erreur du modèle), et
+  chaque cellule stocke son écart à sa voisine en Int16 : 1,05 Mo compressé,
+  contre 1,96 Mo en altitudes brutes au centimètre, gzip ne voyant pas que le
+  terrain varie lentement.
+
+**Les ponts et les tunnels.** `fetch-osm` jetait les tags `bridge`, `tunnel` et
+`layer` : sur un sol plat ils ne servaient à rien. Avec le relief, un viaduc qui
+suivrait le terrain plongerait au fond du vallon qu'il enjambe, **jusqu'à 24 m**
+sous les voies rapides mesurées. `npm run fetch-osm -- ouvrages` récupère ces
+seuls tags et les pose par id de way sur `sainte.geojson`, sans toucher à la
+géométrie : refaire tout le réseau changerait les ways et pourrait déplacer le
+circuit. Résultat : 146 ponts, 39 tunnels, 174 `layer`, 1 voie couverte, et
+aucune autre différence sur les 5 837 ways. Un fetch complet des routes garde
+maintenant ces tags aussi.
 
 ## Streaming par anneaux de distance
 
@@ -1509,6 +1554,9 @@ la largeur réelle du ruban.
 Données © contributeurs OpenStreetMap, sous [ODbL](https://opendatacommons.org/licenses/odbl/).
 L'attribution est affichée dans l'UI. Pas de tuiles Google, pas de
 photogrammétrie.
+
+Relief : IGN, RGE ALTI, sous la même licence, quand `npm run fetch-relief` a
+été lancé.
 
 Bâti : IGN, BD TOPO, sous [Licence Ouverte Etalab 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence/),
 quand `npm run fetch-ign` a été lancé. L'attribution s'affiche alors dans l'UI.
