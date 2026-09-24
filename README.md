@@ -144,6 +144,23 @@ emprise OSM, en clés courtes dans `public/sainte-buildings.json` :
 | `iy` | année (`date_d_apparition`) | avant 1914 → pierre, 1950-1980 en hauteur → barre |
 | `iu` | `usage_1` | industriel → brique, commercial récent → moderne |
 
+**Mesuré à la première jointure** (57 430 emprises BD TOPO servies sur la
+bbox) : 92,7 % des bâtiments OSM trouvent leur emprise, 89,4 % prennent une
+hauteur mesurée, 43,8 % une matière de murs et de toit, 52,8 % une année. Au
+rendu, le p90 des hauteurs passe de 12,4 à 13,7 m et le p99 de 18,6 à 25,2 m :
+les tours de Montreynaud, Beaulieu et La Métare (50 à 60 m, 17 à 22 étages)
+existent enfin. La pierre passe de 5 % à 16 % des emprises et la pente de toit
+tombe de 92 % à 80 % : ce sont les toits terrasses que l'archétype seul ne
+voyait pas. Là où OSM et l'IGN donnent tous deux une hauteur, l'IGN mesure en
+médiane 1,22 fois `building:levels × 3,1 m` : les étages réels sont plus hauts
+que notre étage type, et le rez-de-chaussée plus encore.
+
+**La matière foncière ne dit rien d'une tour.** Les tours de 13 à 17 étages de
+1970-1975 (Le Cervin, Les Dolomites, Le Brévent) sont codées meulière ou
+aggloméré et sortaient en pierre de centre-ville à 50 m. Au-delà de 8 niveaux,
+ou à partir de 5 niveaux entre 1950 et 1980, la cascade conclut au grand
+ensemble avant de lire la matière.
+
 **La jointure vote sur l'emprise entière**, pas sur le seul centroïde. OSM et le
 cadastre ne découpent pas les bâtiments pareil, et le centroïde d'une emprise en
 U tombe dans la cour. On échantillonne le centre et chaque sommet tiré à 35 %

@@ -307,6 +307,16 @@ export function archetypeFor(b: ArchetypeInput): Archetype {
   //
   // Les codes de murs sont ceux des fichiers fonciers : 1 pierre, 2 meuliere,
   // 3 beton, 4 briques, 5 agglomere, 6 bois.
+  //
+  // Sauf en hauteur : la matiere fonciere d'une tour est peu fiable. Mesure a
+  // la premiere jointure, les tours de 13 a 17 etages de 1970-1975 (Le Cervin,
+  // Les Dolomites, Le Brevent) sont codees meuliere ou agglomere, et sortaient
+  // en pierre de centre-ville a 50 m. Au dela de 8 niveaux, ou en hauteur pendant
+  // les Trente Glorieuses, c'est un grand ensemble quelle que soit la matiere.
+  const trenteGlorieuses = b.year !== undefined && b.year >= 1950 && b.year <= 1980;
+  if (b.walls !== undefined || b.year !== undefined) {
+    if (b.renderedLevels >= 8 || (trenteGlorieuses && b.renderedLevels >= 5)) return Archetype.Barre;
+  }
   switch (b.walls) {
     case 4:
       return Archetype.Brique;
@@ -329,8 +339,6 @@ export function archetypeFor(b: ArchetypeInput): Archetype {
     // Immeubles de rapport d'avant 1914 : l'essentiel du centre et des axes
     // (Jacquard, Tarentaize, Bellevue), pierre ou pise enduit sous zinc.
     if (b.year < 1914 && b.renderedLevels >= 3) return Archetype.Pierre;
-    // Les Trente Glorieuses en hauteur : les grands ensembles, ou qu'ils soient.
-    if (b.year >= 1950 && b.year <= 1980 && b.renderedLevels >= 5) return Archetype.Barre;
     // Tertiaire recent.
     if (b.year >= 1990 && b.usage === "c" && b.renderedLevels >= 3) return Archetype.Moderne;
   }
