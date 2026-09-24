@@ -229,7 +229,95 @@ function emitDetailed(
     }
   }
 
+  // --- encombrement de toit, au plein detail seulement ---------------------
+  if (lod === Lod.Full && !b.landmark && !b.unlit && b.family === Family.None) {
+    emitRoofClutter(b, sloped ? top! : ring, capY, sloped, R, roofTint);
+  }
+
   return { shop, sloped, insetFail };
+}
+
+// Cheminees sur les toits en pente, antennes et edicules sur les toits plats.
+// C'est ce qui casse la regle droite des corniches vues de pres, et le trait
+// encre les detache sur le ciel. Au plein detail seulement : passe 300 m, ce
+// ne sont plus que quelques pixels.
+function emitRoofClutter(
+  b: FlatBuilding,
+  cap: { x: number; y: number }[],
+  capY: number,
+  sloped: boolean,
+  R: { pos: number[]; col: number[] },
+  roofTint: THREE.Color,
+) {
+  const n = cap.length;
+  if (n < 3 || b.area < 40) return;
+  let cx = 0;
+  let cy = 0;
+  for (const p of cap) {
+    cx += p.x;
+    cy += p.y;
+  }
+  cx /= n;
+  cy /= n;
+  // un element pour 150 m2 de toit, trois au plus
+  const count = Math.min(3, 1 + Math.floor(b.area / 150));
+  for (let k = 0; k < count; k++) {
+    const i = Math.floor(hash01(b.id, 61 + k) * n) % n;
+    // un peu en retrait du bord, vers le centre du toit
+    const t = 0.18 + hash01(b.id, 67 + k) * 0.2;
+    const x = cap[i].x + (cx - cap[i].x) * t;
+    const y = cap[i].y + (cy - cap[i].y) * t;
+    const rot = hash01(b.id, 71 + k) * Math.PI;
+    if (sloped) {
+      // souche de cheminee en brique sombre, coiffee d'un chapeau clair
+      pushBox(R, x, y, 0.8, 0.55, capY - 0.2, capY + 1.3, rot, 0.34, 0.2, 0.16);
+      pushBox(R, x, y, 0.95, 0.7, capY + 1.3, capY + 1.45, rot, 0.52, 0.5, 0.47);
+    } else if (hash01(b.id, 73 + k) < 0.55) {
+      // antenne : un mat et deux brins
+      const mh = 2.2 + hash01(b.id, 79 + k) * 1.6;
+      pushBox(R, x, y, 0.08, 0.08, capY, capY + mh, rot, 0.2, 0.2, 0.22);
+      pushBox(R, x, y, 1.4, 0.06, capY + mh * 0.7, capY + mh * 0.7 + 0.06, rot, 0.2, 0.2, 0.22);
+      pushBox(R, x, y, 0.9, 0.06, capY + mh * 0.9, capY + mh * 0.9 + 0.06, rot, 0.2, 0.2, 0.22);
+    } else {
+      // edicule d'ascenseur ou de ventilation, dans le ton du toit
+      pushBox(R, x, y, 2.2, 1.6, capY, capY + 1.6, rot, roofTint.r * 1.3, roofTint.g * 1.3, roofTint.b * 1.3);
+    }
+  }
+}
+
+/** Pave oriente, en triangles simples (x, y du plan ; la hauteur en metres). */
+function pushBox(
+  R: { pos: number[]; col: number[] },
+  x: number,
+  y: number,
+  w: number,
+  d: number,
+  y0: number,
+  y1: number,
+  rot: number,
+  r: number,
+  g: number,
+  bl: number,
+) {
+  const c = Math.cos(rot);
+  const s = Math.sin(rot);
+  const corner = (u: number, v: number): [number, number] => [
+    x + u * c - v * s,
+    -(y + u * s + v * c),
+  ];
+  const q = [corner(-w / 2, -d / 2), corner(w / 2, -d / 2), corner(w / 2, d / 2), corner(-w / 2, d / 2)];
+  const tri = (a: number[], b2: number[], c2: number[]) => {
+    R.pos.push(...a, ...b2, ...c2);
+    for (let k = 0; k < 3; k++) R.col.push(r, g, bl);
+  };
+  for (let i = 0; i < 4; i++) {
+    const [ax, az] = q[i];
+    const [bx, bz] = q[(i + 1) % 4];
+    tri([ax, y0, az], [bx, y0, bz], [bx, y1, bz]);
+    tri([ax, y0, az], [bx, y1, bz], [ax, y1, az]);
+  }
+  tri([q[0][0], y1, q[0][1]], [q[1][0], y1, q[1][1]], [q[2][0], y1, q[2][1]]);
+  tri([q[0][0], y1, q[0][1]], [q[2][0], y1, q[2][1]], [q[3][0], y1, q[3][1]]);
 }
 
 /**

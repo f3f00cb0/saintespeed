@@ -504,3 +504,34 @@ body {
   75% { transform: translate(-50%, -50%) rotate(var(--tilt)) scale(1); opacity: 1; }
   100% { transform: translate(-50%, -80%) rotate(var(--tilt)) scale(0.9); opacity: 0; }
 }
+
+/* --- bulle au dessus des autres pilotes ------------------------------------- */
+.peer-bubble {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--bone);
+  color: var(--gink);
+  border: 2.5px solid var(--gink);
+  border-left: 8px solid var(--peer);
+  box-shadow: 3px 3px 0 var(--gink);
+  transform: translateY(-50%) skewX(-6deg);
+  white-space: nowrap;
+  font: 700 11px/1.2 var(--mono);
+}
+.peer-bubble b { font: italic 900 13px/1.2 var(--gdisp); text-transform: uppercase; }
+.peer-bubble span:empty { display: none; }
+.peer-bubble span { font-variant-numeric: tabular-nums; }
+/* la queue de la bulle, vers la voiture */
+.peer-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -11px;
+  border: 8px solid transparent;
+  border-top: 9px solid var(--gink);
+  border-bottom: 0;
+  transform: translateX(-50%);
+}

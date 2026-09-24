@@ -294,6 +294,23 @@ banderole à damier qui porte le nom du checkpoint lettré à l'encre, lisible d
 deux côtés. Celui à passer est rouge, sa banderole se dandine et une colonne le
 signale par-dessus les toits.
 
+**Les autres pilotes** portent une bulle de BD au-dessus de leur voiture : leur
+nom, liseré à leur couleur, et leur chrono quand ils roulent. C'est du DOM
+(drei `Html`), hors de la passe de dessin, donc toujours net ; la bulle ne
+tourne pas avec la voiture et s'efface au-delà de 240 m.
+
+**Les toits proches** ont de l'encombrement, au plein détail seulement :
+souches de cheminée sur les toits en pente, antennes et édicules sur les toits
+plats, un élément pour 150 m² de toit, trois au plus, seedés sur l'id OSM. Le
+trait encré les détache sur le ciel, et c'est ce qui casse la règle droite des
+corniches.
+
+**Les arbres** tirent chacun leur teinte (quatre verts), et un sur sept a déjà
+les couleurs de l'automne : dans la nuit dessinée, ces taches d'ocre font lire
+un alignement comme une rangée d'arbres. Les couronnes sont cabossées, chaque
+sommet de l'icosaèdre poussé d'un bruit fixe, pour ne plus lire comme des
+billes.
+
 **La voiture** reste procédurale : la caisse et
 le vitrage sont des profils latéraux extrudés et chanfreinés, avec les passages
 de roue creusés dans le profil. Les roues tournent avec la vitesse et les roues
