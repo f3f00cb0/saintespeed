@@ -15,7 +15,8 @@ import { loadRail, prepareRail, railLength, makeRoadProbe } from "./lib/rail";
 import { useInput } from "./lib/input";
 import { loadRelief } from "./lib/relief";
 import { buildRoadProfile } from "./lib/roadProfile";
-import { reliefWanted, setElevation } from "./lib/elevation";
+import { elevation, reliefWanted, setElevation } from "./lib/elevation";
+import { Terrain } from "./scene/Terrain";
 import { useStore } from "./state/store";
 import { Roads } from "./scene/Roads";
 import { Car } from "./scene/Car";
@@ -110,18 +111,15 @@ export default function App() {
         saveCurrent(track);
         if (cps.length) spawnAt(g, cps, 0);
 
-        // Relief, derriere le drapeau `?relief` tant que le decor (sol,
-        // batiments, mobilier) ne le suit pas : les routes et la voiture
-        // montent deja, le reste de la ville est encore a plat. Il est pose
-        // AVANT setLoaded, les routes et les portiques lisant l'altitude a leur
-        // construction.
+        // Relief (desactivable par `?plat`). Il est pose AVANT setLoaded : les
+        // routes, les portiques, le sol et les batiments lisent l'altitude a
+        // leur construction.
         if (reliefWanted()) {
           const relief = await loadRelief(g.proj);
           if (dead) return;
           if (relief) {
             const profile = buildRoadProfile(g, relief);
-            // z0 : la chaussee sous la voiture au depart, pour que le decor
-            // encore plat tombe juste la ou l'on commence a rouler
+            // z0 : la chaussee sous la voiture au depart
             const hit = g.nearestEdge(car.x, car.y, 40);
             const z0 = hit ? profile.z(hit.edge.id, hit.t) : relief.at(car.x, car.y);
             setElevation(g, relief, profile, z0);
@@ -262,6 +260,7 @@ export default function App() {
             <Sky />
             {/* le decor passe avant les routes : les surfaces sont sous la
                 chaussee, qui doit rester lisible par dessus une place */}
+            {elevation.on && <Terrain areas={features?.areas ?? null} />}
             {features && <Ground areas={features.areas} paths={features.paths} />}
             <Roads ways={ways} proj={graph!.proj} graph={graph} />
             {features && <Tram lines={features.tram} />}

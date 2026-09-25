@@ -14,6 +14,7 @@ import { Family } from "../lib/families";
 import { kitFor } from "../lib/familyKits";
 import { newEmit, type Buf as KitBuf, type Emit } from "../lib/landmarkGeometry";
 import { NOTABLE } from "../lib/notable";
+import { SINK, footingOf } from "../lib/footing";
 
 // La peinture des facades vit dans lib/facades.ts : des canvas purs, sans
 // three.js, pour que la planche de comparaison (reference/) puisse afficher
@@ -34,6 +35,23 @@ const PARAPET = 0.75; // bandeau vertical des toits plats
 // rez-de-chaussee d'un immeuble de rapport, avec sa devanture et son entresol,
 // monte a 4 m et plus. A 3,1 m la vitrine lisait comme un etage de plus.
 const GF_SHOP = 4.0;
+
+// --- relief : le pied des batiments --------------------------------------------
+//
+// Un batiment se construit toujours dans son repere local, de 0 a sa hauteur,
+// comme avant. Son "niveau de reference" Y0 est le milieu entre le point le plus
+// bas et le plus haut du sol sous ses angles : c'est la que son 0 local se pose,
+// donc la que ses etages se comptent et que son toit, plat, s'arrete a Y0 + h.
+// Ses murs, eux, descendent a chaque angle jusqu'au sol de cet angle, et SINK
+// en dessous : rue en pente, la facade aval montre un etage de plus, la facade
+// amont s'enterre, comme les vrais immeubles stephanois accroches aux cotes.
+// Mesure sur la BD TOPO : une emprise porte 1,7 m de denivele en mediane, 4,2 m
+// au p90. Une altitude unique par batiment l'aurait fait flotter d'un cote.
+/** Decale en y les sommets ecrits depuis `from` : du repere local au monde. */
+function liftFrom(pos: number[], from: number, dy: number) {
+  if (dy === 0) return;
+  for (let i = from + 1; i < pos.length; i += 3) pos[i] += dy;
+}
 const ROOF_RISE = 1.9; // hauteur du bandeau incline des toits en pente
 
 // Combien de tuiles au plus on construit par tick de streaming. Sans worker, la
@@ -95,6 +113,12 @@ function emitDetailed(
   const ring = b.ring;
   const n = ring.length;
   const h = b.height;
+  const foot = footingOf(b);
+  // sol sous l'angle i, dans le repere local du batiment
+  const ground = (i: number) => foot.g[i % n] - foot.y0;
+  const W0 = W.pos.length;
+  const S0 = S.pos.length;
+  const R0 = R.pos.length;
 
   // Variante de facade : tiree par batiment, guidee par sa hauteur, son age et
   // son emprise (lib/facadeVariants.ts). Deux voisins du meme archetype ne
@@ -115,8 +139,15 @@ function emitDetailed(
   // Le socle commercant n'existe qu'au plein detail : c'est un signal de vie a
   // hauteur de rue, invisible passe 300 m, donc c'est la premiere chose qu'on
   // laisse tomber.
-  const shop = lod === Lod.Full && b.shopFront && h > GF_SHOP * 1.3;
+  // ...et seulement s'il reste un etage au dessus de la vitrine la plus haute
+  // perchee : en pente, la vitrine amont commence plus haut que l'aval.
+  const shop = lod === Lod.Full && b.shopFront && h > GF_SHOP * 1.3 + (foot.max - foot.y0);
   const base0 = shop ? GF_SHOP : 0;
+  // Reference des rangees de fenetres : le sol le plus bas (+ la vitrine). Une
+  // seule par batiment, sinon les etages se decaleraient d'un mur a l'autre.
+  const yRef = foot.min - foot.y0 + base0;
+  // pied de mur a l'angle i : sur la vitrine, ou enterre de SINK
+  const foot0 = (i: number) => (shop ? ground(i) + GF_SHOP : ground(i) - SINK);
 
   // Decalage de tuile propre au batiment, en nombres entiers de travees et
   // d'etages : chaque emprise tire sa propre trame de fenetres allumees de la
@@ -152,7 +183,13 @@ function emitDetailed(
     if (shop) {
       const su0 = run / SHOP_TILE_U + sdu;
       const su1 = (run + len) / SHOP_TILE_U + sdu;
-      S.pos.push(px, 0, pz, qx, 0, qz, qx, GF_SHOP, qz, px, 0, pz, qx, GF_SHOP, qz, px, GF_SHOP, pz);
+      const gp = ground(i);
+      const gq = ground(i + 1);
+      const lp = gp - SINK;
+      const lq = gq - SINK;
+      const tp = gp + GF_SHOP;
+      const tq = gq + GF_SHOP;
+      S.pos.push(px, lp, pz, qx, lq, qz, qx, tq, qz, px, lp, pz, qx, tq, qz, px, tp, pz);
       for (let k = 0; k < 6; k++) {
         S.norm.push(nx, 0, -ny);
         S.col.push(tint.r * 0.5, tint.g * 0.5, tint.b * 0.5);
@@ -163,9 +200,13 @@ function emitDetailed(
     const u0 = run / tex.tileU + du;
     const u1 = (run + len) / tex.tileU + du;
     run += len;
-    const v = dv + (h - base0) / tex.tileV;
+    const v = dv + (h - yRef) / tex.tileV;
+    const bp = foot0(i);
+    const bq = foot0(i + 1);
+    const vp = dv + (bp - yRef) / tex.tileV;
+    const vq = dv + (bq - yRef) / tex.tileV;
 
-    W.pos.push(px, base0, pz, qx, base0, qz, qx, h, qz, px, base0, pz, qx, h, qz, px, h, pz);
+    W.pos.push(px, bp, pz, qx, bq, qz, qx, h, qz, px, bp, pz, qx, h, qz, px, h, pz);
     facade();
 
     // Un clocher ou un chevalement n'a pas de rangees de fenetres allumees :
@@ -174,7 +215,7 @@ function emitDetailed(
       const [qu, qv] = tex.patch;
       for (let k = 0; k < 6; k++) {
         W.norm.push(nx, 0, -ny);
-        const f = ramp(k < 2 || k === 3 ? base0 : h, h) * 0.72;
+        const f = ramp(k < 2 || k === 3 ? Math.max(0, base0) : h, h) * 0.72;
         W.col.push(tint.r * f, tint.g * f, tint.b * f);
       }
       W.uv.push(qu, qv, qu, qv, qu, qv, qu, qv, qu, qv, qu, qv);
@@ -184,13 +225,13 @@ function emitDetailed(
     // Rampe verticale sur la couleur de sommet. Une hemisphereLight seule ne
     // degrade rien sur un mur : sa normale est horizontale, elle recoit donc
     // partout le meme melange ciel/sol.
-    const hs = [base0, base0, h, base0, h, h];
+    const hs = [bp, bq, h, bp, h, h];
     for (let k = 0; k < 6; k++) {
       W.norm.push(nx, 0, -ny);
-      const f = ramp(hs[k], h);
+      const f = ramp(Math.max(0, hs[k]), h);
       W.col.push(tint.r * f, tint.g * f, tint.b * f);
     }
-    W.uv.push(u0, dv, u1, dv, u1, v, u0, dv, u1, v, u0, v);
+    W.uv.push(u0, vp, u1, vq, u1, v, u0, vp, u1, v, u0, v);
   }
 
   // --- couronnement ---------------------------------------------------------
@@ -259,6 +300,11 @@ function emitDetailed(
   if (lod === Lod.Full && !b.landmark && !b.unlit && b.family === Family.None) {
     emitRoofClutter(b, sloped ? top! : ring, capY, sloped, R, roofTint);
   }
+
+  // du repere local au monde : tout ce que ce batiment vient d'ecrire monte a Y0
+  liftFrom(W.pos, W0, foot.y0);
+  liftFrom(S.pos, S0, foot.y0);
+  liftFrom(R.pos, R0, foot.y0);
 
   return { shop, sloped, insetFail };
 }
@@ -354,6 +400,9 @@ function pushBox(
  */
 function emitSilhouette(b: FlatBuilding, style: ArchetypeStyle, B: Buf) {
   const { tint, roofTint } = tintsOf(b, style);
+  const foot = footingOf(b);
+  const B0 = B.pos.length;
+  const low = foot.min - foot.y0 - SINK; // pied de la boite, sous l'angle le plus bas
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   for (const p of b.ring) {
     if (p.x < minx) minx = p.x;
@@ -387,7 +436,7 @@ function emitSilhouette(b: FlatBuilding, style: ArchetypeStyle, B: Buf) {
     if (len < 0.05) continue;
     const nx = dy / len;
     const ny = -dx / len;
-    B.pos.push(ax, 0, -ay, bx, 0, -by, tbx, h, -tby, ax, 0, -ay, tbx, h, -tby, tax, h, -tay);
+    B.pos.push(ax, low, -ay, bx, low, -by, tbx, h, -tby, ax, low, -ay, tbx, h, -tby, tax, h, -tay);
     const f = [lo, lo, hi, lo, hi, hi];
     for (let j = 0; j < 6; j++) {
       B.norm.push(nx, 0, -ny);
@@ -404,6 +453,7 @@ function emitSilhouette(b: FlatBuilding, style: ArchetypeStyle, B: Buf) {
     B.norm.push(0, 1, 0);
     B.col.push(roofTint.r, roofTint.g, roofTint.b);
   }
+  liftFrom(B.pos, B0, foot.y0);
 }
 
 function toGeometry(b: Buf, withUv: boolean): THREE.BufferGeometry {
@@ -444,7 +494,14 @@ function emitFamilies(list: FlatBuilding[], far: boolean, e: Emit): boolean {
     if (b.family === Family.None || !b.frame || b.landmark?.replaceBase) continue;
     const kit = kitFor(b.family);
     if (!kit) continue;
+    // le kit se construit de 0 a la hauteur du batiment, comme ses murs : il
+    // monte au meme niveau de reference Y0
+    const from = [e.walls.pos.length, e.roofs.pos.length, e.glow.pos.length];
     kit(e, b.frame, b.frame, kitContext(b, far));
+    const y0 = footingOf(b).y0;
+    liftFrom(e.walls.pos, from[0], y0);
+    liftFrom(e.roofs.pos, from[1], y0);
+    liftFrom(e.glow.pos, from[2], y0);
     any = true;
   }
   return any;

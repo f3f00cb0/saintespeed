@@ -230,12 +230,11 @@ circuit. Résultat : 146 ponts, 39 tunnels, 174 `layer`, 1 voie couverte, et
 aucune autre différence sur les 5 837 ways. Un fetch complet des routes garde
 maintenant ces tags aussi.
 
-### Les routes et la voiture sur le relief (derrière `?relief`)
+### Les routes et la voiture sur le relief
 
-Deuxième étape : les chaussées, la voiture, la caméra, les portiques et les
-voitures du salon suivent le relief. Le reste de la ville (sol, bâtiments,
-mobilier) est encore à plat : l'ensemble reste donc derrière le drapeau
-**`?relief`** dans l'URL, et sans lui le jeu est exactement celui d'avant.
+Les chaussées, la voiture, la caméra, les portiques et les voitures du salon
+suivent le relief. Il est actif par défaut ; **`?plat`** dans l'URL rend la
+ville plate d'avant, pour comparer ou sur une machine qui peinerait.
 
 **Le profil en long** (`src/lib/roadProfile.ts`). La voiture vit en 2D sur le
 graphe routier, et un edge OSM est un segment droit qui peut faire 100 m : des
@@ -286,12 +285,60 @@ Simulation sur le vrai réseau, 90 s pied au plancher depuis le départ : aucun
 glissement pendant le compte à rebours, aucune valeur non finie, un décollage
 de 0,65 s, et au plus 19 cm d'une frame à l'autre avant le filtre d'affichage.
 
-**Le repère vertical** : `y = altitude − z0`, z0 étant la chaussée au départ.
-Le décor encore plat tombe ainsi juste là où l'on commence à rouler. La caméra
+**Le repère vertical** : `y = altitude − z0`, z0 étant la chaussée au départ,
+pour garder de petites coordonnées là où l'on roule. La caméra
 monte en descente (la chaussée derrière la voiture est plus haute qu'elle) et
 teste les murs à sa hauteur au-dessus du sol, pas à son altitude. Les voitures
 du salon retrouvent leur altitude sur la chaussée de chaque client : le relief
 étant le même partout, le protocole n'a pas changé.
+
+### La ville sur le relief
+
+**Un seul sol** (`surfaceY`, `src/lib/elevation.ts`) : sur une chaussée, son
+profil en long ; au-delà du bord, un raccord en smoothstep vers le terrain sur
+8 m. Tout ce qui est posé au sol le lit, et c'est ce qui fait que trottoirs,
+places, pieds d'immeubles et chaussées s'emboîtent. Les ponts et les tunnels
+n'y comptent pas : sous un tablier, le sol est le fond du vallon.
+
+**Le terrain** (`src/scene/Terrain.tsx`) remplace le plan sombre : une grille
+par tuile de 240 m, au même streaming que les bâtiments, à 6, 12 puis 30 m de
+maille, 60 cm sous le sol de la ville (les surfaces au sol commencent à
+−30 cm), avec une jupe verticale contre les fentes entre mailles différentes.
+Une corde entre deux sommets passait au-dessus des chaussées qui plongent :
+0,3 % des points de chaussée percés à 6 m, 3,6 % à 12 m, 13 % à 30 m, des
+taches sombres sur les rues vues de loin. Près d'une route, un sommet prend
+donc le minimum du sol sur sa demi-maille : plus aucun point percé à aucune
+maille. Coût mesuré au centre-ville : 11 ms la tuile pleine, 3 ms la réduite,
+moins d'une la lointaine ; deux tuiles par tick.
+
+**Les grandes surfaces naturelles sont peintes sur le terrain**, en couleur
+de sommet : herbe, forêt, zones d'activité, friches, jardins ouvriers, et
+toute surface de plus de 4 ha. Drapées comme maillages, elles faisaient
+4,5 millions de triangles et 15 s de calcul au chargement, l'herbe et la forêt
+des collines à elles seules 3,9 millions. Les surfaces de ville (places,
+parcs, parkings, eau, stades) restent des maillages à bords nets : 59 000
+triangles, 0,3 s.
+
+**Le drapé** (`src/lib/drape.ts`) pose sur ce sol ce qui a été dessiné à plat :
+places, allées, trottoirs et bordures, passages piétons, plateforme du tram,
+clôtures, viaduc ferroviaire. Le découpage est adaptatif : on coupe le plus
+long côté d'un triangle tant que le sol s'écarte de sa corde, une place plate
+reste en quelques triangles. Les faces verticales (bordures, clôtures, piles)
+gardent leurs arêtes au même décalage et restent verticales.
+
+**Les bâtiments** se construisent toujours de 0 à leur hauteur dans leur repère
+local, posé à mi-chemin entre le sol le plus bas et le plus haut sous leurs
+angles ; le toit reste plat. Les murs descendent à chaque angle jusqu'au sol,
+60 cm dessous : rue en pente, la façade aval gagne un étage, la façade amont
+s'enterre, comme les immeubles accrochés aux côtes. Les rangées de fenêtres
+partent toutes du sol le plus bas, sinon les étages se décaleraient d'un mur à
+l'autre. La vitrine suit la rue ; elle saute si elle ne laisse plus d'étage
+au-dessus d'elle. Silhouettes lointaines, kits de famille et repères montent au
+même niveau ; un repère qui remplace son bâtiment (Zénith, chevalement) se pose
+sur son point le plus bas pour ne flotter nulle part.
+
+Arbres, lampadaires, fontaines, poteaux de caténaire et objets d'espace public
+se posent sur le sol à leur pied ; la ligne du tracé de l'éditeur aussi.
 
 ## Streaming par anneaux de distance
 

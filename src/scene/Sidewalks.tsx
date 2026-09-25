@@ -7,6 +7,7 @@ import type { Way } from "../lib/osm";
 import { car } from "../lib/car";
 import { editView } from "../lib/editView";
 import { useStore } from "../state/store";
+import { drapeGeometry } from "../lib/drape";
 
 // Trottoirs, bordures et caniveaux. La geometrie est calculee dans
 // src/lib/sidewalks.ts, qui est pur et se rejoue dans Node (`npm run voirie`).
@@ -73,12 +74,13 @@ function toGeometry(t: TileData): Built {
   const uv = new Float32Array(t.pavingUv.length);
   for (let i = 0; i < uv.length; i++) uv[i] = t.pavingUv[i] / TEX_M;
   paving.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-  paving.computeBoundingSphere();
   const trim = new THREE.BufferGeometry();
   trim.setAttribute("position", new THREE.BufferAttribute(t.trim, 3));
   trim.setAttribute("color", new THREE.BufferAttribute(t.trimColor, 3));
-  trim.computeBoundingSphere();
-  return { paving, trim };
+  // relief : le worker dessine a plat, on pose ici sur le sol de la ville. Les
+  // bordures sont des faces verticales : leurs deux aretes ont la meme emprise
+  // au sol, donc le meme decalage, et restent verticales.
+  return { paving: drapeGeometry(paving), trim: drapeGeometry(trim) };
 }
 
 // Le worker refait son graphe depuis le meme reseau : meme entree, meme

@@ -17,6 +17,8 @@ import {
   frameOf, newEmit, toGeometry, type Anchor, type Tint,
 } from "../lib/landmarkGeometry";
 import { LANDMARK_KITS, SYNTHETIC_LANDMARKS } from "../lib/landmarks";
+import { footingOf } from "../lib/footing";
+import { surfaceY } from "../lib/elevation";
 
 const tintOf = (hex: number): Tint => {
   const c = new THREE.Color(hex);
@@ -25,6 +27,8 @@ const tintOf = (hex: number): Tint => {
 
 type Built = {
   key: string;
+  /** niveau de pose sur le relief, y three.js */
+  y: number;
   archetype: Archetype;
   walls: THREE.BufferGeometry | null;
   roofs: THREE.BufferGeometry | null;
@@ -50,8 +54,14 @@ export function Landmarks({ buildings, proj }: { buildings: FlatBuilding[]; proj
       kit(e, frame, painted[b.archetype], tint, roofTint, frame);
       const tris = (e.walls.pos.length + e.roofs.pos.length + e.glow.pos.length) / 9;
       if (tris === 0) console.warn(`repere ${b.id}: kit vide (aucune geometrie)`);
+      // Un kit qui habille un batiment extrude monte a son niveau de reference,
+      // comme lui. Un kit qui le remplace (Zenith, chevalement) n'a pas de murs
+      // descendus a chaque angle : on le pose sur le point le plus bas, pour
+      // qu'il ne flotte nulle part.
+      const foot = footingOf(b);
       out.push({
         key: `lm-${b.id}`,
+        y: b.landmark.replaceBase ? foot.min : foot.y0,
         archetype: b.archetype,
         walls: toGeometry(e.walls, true),
         roofs: toGeometry(e.roofs, false),
@@ -68,6 +78,7 @@ export function Landmarks({ buildings, proj }: { buildings: FlatBuilding[]; proj
         { w: 0, d: 0, area: 0, height: 0, minx: 0, maxx: 0, miny: 0, maxy: 0 });
       out.push({
         key: syn.key,
+        y: surfaceY(p.x, p.y),
         archetype: Archetype.Pierre,
         walls: toGeometry(e.walls, true),
         roofs: toGeometry(e.roofs, false),
@@ -92,7 +103,7 @@ export function Landmarks({ buildings, proj }: { buildings: FlatBuilding[]; proj
   return (
     <group>
       {built.map((m) => (
-        <group key={m.key}>
+        <group key={m.key} position={[0, m.y, 0]}>
           {m.walls && (
             <mesh geometry={m.walls}>
               <meshLambertMaterial

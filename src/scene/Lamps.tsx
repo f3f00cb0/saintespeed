@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { specFor, type Way } from "../lib/osm";
 import type { Projector } from "../lib/project";
 import type { RoadGraph } from "../lib/graph";
+import { surfaceY } from "../lib/elevation";
 
 // Lampadaires le long des axes. Trois maillages instancies : le mat, la tete
 // lumineuse, et une flaque de lumiere additive au sol. C'est la flaque qui fait
@@ -189,10 +190,11 @@ function LampSector({
     const flat = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
     indices.forEach((lampIdx, instIdx) => {
       const l = lamps[lampIdx];
-      posts.current?.setMatrixAt(instIdx, m.makeTranslation(l.x, POST_H / 2, -l.y));
-      heads.current?.setMatrixAt(instIdx, m.makeTranslation(l.x, POST_H, -l.y));
+      const gy = surfaceY(l.x, l.y); // relief
+      posts.current?.setMatrixAt(instIdx, m.makeTranslation(l.x, gy + POST_H / 2, -l.y));
+      heads.current?.setMatrixAt(instIdx, m.makeTranslation(l.x, gy + POST_H, -l.y));
       if (pools.current) {
-        m.copy(flat).setPosition(l.x, 0.45, -l.y);
+        m.copy(flat).setPosition(l.x, gy + 0.45, -l.y);
         pools.current.setMatrixAt(instIdx, m);
       }
     });

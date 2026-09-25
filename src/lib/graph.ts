@@ -239,7 +239,13 @@ export class RoadGraph {
 
   // Segment le plus proche. Anneaux croissants, on s'arrete des qu'aucun
   // anneau plus lointain ne peut faire mieux.
-  nearestEdgeInto(x: number, y: number, out: EdgeHit, maxRadius = 400): EdgeHit | null {
+  nearestEdgeInto(
+    x: number,
+    y: number,
+    out: EdgeHit,
+    maxRadius = 400,
+    groundOnly = false,
+  ): EdgeHit | null {
     this.ensureEdgeSeen();
     const stamp = this.bumpStamp();
     const cx = Math.floor(x / CELL);
@@ -258,6 +264,8 @@ export class RoadGraph {
           for (const id of bucket) {
             if (this.edgeSeen[id] === stamp) continue;
             this.edgeSeen[id] = stamp;
+            // groundOnly : on ignore ponts et tunnels (sol sous un tablier)
+            if (groundOnly && this.edges[id].structure) continue;
             const hit = this.projectInto(this.edges[id], x, y, this.projScratch);
             if (!hasBest || hit.dist < bestDist) {
               this.copyHit(hit, out);

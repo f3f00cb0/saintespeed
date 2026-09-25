@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { drapeGeometry } from "../lib/drape";
 import * as THREE from "three";
 import { DECK_HEIGHT, DECK_THICKNESS, DECK_WIDTH, railLength, type FlatRail, type RoadProbe } from "../lib/rail";
 import type { FlatBuilding } from "../lib/buildings";
@@ -170,10 +171,14 @@ export function Viaduct({
       }
     }
 
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(buf.pos, 3));
-    g.setAttribute("color", new THREE.Float32BufferAttribute(buf.col, 3));
-    g.computeVertexNormals();
+    const flat = new THREE.BufferGeometry();
+    flat.setAttribute("position", new THREE.Float32BufferAttribute(buf.pos, 3));
+    flat.setAttribute("color", new THREE.Float32BufferAttribute(buf.col, 3));
+    flat.computeVertexNormals();
+    // Relief : l'ouvrage est dessine en hauteur au-dessus d'un sol plat. Drape,
+    // chaque sommet monte du sol sous lui : les piles gardent leur pied au sol
+    // et restent verticales, le tablier suit le terrain lisse a sa hauteur.
+    const g = drapeGeometry(flat);
     g.computeBoundingSphere();
     console.log(
       `viaduc: ${rail.length} troncons aeriens, ${Math.round(railLength(rail))} m, ` +

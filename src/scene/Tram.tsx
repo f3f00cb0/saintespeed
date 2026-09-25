@@ -1,5 +1,7 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { drapeGeometry } from "../lib/drape";
+import { surfaceY } from "../lib/elevation";
 
 // Le tram, signature stephanoise.
 //
@@ -140,9 +142,10 @@ export function Tram({ lines }: { lines: { x: number; y: number }[][] }) {
   const built = useMemo(() => {
     if (!lines.length) return null;
     const t0 = performance.now();
-    const bed = ribbon(lines, BED_W / 2, 0, BED_Y);
-    const railL = ribbon(lines, RAIL_W / 2, GAUGE / 2, RAIL_Y);
-    const railR = ribbon(lines, RAIL_W / 2, -GAUGE / 2, RAIL_Y);
+    // relief : la plateforme et les rails suivent la chaussee qu'ils partagent
+    const bed = drapeGeometry(ribbon(lines, BED_W / 2, 0, BED_Y));
+    const railL = drapeGeometry(ribbon(lines, RAIL_W / 2, GAUGE / 2, RAIL_Y));
+    const railR = drapeGeometry(ribbon(lines, RAIL_W / 2, -GAUGE / 2, RAIL_Y));
     const poles = placePoles(lines);
     console.log(
       `tram: ${lines.length} troncons, ${poles.length} poteaux de catenaire, ` +
@@ -163,7 +166,7 @@ export function Tram({ lines }: { lines: { x: number; y: number }[][] }) {
     if (!built || !poles.current) return;
     const m = new THREE.Matrix4();
     built.poles.forEach((p, i) => {
-      poles.current!.setMatrixAt(i, m.makeTranslation(p.x, POLE_H / 2, -p.y));
+      poles.current!.setMatrixAt(i, m.makeTranslation(p.x, POLE_H / 2 + surfaceY(p.x, p.y), -p.y));
     });
     poles.current.instanceMatrix.needsUpdate = true;
     fitInstancedBounds(poles.current, poleRadius);

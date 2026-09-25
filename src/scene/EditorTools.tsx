@@ -5,7 +5,7 @@ import type { RoadGraph } from "../lib/graph";
 import { snapCheckpoint } from "../lib/race";
 import { editView } from "../lib/editView";
 import { useStore } from "../state/store";
-import { elevation, terrainY } from "../lib/elevation";
+import { elevation, surfaceY, terrainY } from "../lib/elevation";
 
 const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const ndc = new THREE.Vector2();
@@ -61,7 +61,8 @@ export function EditorTools({ graph }: { graph: RoadGraph }) {
   const line = useMemo(() => {
     const geo = new THREE.BufferGeometry();
     if (checkpoints.length >= 2) {
-      const pts = checkpoints.map((c) => new THREE.Vector3(c.x, 1.6, -c.y));
+      // relief : la ligne du trace passe a 1,6 m au-dessus du sol de chaque portique
+      const pts = checkpoints.map((c) => new THREE.Vector3(c.x, 1.6 + surfaceY(c.x, c.y), -c.y));
       pts.push(pts[0].clone());
       geo.setFromPoints(pts);
     }

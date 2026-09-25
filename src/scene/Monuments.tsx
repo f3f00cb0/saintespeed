@@ -4,6 +4,7 @@ import { MONUMENT_POINTS, POINT_KIND_NAMES } from "../lib/monumentPoints";
 import { kitForPointKind, PLACE_MONUMENTS } from "../lib/monuments";
 import { newEmit, toGeometry } from "../lib/landmarkGeometry";
 import type { Projector } from "../lib/project";
+import { surfaceY } from "../lib/elevation";
 
 // Les objets ponctuels de l'espace public : croix de chemin, monuments aux
 // morts, steles, bustes, statues. 55 objets releves dans l'export patrimoine et
@@ -47,7 +48,13 @@ export function Monuments({ proj }: { proj: Projector }) {
       if (!kit) continue;
       const anchor = { x: p.x, y: p.y, rot: (seed % 360) * (Math.PI / 180) };
       const dims = { w: 0, d: 0, area: 0, height: 0, minx: 0, maxx: 0, miny: 0, maxy: 0 };
+      const from = [e.roofs.pos.length, e.glow.pos.length];
       kit(e, anchor, null as never, { r: 1, g: 1, b: 1 }, { r: 1, g: 1, b: 1 }, dims);
+      // relief : le kit est construit depuis y = 0, on le pose sur le sol
+      const gy = surfaceY(p.x, p.y);
+      for (const [buf, f] of [[e.roofs.pos, from[0]], [e.glow.pos, from[1]]] as const) {
+        for (let k = f + 1; k < buf.length; k += 3) buf[k] += gy;
+      }
       posed++;
       byKind[kind]++;
       void name;
