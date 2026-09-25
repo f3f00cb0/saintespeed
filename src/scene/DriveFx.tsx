@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { car, input } from "../lib/car";
+import { groundY } from "../lib/elevation";
 import { bang } from "../lib/bangs";
 
 // Retours de conduite : traces de pneus et fumee. La physique est arcade et ne
@@ -36,7 +37,7 @@ export function slipOf(): number {
 
 // --- traces -------------------------------------------------------------------
 
-type Track = { x: number; y: number; alive: boolean };
+type Track = { x: number; y: number; z: number; alive: boolean };
 
 function SkidMarks({ slip }: { slip: React.MutableRefObject<number> }) {
   const geo = useMemo(() => {
@@ -58,8 +59,8 @@ function SkidMarks({ slip }: { slip: React.MutableRefObject<number> }) {
     [],
   );
   const last = useRef<Track[]>([
-    { x: 0, y: 0, alive: false },
-    { x: 0, y: 0, alive: false },
+    { x: 0, y: 0, z: 0, alive: false },
+    { x: 0, y: 0, z: 0, alive: false },
   ]);
   const head = useRef(0);
 
@@ -84,6 +85,7 @@ function SkidMarks({ slip }: { slip: React.MutableRefObject<number> }) {
       if (!l.alive) {
         l.x = x;
         l.y = y;
+        l.z = groundY(x, y, hx, hy);
         l.alive = true;
         continue;
       }
@@ -99,6 +101,13 @@ function SkidMarks({ slip }: { slip: React.MutableRefObject<number> }) {
       }
       const nx = (-dy / d) * MARK_W;
       const ny = (dx / d) * MARK_W;
+      // la trace se pose sur la chaussee sous la roue, pas a l'altitude de la
+      // caisse : en l'air, on ne laisse pas de gomme
+      if (car.air) {
+        l.alive = false;
+        continue;
+      }
+      const zNew = groundY(x, y, hx, hy);
       const i = (head.current % (MARK_SEGMENTS * 2)) * 6;
       head.current++;
       const quad = [
@@ -111,11 +120,12 @@ function SkidMarks({ slip }: { slip: React.MutableRefObject<number> }) {
       ];
       const alpha = 0.25 + 0.5 * s;
       for (let k = 0; k < 6; k++) {
-        pos.setXYZ(i + k, quad[k][0], MARK_Y, -quad[k][1]);
+        pos.setXYZ(i + k, quad[k][0], MARK_Y + (k === 1 || k === 2 || k === 4 ? zNew : l.z), -quad[k][1]);
         col.setXYZW(i + k, 0.02, 0.02, 0.025, alpha);
       }
       l.x = x;
       l.y = y;
+      l.z = zNew;
       dirty = true;
     }
     if (dirty) {
@@ -200,7 +210,7 @@ function Smoke({ slip }: { slip: React.MutableRefObject<number> }) {
       const y = car.y - hy * (AXLE + 0.2) + hx * TRACK * side;
       p.x = x;
       p.z = -y;
-      p.y = 0.6;
+      p.y = 0.6 + (Number.isFinite(car.z) ? car.z : 0);
       // la fumee reste en arriere : elle herite peu de la vitesse de la voiture
       const drift = car.speed * 0.15;
       p.vx = hx * drift + (Math.random() - 0.5) * 1.2;

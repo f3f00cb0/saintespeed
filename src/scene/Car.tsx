@@ -29,6 +29,15 @@ export function Car({ graph }: { graph: RoadGraph }) {
   const zoomArmed = useRef(true);
   const wasOff = useRef(false);
   const { headMat, tailMat } = useCarLights();
+  // tangage affiche, lisse : le profil change de pente tous les 8 m, et suivre
+  // chaque cassure a la lettre faisait vibrer la caisse
+  const pitch = useRef(0);
+  // Altitude affichee. Le profil est une ligne par rue : quand la voiture coupe
+  // un virage a 6 m de l'axe, passer d'une rue a l'autre du carrefour decale
+  // l'altitude de 10 a 20 cm d'un coup. On la filtre, mais en anticipant la
+  // vitesse verticale : un simple lissage laisserait la caisse s'enfoncer de
+  // 20 cm dans une cote a 170 km/h.
+  const shownZ = useRef(NaN);
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 1 / 30);
@@ -68,8 +77,18 @@ export function Car({ graph }: { graph: RoadGraph }) {
     }
 
     if (body.current) {
-      body.current.position.set(car.x, 0.35, -car.y);
+      const zNow = Number.isFinite(car.z) ? car.z : 0;
+      if (!Number.isFinite(shownZ.current) || Math.abs(zNow - shownZ.current) > 3) shownZ.current = zNow;
+      shownZ.current += car.vz * dt;
+      shownZ.current += (zNow - shownZ.current) * (1 - Math.exp(-20 * dt));
+      const z = shownZ.current;
+      pitch.current += (car.pitch - pitch.current) * (1 - Math.exp(-(car.air ? 2 : 12) * dt));
+      body.current.position.set(car.x, 0.35 + z, -car.y);
+      // cap, puis tangage autour de l'essieu, puis roulis : l'ordre compte, sinon
+      // le tangage s'appliquerait dans le repere du monde et non de la caisse
+      body.current.rotation.order = "YZX";
       body.current.rotation.y = car.heading;
+      body.current.rotation.z = pitch.current;
       body.current.rotation.x = -car.steer * Math.min(1, Math.abs(car.speed) / 30) * 0.12;
     }
 

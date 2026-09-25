@@ -5,6 +5,7 @@ import type { RoadGraph } from "../lib/graph";
 import { snapCheckpoint } from "../lib/race";
 import { editView } from "../lib/editView";
 import { useStore } from "../state/store";
+import { elevation, terrainY } from "../lib/elevation";
 
 const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const ndc = new THREE.Vector2();
@@ -15,7 +16,16 @@ function groundAt(camera: THREE.Camera, clientX: number, clientY: number) {
   ndc.x = (clientX / window.innerWidth) * 2 - 1;
   ndc.y = -(clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(ndc, camera);
+  // Avec le relief, le sol n'est plus le plan y = 0 : un clic vise sous la vue
+  // inclinee tomberait a 20 m de la rue visee dans un vallon. On recale le plan
+  // a l'altitude du terrain sous le point trouve, trois fois, ce qui converge
+  // bien avant le metre sur des pentes de rue.
+  plane.constant = 0;
   if (!raycaster.ray.intersectPlane(plane, hit)) return null;
+  for (let i = 0; elevation.on && i < 3; i++) {
+    plane.constant = -terrainY(hit.x, -hit.z);
+    if (!raycaster.ray.intersectPlane(plane, hit)) break;
+  }
   return { x: hit.x, y: -hit.z };
 }
 

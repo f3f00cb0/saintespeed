@@ -46,9 +46,29 @@ const LAYER = "ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES";
 const UA = "saintespeed/0.1 (jeu de course, grille de relief; contact via github)";
 export const RELIEF_ATTRIBUTION = "IGN - RGE ALTI, Licence Ouverte Etalab 2.0";
 
-// meme bbox que le reseau : [ouest, sud, est, nord]
+// Emprise : celle des routes, pas la bbox de requete. Overpass rend les ways
+// qui touchent la bbox en entier, et ils en debordent de 2 km au nord et de
+// 2,5 km a l'ouest. Hors grille, l'altitude restait figee a la valeur du bord :
+// la premiere cuisson donnait des murs a 60 % la ou la route y rentrait (avenue
+// du Pilat, route du Gouffre d'Enfer). On prend donc l'emprise reelle des
+// routes, plus une marge. [ouest, sud, est, nord]
+const MARGIN_M = 300;
 const geo = JSON.parse(readFileSync(resolve(PUBLIC, "sainte.geojson"), "utf8"));
-const [W0, S0, E0, N0] = geo.bbox ?? [4.33, 45.38, 4.44, 45.49];
+let [W0, S0, E0, N0] = [Infinity, Infinity, -Infinity, -Infinity];
+for (const f of geo.features) {
+  for (const [lon, lat] of f.geometry.coordinates) {
+    if (lon < W0) W0 = lon;
+    if (lon > E0) E0 = lon;
+    if (lat < S0) S0 = lat;
+    if (lat > N0) N0 = lat;
+  }
+}
+{
+  const dLat = MARGIN_M / 111320;
+  const dLon = MARGIN_M / (111320 * Math.cos((((S0 + N0) / 2) * Math.PI) / 180));
+  const r = (v) => Math.round(v * 1e4) / 1e4;
+  [W0, S0, E0, N0] = [r(W0 - dLon), r(S0 - dLat), r(E0 + dLon), r(N0 + dLat)];
+}
 
 const TARGET = 10; // metres, pas de la grille livree
 const FACTOR = 5; // cellules fines par cellule livree, dans chaque direction
@@ -85,7 +105,9 @@ async function getTile(x0, y0, tw, th) {
   const url = `${WMS}?${params}`;
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
-      const res = await fetch(url, { headers: { "User-Agent": UA } });
+      // Sans delai, une requete que le service laisse pendre bloquait toute la
+      // cuisson indefiniment : 90 s, puis on retente.
+      const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(90_000) });
       if (res.ok) {
         const buf = Buffer.from(await res.arrayBuffer());
         if (buf.length === tw * th * 4) {
@@ -108,15 +130,22 @@ const valid = (v) => v > -500 && v < 5000;
 
 console.log(`relief -> ${W0}, ${S0}, ${E0}, ${N0} : grille fine ${fw} x ${fh} a ${FINE} m`);
 const fine = new Float32Array(fw * fh);
+const jobs = [];
 for (let y0 = 0; y0 < fh; y0 += TILE) {
-  for (let x0 = 0; x0 < fw; x0 += TILE) {
-    const tw = Math.min(TILE, fw - x0);
-    const th = Math.min(TILE, fh - y0);
+  for (let x0 = 0; x0 < fw; x0 += TILE) jobs.push([x0, y0, Math.min(TILE, fw - x0), Math.min(TILE, fh - y0)]);
+}
+// trois requetes en vol : le service met plusieurs secondes a servir une tuile
+// de 4 Mo, et les tuiles sont independantes
+let done = 0;
+const worker = async () => {
+  for (let job = jobs.shift(); job; job = jobs.shift()) {
+    const [x0, y0, tw, th] = job;
     const t = await getTile(x0, y0, tw, th);
     for (let y = 0; y < th; y++) fine.set(t.subarray(y * tw, (y + 1) * tw), (y0 + y) * fw + x0);
-    console.log(`    tuile ${x0},${y0} (${tw} x ${th}) lue`);
+    console.log(`    tuile ${x0},${y0} (${tw} x ${th}) lue, ${++done} au total`);
   }
-}
+};
+await Promise.all([worker(), worker(), worker()]);
 
 // moyenne FACTOR x FACTOR, en ignorant les pixels sans donnee
 const w = fw / FACTOR;

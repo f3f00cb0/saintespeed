@@ -191,14 +191,15 @@ IGN sont chargées.
 ## Le relief : la cuvette stéphanoise
 
 Le jeu était plat. Saint-Étienne est une cuvette : la bbox va de **414 m** au
-fond de la vallée du Furan à **1 065 m** sur les contreforts du Pilat, et la
-moitié du terrain y dépasse 14 % de pente. Même le circuit, qu'on croyait de
+fond de la vallée du Furan à **1 065 m** sur les contreforts du Pilat (392 à
+1 099 m sur l'emprise élargie des routes), et la moitié du terrain y dépasse
+14 % de pente. Même le circuit, qu'on croyait de
 plaine, monte de 531 m place Anatole France à 571 m à La Métare. Cette section
 décrit les données ; le rendu vient ensuite, par étapes.
 
 **La grille.** `npm run fetch-relief` lit le RGE ALTI de l'IGN (WMS raster de la
-Géoplateforme, flottants 32 bits) et cuit une grille de **860 × 1 225 cellules
-de 10 m**, régulière en degrés pour ne pas dépendre de l'origine du repère
+Géoplateforme, flottants 32 bits) et cuit une grille de **1 207 × 1 657
+cellules de 10 m** sur l'emprise des routes plus 300 m, régulière en degrés pour ne pas dépendre de l'origine du repère
 métrique du jeu. `src/lib/relief.ts` la lit et l'interpole bilinéairement, en
 lon/lat ou en mètres du jeu.
 
@@ -212,9 +213,12 @@ lon/lat ou en mètres du jeu.
   l'altitude du sol mesurée par l'IGN est de 0,22 m en médiane, 0,86 m au p90,
   1,77 m au p99, pour un biais de −0,04 m.
 - **Codée en écarts.** Pas de 5 cm (bien en dessous de l'erreur du modèle), et
-  chaque cellule stocke son écart à sa voisine en Int16 : 1,05 Mo compressé,
-  contre 1,96 Mo en altitudes brutes au centimètre, gzip ne voyant pas que le
-  terrain varie lentement.
+  chaque cellule stocke son écart à sa voisine en Int16 : 1,05 Mo compressé
+  sur la bbox d'origine, contre 1,96 Mo en altitudes brutes au centimètre, gzip
+  ne voyant pas que le terrain varie lentement. 2,0 Mo sur l'emprise élargie.
+- **Chaque tuile a un délai de 90 s**, et trois partent en parallèle : sans
+  délai, une requête que le service laissait pendre bloquait la cuisson
+  indéfiniment.
 
 **Les ponts et les tunnels.** `fetch-osm` jetait les tags `bridge`, `tunnel` et
 `layer` : sur un sol plat ils ne servaient à rien. Avec le relief, un viaduc qui
@@ -225,6 +229,69 @@ géométrie : refaire tout le réseau changerait les ways et pourrait déplacer 
 circuit. Résultat : 146 ponts, 39 tunnels, 174 `layer`, 1 voie couverte, et
 aucune autre différence sur les 5 837 ways. Un fetch complet des routes garde
 maintenant ces tags aussi.
+
+### Les routes et la voiture sur le relief (derrière `?relief`)
+
+Deuxième étape : les chaussées, la voiture, la caméra, les portiques et les
+voitures du salon suivent le relief. Le reste de la ville (sol, bâtiments,
+mobilier) est encore à plat : l'ensemble reste donc derrière le drapeau
+**`?relief`** dans l'URL, et sans lui le jeu est exactement celui d'avant.
+
+**Le profil en long** (`src/lib/roadProfile.ts`). La voiture vit en 2D sur le
+graphe routier, et un edge OSM est un segment droit qui peut faire 100 m : des
+altitudes aux seuls nœuds feraient couper les collines en ligne droite. Chaque
+edge est donc échantillonné tous les 8 m (137 000 points), puis tout le réseau
+est lissé d'un bloc, par Gauss-Seidel, en minimisant l'écart au terrain plus
+une raideur entre points voisins. Les nœuds étant partagés, un carrefour garde
+une seule altitude. Mesuré sur le vrai réseau, avec la raideur retenue :
+
+| raideur | écart au terrain p99 | courbure p99 (%/8 m) |
+| --- | --- | --- |
+| 0 (terrain brut) | 0 m | 10,1 |
+| 6 (retenue) | 0,33 m | 4,2 |
+| 16 | 0,57 m | 2,8 |
+
+**Les ponts et les tunnels n'ont aucune attache au terrain** : leurs points sont
+posés par interpolation entre leurs culées ou leurs têtes (Dijkstra depuis
+chaque culée à travers l'ouvrage, exacte sur un tablier sans branche), puis
+lissés avec le reste. Les tabliers passent jusqu'à 26 m au-dessus du fond des
+vallons, les tunnels jusqu'à 43 m sous la colline. Un passage sous immeuble
+(`tunnel=building_passage`) reste au sol.
+
+**La grille déborde la bbox.** Les ways d'Overpass en sortent de 2 km au nord
+et de 2,5 km à l'ouest ; hors grille, l'altitude restait figée à la valeur du
+bord et donnait des murs à 60 % là où la route rentrait dans la grille (avenue
+du Pilat, route du Gouffre d'Enfer). `fetch-relief` couvre maintenant
+l'emprise réelle des routes, plus 300 m : la voirie au-dessus de 30 % passe de
+3,7 km à 404 m.
+
+**Une pente plafond à 30 %** efface ce qui reste : des bretelles d'échangeur au
+bord d'un talus que la grille à 10 m étale, à 35-43 % sur quelques dizaines de
+mètres. Les rues les plus raides de la ville font 20 à 21 % sur leur longueur
+(rue Diderot, rue Valentin-Haüy), le plafond ne les touche pas.
+
+**La voiture** reste contrainte au graphe : son sol est la chaussée qu'elle
+suit, jamais le terrain voisin, elle ne peut donc ni s'enfoncer dans une
+colline ni tomber d'un pont. La pente tire sur elle (g sin a, à 60 % pour rester
+arcade), les freins la tiennent à l'arrêt sans gaz (sinon elle reculait pendant
+le compte à rebours), et elle décolle quand la chaussée se dérobe plus vite que
+la gravité ne suit, au-dessus de 58 km/h. Au bout d'un edge, l'altitude se lit
+sur la rue du nœud où la voiture se trouve vraiment : en coupant un virage,
+elle restait épinglée quelques frames à la fin de l'edge quitté, puis sautait
+de 33 cm. L'altitude affichée est filtrée en anticipant la vitesse verticale,
+pour gommer les 10 à 20 cm qui restent sans que la caisse ne s'enfonce dans
+une côte.
+
+Simulation sur le vrai réseau, 90 s pied au plancher depuis le départ : aucun
+glissement pendant le compte à rebours, aucune valeur non finie, un décollage
+de 0,65 s, et au plus 19 cm d'une frame à l'autre avant le filtre d'affichage.
+
+**Le repère vertical** : `y = altitude − z0`, z0 étant la chaussée au départ.
+Le décor encore plat tombe ainsi juste là où l'on commence à rouler. La caméra
+monte en descente (la chaussée derrière la voiture est plus haute qu'elle) et
+teste les murs à sa hauteur au-dessus du sol, pas à son altitude. Les voitures
+du salon retrouvent leur altitude sur la chaussée de chaque client : le relief
+étant le même partout, le protocole n'a pas changé.
 
 ## Streaming par anneaux de distance
 

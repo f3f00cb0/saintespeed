@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { Html } from "@react-three/drei";
 import { onPeers, peerListKey, peers, samplePeer } from "../lib/peers";
 import { CarMesh, pulseBrake, useCarLights } from "./CarMesh";
+import { elevation, groundY } from "../lib/elevation";
 
 // Bulle de BD au dessus de chaque autre pilote : son nom, et son chrono quand il
 // roule. C'est du DOM (drei Html), donc hors de la passe de dessin : elle reste
@@ -28,19 +29,42 @@ function RemoteCar({ id }: { id: string }) {
   const peer = peers.get(id);
   const color = peer?.color ?? 0x5ec8e0;
   const motion = useCallback(() => peers.get(id), [id]);
+  // Altitude des autres pilotes : le salon ne transmet que x, y et le cap. Le
+  // relief etant le meme chez tout le monde, chaque client la retrouve sur sa
+  // propre chaussee, a la voiture pres, sans toucher au protocole. Lissee, pour
+  // que l'interpolation 2D ne fasse pas sautiller la caisse d'un edge a l'autre.
+  const lift = useRef<{ z: number; pitch: number } | null>(null);
 
   useFrame(({ camera }, dt) => {
     const p = peers.get(id);
     if (!p || !body.current) return;
     samplePeer(p, performance.now());
-    body.current.position.set(p.x, 0.35, -p.y);
-    label.current?.position.set(p.x, BUBBLE_Y, -p.y);
+    let z = 0;
+    let pitch = 0;
+    if (elevation.on) {
+      const hx = Math.cos(p.heading);
+      const hy = Math.sin(p.heading);
+      const zNow = groundY(p.x, p.y, hx, hy);
+      const zFront = groundY(p.x + hx * 2, p.y + hy * 2, hx, hy);
+      const zBack = groundY(p.x - hx * 2, p.y - hy * 2, hx, hy);
+      const wantPitch = Math.atan((zFront - zBack) / 4);
+      if (!lift.current) lift.current = { z: zNow, pitch: wantPitch };
+      const k = 1 - Math.exp(-12 * dt);
+      lift.current.z += (zNow - lift.current.z) * k;
+      lift.current.pitch += (wantPitch - lift.current.pitch) * k;
+      z = lift.current.z;
+      pitch = lift.current.pitch;
+    }
+    body.current.position.set(p.x, 0.35 + z, -p.y);
+    label.current?.position.set(p.x, BUBBLE_Y + z, -p.y);
     if (bubble.current) {
       const d = camera.position.distanceTo(body.current.position);
       bubble.current.style.opacity = String(1 - Math.min(1, Math.max(0, (d - BUBBLE_FAR * 0.7) / (BUBBLE_FAR * 0.3))));
     }
     if (time.current) time.current.textContent = p.running ? fmt(p.lapTime) : "";
+    body.current.rotation.order = "YZX";
     body.current.rotation.y = p.heading;
+    body.current.rotation.z = pitch;
     body.current.rotation.x = -p.steer * Math.min(1, Math.abs(p.speed) / 30) * 0.12;
     pulseBrake(tailMat, p.brake > 0.2, dt);
   });

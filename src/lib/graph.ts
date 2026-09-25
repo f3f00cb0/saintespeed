@@ -27,6 +27,8 @@ export type GraphEdge = {
   halfWidth: number;
   wayId: number;
   name?: string;
+  /** 0 au sol, 1 pont, 2 tunnel : l'ouvrage ne suit pas le terrain. */
+  structure: 0 | 1 | 2;
 };
 
 export type EdgeHit = {
@@ -122,6 +124,7 @@ export class RoadGraph {
       halfWidth: spec.w / 2,
       wayId: way.id,
       name: way.name,
+      structure: way.bridge ? 1 : way.tunnel ? 2 : 0,
     };
     this.edges.push(e);
     na.edges.push(e.id);
@@ -130,6 +133,23 @@ export class RoadGraph {
   }
 
   // --- requetes ----------------------------------------------------------
+
+  /** Noeud exactement a cette position (meme quantification que nodeAt), sans en creer. */
+  findNode(x: number, y: number): GraphNode | undefined {
+    const id = this.byPos.get(Math.round(x * QUANT) + ":" + Math.round(y * QUANT));
+    return id === undefined ? undefined : this.nodes.get(id);
+  }
+
+  /** Edge reliant deux noeuds, s'il existe. */
+  edgeBetween(a: number, b: number): GraphEdge | undefined {
+    const n = this.nodes.get(a);
+    if (!n) return undefined;
+    for (const id of n.edges) {
+      const e = this.edges[id];
+      if ((e.a === a && e.b === b) || (e.a === b && e.b === a)) return e;
+    }
+    return undefined;
+  }
 
   private ensureEdgeSeen() {
     const n = this.edges.length;

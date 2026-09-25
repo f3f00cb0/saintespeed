@@ -34,8 +34,27 @@ export type Way = {
   type: string;
   name?: string;
   oneway?: string;
+  /** Ouvrage d'art : le tablier ne suit pas le terrain (voir roadProfile.ts). */
+  bridge?: boolean;
+  /** Sous terre : la chaussee ne suit pas le terrain non plus. */
+  tunnel?: boolean;
+  /** Tag layer OSM : l'ordre d'empilement, pas une altitude. */
+  layer?: number;
   pts: [number, number][]; // [lon, lat]
 };
+
+/** Ouvrages d'art d'un jeu de tags OSM, quelle que soit sa source. */
+function ouvrages(t: Record<string, any>): Pick<Way, "bridge" | "tunnel" | "layer"> {
+  const out: Pick<Way, "bridge" | "tunnel" | "layer"> = {};
+  // bridge=yes|viaduct|..., tunnel=yes|building_passage|... ; "no" n'en est pas un
+  if (t.bridge && t.bridge !== "no") out.bridge = true;
+  // Un passage sous immeuble (tunnel=building_passage) reste au niveau du sol :
+  // c'est la rue qui passe sous un porche, pas un souterrain.
+  if (t.tunnel && t.tunnel !== "no" && t.tunnel !== "building_passage") out.tunnel = true;
+  const layer = parseInt(t.layer, 10);
+  if (Number.isFinite(layer) && layer !== 0) out.layer = layer;
+  return out;
+}
 
 export const BBOX = [45.38, 4.33, 45.49, 4.44]; // sud, ouest, nord, est
 
@@ -68,6 +87,7 @@ export function parseNetwork(data: any): Way[] {
         type: t.highway,
         name: t.name,
         oneway: t.oneway,
+        ...ouvrages(t),
         pts: el.geometry.map((g: any) => [g.lon, g.lat] as [number, number]),
       });
     }
@@ -76,7 +96,7 @@ export function parseNetwork(data: any): Way[] {
       const g = f.geometry;
       if (!g) continue;
       const p = f.properties || {};
-      const base = { type: p.highway, name: p.name, oneway: p.oneway };
+      const base = { type: p.highway, name: p.name, oneway: p.oneway, ...ouvrages(p) };
       if (g.type === "LineString") {
         ways.push({ id: f.id ?? ++auto, ...base, pts: g.coordinates });
       } else if (g.type === "MultiLineString") {

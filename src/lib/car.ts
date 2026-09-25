@@ -2,6 +2,7 @@
 // Integration a la main, pas de moteur physique. Le fun avant le realisme.
 
 import type { EdgeHit, RoadGraph } from "./graph";
+import { elevation, roadGrade, roadY } from "./elevation";
 
 export type CarState = {
   x: number;
@@ -15,6 +16,14 @@ export type CarState = {
   offroad: boolean;
   roadName: string;
   roadType: string;
+  /** y three.js du bas de caisse : la chaussee, ou plus haut en l'air. */
+  z: number;
+  /** vitesse verticale, m/s */
+  vz: number;
+  /** tangage vise, radians, positif nez en l'air */
+  pitch: number;
+  /** decolle d'une bosse */
+  air: boolean;
 };
 
 export type CarInput = {
@@ -37,6 +46,10 @@ export function createCar(): CarState {
     offroad: false,
     roadName: "",
     roadType: "",
+    z: NaN,
+    vz: 0,
+    pitch: 0,
+    air: false,
   };
 }
 
@@ -61,6 +74,17 @@ const GRIP_MARGIN = 2.0; // metres toleres au dela du bord du ruban
 const PULL_GAIN = 5; // force du rappel vers la chaussee
 const PULL_MAX = 25; // m/s max de rappel, evite le teleport
 const OFFROAD_DRAG = 3.2;
+// --- relief ---------------------------------------------------------------
+// La pente tire sur la voiture : g sin(a), rabattu a 60 % pour rester arcade.
+// A 15 %, une cote coute ~5 km/h par seconde ; la descente en rend autant.
+const GRAVITY = 9.81;
+const SLOPE_PULL = 0.6;
+// Decollage : la chaussee se derobe plus vite que la gravite ne peut suivre.
+// Le profil est lisse (roadProfile.ts), donc il faut une vraie bosse et de la
+// vitesse ; en dessous de TAKEOFF_MIN on colle toujours au sol.
+const TAKEOFF_MIN = 16; // m/s
+const TAKEOFF_GAP = 0.08; // m de vide sous les roues pour se dire en l'air
+const HOLD_SPEED = 0.8; // m/s : en dessous, sans gaz, la pente ne fait pas rouler
 const followHit: EdgeHit = { edge: null!, t: 0, x: 0, y: 0, dist: 0, tx: 0, ty: 0 };
 
 export function resetCar(x: number, y: number, heading: number, edgeId = -1, c: CarState = car) {
@@ -72,6 +96,10 @@ export function resetCar(x: number, y: number, heading: number, edgeId = -1, c: 
   c.edgeId = edgeId;
   c.offroad = false;
   c.lateral = 0;
+  // l'altitude se recale sur la chaussee au prochain pas
+  c.z = NaN;
+  c.vz = 0;
+  c.air = false;
 }
 
 // Suit le reseau : on reste sur l'edge courant tant qu'on est dessus, on
@@ -155,6 +183,7 @@ export function stepCar(g: RoadGraph, dt: number, c: CarState = car, inp: CarInp
 
   c.t = hit.t;
   c.lateral = hit.dist;
+  if (elevation.on) vertical(g, c, hit, dt, inp.throttle);
   c.roadType = hit.edge.type;
   c.roadName = hit.edge.name || "";
 
@@ -182,6 +211,87 @@ export function stepCar(g: RoadGraph, dt: number, c: CarState = car, inp: CarInp
   } else {
     c.offroad = false;
   }
+}
+
+/**
+ * Altitude, tangage et effet de la pente. La voiture reste contrainte au
+ * graphe : son sol est la chaussee qu'elle suit, jamais le terrain voisin, donc
+ * elle ne peut pas s'enfoncer dans une colline ni tomber d'un pont.
+ */
+const nodeHit: EdgeHit = { edge: null!, t: 0, x: 0, y: 0, dist: 0, tx: 0, ty: 0 };
+
+/**
+ * Chaussee sous la voiture pour l'altitude. D'ordinaire l'edge suivi ; mais
+ * quand la voiture coupe un virage, follow() la garde quelques frames sur
+ * l'edge qu'elle quitte, epinglee a son bout (t = 1) alors qu'elle a deja passe
+ * le noeud. L'altitude restait figee puis sautait de 30 cm au changement
+ * d'edge. On lit donc, au bout d'un edge, celle des rues du noeud sur laquelle
+ * la voiture se trouve vraiment.
+ */
+function surfaceHit(g: RoadGraph, hit: EdgeHit, x: number, y: number): EdgeHit {
+  if (hit.t > 1e-4 && hit.t < 1 - 1e-4) return hit;
+  const e = hit.edge;
+  const node = g.nodes.get(hit.t >= 0.5 ? e.b : e.a);
+  if (!node) return hit;
+  let best = hit;
+  let bestDist = hit.dist;
+  for (const id of node.edges) {
+    if (id === e.id) continue;
+    const h = g.projectInto(g.edges[id], x, y, nodeHit);
+    if (h.t > 1e-4 && h.dist < bestDist) {
+      bestDist = h.dist;
+      best = { ...h };
+    }
+  }
+  return best;
+}
+
+function vertical(g: RoadGraph, c: CarState, followed: EdgeHit, dt: number, throttle: number) {
+  const hit = surfaceHit(g, followed, c.x, c.y);
+  const e = hit.edge;
+  const ground = roadY(e.id, hit.t);
+  // pente dans le sens du cap, pas dans le sens de l'edge
+  const along = Math.cos(c.heading) * e.dx + Math.sin(c.heading) * e.dy >= 0 ? 1 : -1;
+  const grade = roadGrade(e.id, hit.t) * along;
+  const sin = grade / Math.sqrt(1 + grade * grade);
+
+  if (!Number.isFinite(c.z)) {
+    c.z = ground;
+    c.vz = 0;
+    c.air = false;
+  }
+
+  if (c.air) {
+    c.vz -= GRAVITY * dt;
+    c.z += c.vz * dt;
+    if (c.z <= ground) {
+      // reception : on reprend la vitesse verticale de la chaussee
+      c.z = ground;
+      c.air = false;
+      c.vz = c.speed * sin;
+    }
+  } else {
+    // La vitesse verticale au sol est celle que la pente impose. Si la
+    // trajectoire balistique a partir d'ici passe nettement au dessus de la
+    // chaussee au pas suivant, la route s'est derobee : on decolle.
+    const ballistic = c.z + c.vz * dt - 0.5 * GRAVITY * dt * dt;
+    if (Math.abs(c.speed) > TAKEOFF_MIN && ballistic > ground + TAKEOFF_GAP) {
+      c.air = true;
+      c.z = ballistic;
+      c.vz -= GRAVITY * dt;
+    } else {
+      c.z = ground;
+      c.vz = c.speed * sin;
+    }
+  }
+
+  // Au sol, la pente freine en montee et pousse en descente. A l'arret sans gaz,
+  // les freins tiennent : sans ca, la voiture reculait toute seule pendant le
+  // compte a rebours sur une ligne de depart en pente.
+  const holding = throttle === 0 && Math.abs(c.speed) < HOLD_SPEED;
+  if (!c.air && !holding) c.speed -= GRAVITY * SLOPE_PULL * sin * dt;
+  // en l'air le nez garde son angle ; au sol il suit la chaussee
+  if (!c.air) c.pitch = Math.atan(grade);
 }
 
 export function stepCarFrozen(g: RoadGraph, dt: number, c: CarState = car) {
