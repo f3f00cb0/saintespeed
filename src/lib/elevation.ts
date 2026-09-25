@@ -27,6 +27,50 @@ export function setElevation(graph: RoadGraph, relief: Relief, profile: RoadProf
   elevation.on = true;
 }
 
+/** Hauteur libre maximale d'un tube de tunnel. */
+export const TUBE_H = 5;
+/** Epaisseur gardee entre la voute et le terrain au-dessus. */
+const ROOF = 0.8;
+/**
+ * Couverture minimale, de la chaussee au terrain, pour faire un tube : une
+ * voute a 3,5 m au moins. Plus bas, c'est une tranchee. Le seuil etait a 6,5 m ;
+ * l'A72 au nord passe pourtant sous un batiment commercial en tranchee
+ * couverte, 4 a 5 m sous le terrain sur 265 m. Traitee en tranchee ouverte, le
+ * sol s'y creusait jusqu'a l'autoroute et le batiment du dessus descendait
+ * avec, jusque dans la camera.
+ */
+export const COVER_MIN = 3.5 + ROOF;
+
+/** Hauteur de voute d'un tube en ce point : sous la couverture, 5 m au plus. */
+export function tubeCeiling(edgeId: number, t: number): number {
+  return Math.min(TUBE_H, coverAt(edgeId, t) - ROOF);
+}
+
+/**
+ * Epaisseur de terrain au-dessus d'un point de tunnel, en m.
+ *
+ * Tube ou tranchee, point par point. Sur 39 tunnels OSM, la plupart sont des
+ * passages sous une rue, a un metre sous le terrain en mediane : un tube y
+ * crevait le sol. Les autres passent jusqu'a 43 m sous la colline (N88).
+ * Un tunnel OSM est un long edge qui part de sa tete, ou la couverture est
+ * nulle : on ne peut pas trancher edge par edge (aucun ne passait). Un point de
+ * tunnel est donc un tube la ou le terrain le couvre d'au moins COVER_MIN, une
+ * tranchee ailleurs, ou le sol se creuse comme pour une route au sol.
+ */
+export function coverAt(edgeId: number, t: number): number {
+  const e = elevation.graph!.edges[edgeId];
+  const x = e.ax + (e.bx - e.ax) * t;
+  const y = e.ay + (e.by - e.ay) * t;
+  return elevation.relief!.at(x, y) - elevation.profile!.z(edgeId, t);
+}
+
+/** Ce point d'edge est-il dans un tube de tunnel ? */
+export function inTube(edgeId: number, t: number): boolean {
+  if (!elevation.on || edgeId < 0) return false;
+  const e = elevation.graph!.edges[edgeId];
+  return !!e && e.structure === 2 && coverAt(edgeId, t) >= COVER_MIN;
+}
+
 /**
  * Relief actif par defaut. `?plat` dans l'URL rend la ville plate d'avant, pour
  * comparer ou sur une machine qui peinerait.
@@ -97,6 +141,8 @@ export function surfaceY(x: number, y: number): number {
   const terrain = terrainY(x, y);
   const hit = elevation.graph!.nearestEdgeInto(x, y, surfaceProbe, 7 + BLEND, true);
   if (!hit) return terrain;
+  // au-dessus d'un tube, le sol est la colline, pas la chaussee
+  if (hit.edge.structure === 2 && coverAt(hit.edge.id, hit.t) >= COVER_MIN) return terrain;
   const road = roadY(hit.edge.id, hit.t);
   const d = hit.dist - hit.edge.halfWidth;
   if (d <= 0) return road;

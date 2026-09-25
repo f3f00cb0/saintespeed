@@ -264,8 +264,10 @@ export class RoadGraph {
           for (const id of bucket) {
             if (this.edgeSeen[id] === stamp) continue;
             this.edgeSeen[id] = stamp;
-            // groundOnly : on ignore ponts et tunnels (sol sous un tablier)
-            if (groundOnly && this.edges[id].structure) continue;
+            // groundOnly : on ignore les ponts (sol sous un tablier). Les
+            // tunnels restent : c'est surfaceY qui decide, point par point,
+            // s'ils sont un tube ou une tranchee.
+            if (groundOnly && this.edges[id].structure === 1) continue;
             const hit = this.projectInto(this.edges[id], x, y, this.projScratch);
             if (!hasBest || hit.dist < bestDist) {
               this.copyHit(hit, out);

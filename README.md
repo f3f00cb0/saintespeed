@@ -340,6 +340,46 @@ sur son point le plus bas pour ne flotter nulle part.
 Arbres, lampadaires, fontaines, poteaux de caténaire et objets d'espace public
 se posent sur le sol à leur pied ; la ligne du tracé de l'éditeur aussi.
 
+### Le balayage : ce que les images ont trouvé
+
+Dix-huit lieux posés automatiquement depuis la donnée (douze repères, trois
+têtes de tunnel, trois ponts), la voiture sur la chaussée la plus proche,
+tournée vers eux, en plus des rues les plus raides. Trois défauts, tous
+confirmés par la mesure avant d'être corrigés :
+
+**Les repères se posent au pied de leur façade.** Un repère posé à mi-pente
+comme un bâtiment ordinaire flottait : la BD TOPO mesure 18 m de dénivelé sous
+la Bourse du Travail (525,9 à 543,8 m), dont la façade donne en bas, sur le
+cours Victor-Hugo, et son péristyle flottait à 8 m au-dessus de la rue. Ses
+hauteurs ont été relevées sur photo depuis cette rue : c'est le sol devant le
+côté `face` du repère (cinq points, 3 m en avant) qui fait son niveau, pour ses
+murs comme pour son kit. Derrière, là où le sol monte plus haut que lui, le
+bâtiment est enterré entier et ses murs sont plafonnés sous le toit. Un repère
+qui remplace son bâtiment (Zénith, chevalement, auvents de quai) reçoit un
+soubassement de pierre sombre jusqu'au sol de chaque angle : 4,8 m sous le
+Zénith.
+
+**Les ponts routiers ont des piles** (`src/scene/Bridges.tsx`) : poutres de rive
+et sous-face du tablier, et une pile tous les 25 m là où le tablier passe à plus
+de 3 m du sol, décalée le long de l'ouvrage si une chaussée passe dessous. 116
+piles, 150 emplacements sautés. Sans elles, le viaduc de la N88 était un ruban
+sans épaisseur à 24 m au-dessus du vallon.
+
+**Les tunnels ont des tubes** (`src/scene/Tunnels.tsx`). Sans eux, la voiture
+qui entrait sous la colline roulait dans la masse du terrain : écran noir. Mais
+la plupart des 39 tunnels OSM sont des passages sous une rue, à un mètre sous
+le terrain, où un tube crèverait le sol. On tranche donc point par point, par
+tronçon de 8 m : un tube là où le terrain couvre la chaussée d'au moins 4,3 m,
+voûte à 5 m au plus et 0,8 m sous le terrain ; une tranchée ailleurs, où le sol
+se creuse comme pour une route au sol. Trancher edge par edge ne marchait pas :
+un tunnel OSM part de sa tête, où la couverture est nulle, et aucun edge ne
+passait. Le premier seuil, à 6,5 m, ratait l'A72 au nord, en tranchée couverte
+sous un bâtiment commercial à 4-5 m de profondeur : le sol s'y creusait jusqu'à
+l'autoroute et le bâtiment descendait avec, jusque dans la caméra. Résultat :
+1 212 m de tube, surtout la N88, avec plafonniers orange et une tête en béton à
+chaque sortie ; 1 383 m de tranchées. Dans un tube, la caméra passe sous la
+voûte.
+
 ## Streaming par anneaux de distance
 
 La ville entière fait **55 049 emprises, 2,00 M de triangles et 247 Mo de

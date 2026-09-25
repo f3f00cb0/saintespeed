@@ -147,7 +147,11 @@ function emitDetailed(
   // seule par batiment, sinon les etages se decaleraient d'un mur a l'autre.
   const yRef = foot.min - foot.y0 + base0;
   // pied de mur a l'angle i : sur la vitrine, ou enterre de SINK
-  const foot0 = (i: number) => (shop ? ground(i) + GF_SHOP : ground(i) - SINK);
+  // Plafonne sous le toit : un repere pose au pied de sa facade peut avoir, a
+  // l'arriere, un sol plus haut que lui (la Bourse du Travail, 15 m de haut sur
+  // 18 m de denivele). Il y est enterre en entier, et le mur ne doit pas
+  // s'inverser.
+  const foot0 = (i: number) => Math.min(h - 0.1, shop ? ground(i) + GF_SHOP : ground(i) - SINK);
 
   // Decalage de tuile propre au batiment, en nombres entiers de travees et
   // d'etages : chaque emprise tire sa propre trame de fenetres allumees de la

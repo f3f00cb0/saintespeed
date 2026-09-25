@@ -17,6 +17,8 @@ import { loadRelief } from "./lib/relief";
 import { buildRoadProfile } from "./lib/roadProfile";
 import { elevation, reliefWanted, setElevation } from "./lib/elevation";
 import { Terrain } from "./scene/Terrain";
+import { Bridges } from "./scene/Bridges";
+import { Tunnels } from "./scene/Tunnels";
 import { useStore } from "./state/store";
 import { Roads } from "./scene/Roads";
 import { Car } from "./scene/Car";
@@ -263,6 +265,8 @@ export default function App() {
             {elevation.on && <Terrain areas={features?.areas ?? null} />}
             {features && <Ground areas={features.areas} paths={features.paths} />}
             <Roads ways={ways} proj={graph!.proj} graph={graph} />
+            {elevation.on && <Bridges graph={graph!} />}
+            {elevation.on && <Tunnels graph={graph!} />}
             {features && <Tram lines={features.tram} />}
             {features && <Trees trees={features.trees} />}
             {features && <Fountains points={features.fountains} />}

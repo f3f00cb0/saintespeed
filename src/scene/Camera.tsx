@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { car } from "../lib/car";
 import type { WallIndex } from "../lib/buildings";
+import { inTube, tubeCeiling } from "../lib/elevation";
 
 const DIST = 14; // recul derriere la voiture
 const HEIGHT = 6.2;
@@ -57,11 +58,11 @@ export function ChaseCamera({ walls }: { walls: WallIndex | null }) {
     // Rentree, la camera monte au lieu de descendre : de pres et bas elle
     // perd la voiture, de pres et haut elle la surplombe et reste lisible.
     const climb = Math.max(0, -slope) * eff;
-    targetScratch.set(
-      car.x - cx * eff,
-      z + climb + 4.2 + (wantY - 4.2) * boom.current,
-      -(car.y - cy * eff),
-    );
+    // Dans un tube, la camera passe sous la voute : a 6 m elle serait au-dessus
+    // du plafond, dans la masse de la colline, et ne verrait que du noir.
+    let camY = z + climb + 4.2 + (wantY - 4.2) * boom.current;
+    if (inTube(car.edgeId, car.t)) camY = Math.min(camY, z + tubeCeiling(car.edgeId, car.t) - 1.1);
+    targetScratch.set(car.x - cx * eff, camY, -(car.y - cy * eff));
     // le point vise se rapproche avec le bras, sinon la voiture sort du cadre ;
     // il suit la pente pour qu'une cote se voie devant soi
     const ahead = LOOK_AHEAD * (0.28 + 0.72 * boom.current);
