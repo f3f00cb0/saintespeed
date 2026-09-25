@@ -27,6 +27,8 @@ export type GraphEdge = {
   halfWidth: number;
   wayId: number;
   name?: string;
+  /** 0 au sol, 1 pont, 2 tunnel : l'ouvrage ne suit pas le terrain. */
+  structure: 0 | 1 | 2;
 };
 
 export type EdgeHit = {
@@ -122,6 +124,7 @@ export class RoadGraph {
       halfWidth: spec.w / 2,
       wayId: way.id,
       name: way.name,
+      structure: way.bridge ? 1 : way.tunnel ? 2 : 0,
     };
     this.edges.push(e);
     na.edges.push(e.id);
@@ -130,6 +133,23 @@ export class RoadGraph {
   }
 
   // --- requetes ----------------------------------------------------------
+
+  /** Noeud exactement a cette position (meme quantification que nodeAt), sans en creer. */
+  findNode(x: number, y: number): GraphNode | undefined {
+    const id = this.byPos.get(Math.round(x * QUANT) + ":" + Math.round(y * QUANT));
+    return id === undefined ? undefined : this.nodes.get(id);
+  }
+
+  /** Edge reliant deux noeuds, s'il existe. */
+  edgeBetween(a: number, b: number): GraphEdge | undefined {
+    const n = this.nodes.get(a);
+    if (!n) return undefined;
+    for (const id of n.edges) {
+      const e = this.edges[id];
+      if ((e.a === a && e.b === b) || (e.a === b && e.b === a)) return e;
+    }
+    return undefined;
+  }
 
   private ensureEdgeSeen() {
     const n = this.edges.length;
@@ -219,7 +239,13 @@ export class RoadGraph {
 
   // Segment le plus proche. Anneaux croissants, on s'arrete des qu'aucun
   // anneau plus lointain ne peut faire mieux.
-  nearestEdgeInto(x: number, y: number, out: EdgeHit, maxRadius = 400): EdgeHit | null {
+  nearestEdgeInto(
+    x: number,
+    y: number,
+    out: EdgeHit,
+    maxRadius = 400,
+    groundOnly = false,
+  ): EdgeHit | null {
     this.ensureEdgeSeen();
     const stamp = this.bumpStamp();
     const cx = Math.floor(x / CELL);
@@ -238,6 +264,10 @@ export class RoadGraph {
           for (const id of bucket) {
             if (this.edgeSeen[id] === stamp) continue;
             this.edgeSeen[id] = stamp;
+            // groundOnly : on ignore les ponts (sol sous un tablier). Les
+            // tunnels restent : c'est surfaceY qui decide, point par point,
+            // s'ils sont un tube ou une tranchee.
+            if (groundOnly && this.edges[id].structure === 1) continue;
             const hit = this.projectInto(this.edges[id], x, y, this.projScratch);
             if (!hasBest || hit.dist < bestDist) {
               this.copyHit(hit, out);

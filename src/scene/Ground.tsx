@@ -8,6 +8,8 @@ import {
   type FlatPath,
 } from "../lib/features";
 import { CHARACTER_NAMES, characterSpec, Character, MINERAL_PAVED } from "../lib/places";
+import { drapeGeometry } from "../lib/drape";
+import { elevation } from "../lib/elevation";
 
 // Surfaces au sol : places pietonnes, parcs, parkings, eau.
 //
@@ -36,10 +38,47 @@ type Layer = {
   z: number;
 };
 
+/**
+ * Grandes surfaces naturelles : herbe, foret, zones d'activite, friches,
+ * jardins ouvriers. Avec le relief, elles ne sont plus des maillages : drapees
+ * sur les collines, herbe et foret faisaient a elles deux 3,9 millions de
+ * triangles et 13 s de calcul au chargement. Elles sont peintes en couleur de
+ * sommet sur le terrain (Terrain.tsx), qui les porte gratuitement.
+ */
+export const PAINTED_KINDS: ReadonlySet<string> = new Set([
+  "grass",
+  "forest",
+  "industrial",
+  "brownfield",
+  "construction",
+  "allotments",
+]);
+
+/** Au-dela, une surface de n'importe quelle nature est peinte (grands parcs). */
+const PAINT_AREA = 40_000; // m2
+
+/** La surface est-elle peinte sur le terrain plutot que drapee ? */
+export function paintedOnTerrain(a: FlatArea): boolean {
+  return PAINTED_KINDS.has(a.kind) || a.area > PAINT_AREA;
+}
+
+/** Couleur et rang d'une surface, partages avec la peinture du terrain. */
+export function areaLook(a: FlatArea): { color: number; z: number } {
+  const byChar = a.character !== null;
+  const paved = byChar && a.character === Character.Mineral && a.paved;
+  if (byChar) {
+    const { ground, z } = characterSpec(a.character as Character);
+    return { color: paved ? MINERAL_PAVED : ground, z };
+  }
+  const { c, z } = areaSpec(a.kind);
+  return { color: c, z };
+}
+
 function merge(areas: FlatArea[]): Layer[] {
   const buckets = new Map<string, { list: FlatArea[]; color: number; z: number }>();
 
   for (const a of areas) {
+    if (elevation.on && paintedOnTerrain(a)) continue;
     // Un espace ouvert est peint par caractere, tout le reste par nature. Le
     // mineral se dedouble selon le revetement : la pierre appareillee de la
     // place du Peuple ne doit pas se peindre comme le beton de Dorian.
@@ -68,8 +107,12 @@ function merge(areas: FlatArea[]): Layer[] {
       pos.set(a.pos, o);
       o += a.pos.length;
     }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const flat = new THREE.BufferGeometry();
+    flat.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    // relief : recoupee et posee sur le sol de la ville (lib/drape.ts). La
+    // tolerance de 25 cm suffit sous la ligne d'encre ; a 8 cm les parcs
+    // triplaient de triangles pour rien.
+    const geometry = drapeGeometry(flat, { tol: 0.25, minEdge: 6 });
     geometry.computeBoundingSphere();
     out.push({ key, geometry, color: b.color, z: b.z });
   }
@@ -132,8 +175,9 @@ function mergePaths(paths: FlatPath[]) {
     ["path-hard", hard, PATH_HARD],
   ] as const) {
     if (!pos.length) continue;
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    const flat = new THREE.BufferGeometry();
+    flat.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    const geometry = drapeGeometry(flat);
     geometry.computeBoundingSphere();
     out.push({ key, geometry, color, z: PATH_Z });
   }

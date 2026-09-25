@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { buildCrossings } from "../lib/crossings";
 import type { RoadGraph } from "../lib/graph";
 import type { Crossing } from "../lib/voirie";
+import { drapeGeometry } from "../lib/drape";
 
 // Passages pietons. La geometrie est dans src/lib/crossings.ts, qui est pur et
 // se rejoue donc dans Node : c'est la qu'on verifie qu'aucune bande ne deborde
@@ -43,8 +44,8 @@ export function Crossings({
     );
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(m.pos, 3));
-    g.computeBoundingSphere();
-    return g;
+    // relief : les bandes se posent sur la chaussee, donc sur son profil
+    return drapeGeometry(g);
   }, [crossings, graph, centre]);
 
   if (geometry.attributes.position.count === 0) return null;

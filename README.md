@@ -31,6 +31,13 @@ npm run fetch-ign              # télécharge la BD TOPO puis joint
 npm run fetch-ign -- --cache   # rejoint depuis data/ign-batiments.json, sans réseau
 ```
 
+Le relief (grille d'altitude IGN) et les ponts et tunnels des routes :
+
+```bash
+npm run fetch-relief           # public/sainte-relief.json + .bin
+npm run fetch-osm -- ouvrages  # tags bridge/tunnel/layer posés sur sainte.geojson
+```
+
 ## Commandes
 
 | touche | effet |
@@ -180,6 +187,198 @@ bâtiments restent sur l'inférence ; avec le cache, `fetch-osm -- buildings`
 rejoue la jointure, donc régénérer OSM n'efface pas les hauteurs. La mention
 « bâti IGN BD TOPO, Licence Ouverte » n'apparaît dans l'UI que si des données
 IGN sont chargées.
+
+## Le relief : la cuvette stéphanoise
+
+Le jeu était plat. Saint-Étienne est une cuvette : la bbox va de **414 m** au
+fond de la vallée du Furan à **1 065 m** sur les contreforts du Pilat (392 à
+1 099 m sur l'emprise élargie des routes), et la moitié du terrain y dépasse
+14 % de pente. Même le circuit, qu'on croyait de
+plaine, monte de 531 m place Anatole France à 571 m à La Métare. Cette section
+décrit les données ; le rendu vient ensuite, par étapes.
+
+**La grille.** `npm run fetch-relief` lit le RGE ALTI de l'IGN (WMS raster de la
+Géoplateforme, flottants 32 bits) et cuit une grille de **1 207 × 1 657
+cellules de 10 m** sur l'emprise des routes plus 300 m, régulière en degrés pour ne pas dépendre de l'origine du repère
+métrique du jeu. `src/lib/relief.ts` la lit et l'interpole bilinéairement, en
+lon/lat ou en mètres du jeu.
+
+- **Lue à 2 m, moyennée par 5 × 5.** Le service choisit son niveau de pyramide
+  sur l'échelle demandée : à 5 m par pixel sur des tuiles de 5 km, il servait
+  un niveau plus grossier en latitude, en pixels dupliqués. La première cuisson
+  avait 555 lignes sur 1 225 identiques à leur voisine, un relief en escalier.
+  À 2 m par pixel il sert sa vraie résolution, et la moyenne à 10 m gomme
+  bordures, murets et voitures garées.
+- **Contrôlée contre la BD TOPO** : aux 52 609 bâtiments de la bbox, l'écart à
+  l'altitude du sol mesurée par l'IGN est de 0,22 m en médiane, 0,86 m au p90,
+  1,77 m au p99, pour un biais de −0,04 m.
+- **Codée en écarts.** Pas de 5 cm (bien en dessous de l'erreur du modèle), et
+  chaque cellule stocke son écart à sa voisine en Int16 : 1,05 Mo compressé
+  sur la bbox d'origine, contre 1,96 Mo en altitudes brutes au centimètre, gzip
+  ne voyant pas que le terrain varie lentement. 2,0 Mo sur l'emprise élargie.
+- **Chaque tuile a un délai de 90 s**, et trois partent en parallèle : sans
+  délai, une requête que le service laissait pendre bloquait la cuisson
+  indéfiniment.
+
+**Les ponts et les tunnels.** `fetch-osm` jetait les tags `bridge`, `tunnel` et
+`layer` : sur un sol plat ils ne servaient à rien. Avec le relief, un viaduc qui
+suivrait le terrain plongerait au fond du vallon qu'il enjambe, **jusqu'à 24 m**
+sous les voies rapides mesurées. `npm run fetch-osm -- ouvrages` récupère ces
+seuls tags et les pose par id de way sur `sainte.geojson`, sans toucher à la
+géométrie : refaire tout le réseau changerait les ways et pourrait déplacer le
+circuit. Résultat : 146 ponts, 39 tunnels, 174 `layer`, 1 voie couverte, et
+aucune autre différence sur les 5 837 ways. Un fetch complet des routes garde
+maintenant ces tags aussi.
+
+### Les routes et la voiture sur le relief
+
+Les chaussées, la voiture, la caméra, les portiques et les voitures du salon
+suivent le relief. Il est actif par défaut ; **`?plat`** dans l'URL rend la
+ville plate d'avant, pour comparer ou sur une machine qui peinerait.
+
+**Le profil en long** (`src/lib/roadProfile.ts`). La voiture vit en 2D sur le
+graphe routier, et un edge OSM est un segment droit qui peut faire 100 m : des
+altitudes aux seuls nœuds feraient couper les collines en ligne droite. Chaque
+edge est donc échantillonné tous les 8 m (137 000 points), puis tout le réseau
+est lissé d'un bloc, par Gauss-Seidel, en minimisant l'écart au terrain plus
+une raideur entre points voisins. Les nœuds étant partagés, un carrefour garde
+une seule altitude. Mesuré sur le vrai réseau, avec la raideur retenue :
+
+| raideur | écart au terrain p99 | courbure p99 (%/8 m) |
+| --- | --- | --- |
+| 0 (terrain brut) | 0 m | 10,1 |
+| 6 (retenue) | 0,33 m | 4,2 |
+| 16 | 0,57 m | 2,8 |
+
+**Les ponts et les tunnels n'ont aucune attache au terrain** : leurs points sont
+posés par interpolation entre leurs culées ou leurs têtes (Dijkstra depuis
+chaque culée à travers l'ouvrage, exacte sur un tablier sans branche), puis
+lissés avec le reste. Les tabliers passent jusqu'à 26 m au-dessus du fond des
+vallons, les tunnels jusqu'à 43 m sous la colline. Un passage sous immeuble
+(`tunnel=building_passage`) reste au sol.
+
+**La grille déborde la bbox.** Les ways d'Overpass en sortent de 2 km au nord
+et de 2,5 km à l'ouest ; hors grille, l'altitude restait figée à la valeur du
+bord et donnait des murs à 60 % là où la route rentrait dans la grille (avenue
+du Pilat, route du Gouffre d'Enfer). `fetch-relief` couvre maintenant
+l'emprise réelle des routes, plus 300 m : la voirie au-dessus de 30 % passe de
+3,7 km à 404 m.
+
+**Une pente plafond à 30 %** efface ce qui reste : des bretelles d'échangeur au
+bord d'un talus que la grille à 10 m étale, à 35-43 % sur quelques dizaines de
+mètres. Les rues les plus raides de la ville font 20 à 21 % sur leur longueur
+(rue Diderot, rue Valentin-Haüy), le plafond ne les touche pas.
+
+**La voiture** reste contrainte au graphe : son sol est la chaussée qu'elle
+suit, jamais le terrain voisin, elle ne peut donc ni s'enfoncer dans une
+colline ni tomber d'un pont. La pente tire sur elle (g sin a, à 60 % pour rester
+arcade), les freins la tiennent à l'arrêt sans gaz (sinon elle reculait pendant
+le compte à rebours), et elle décolle quand la chaussée se dérobe plus vite que
+la gravité ne suit, au-dessus de 58 km/h. Au bout d'un edge, l'altitude se lit
+sur la rue du nœud où la voiture se trouve vraiment : en coupant un virage,
+elle restait épinglée quelques frames à la fin de l'edge quitté, puis sautait
+de 33 cm. L'altitude affichée est filtrée en anticipant la vitesse verticale,
+pour gommer les 10 à 20 cm qui restent sans que la caisse ne s'enfonce dans
+une côte.
+
+Simulation sur le vrai réseau, 90 s pied au plancher depuis le départ : aucun
+glissement pendant le compte à rebours, aucune valeur non finie, un décollage
+de 0,65 s, et au plus 19 cm d'une frame à l'autre avant le filtre d'affichage.
+
+**Le repère vertical** : `y = altitude − z0`, z0 étant la chaussée au départ,
+pour garder de petites coordonnées là où l'on roule. La caméra
+monte en descente (la chaussée derrière la voiture est plus haute qu'elle) et
+teste les murs à sa hauteur au-dessus du sol, pas à son altitude. Les voitures
+du salon retrouvent leur altitude sur la chaussée de chaque client : le relief
+étant le même partout, le protocole n'a pas changé.
+
+### La ville sur le relief
+
+**Un seul sol** (`surfaceY`, `src/lib/elevation.ts`) : sur une chaussée, son
+profil en long ; au-delà du bord, un raccord en smoothstep vers le terrain sur
+8 m. Tout ce qui est posé au sol le lit, et c'est ce qui fait que trottoirs,
+places, pieds d'immeubles et chaussées s'emboîtent. Les ponts et les tunnels
+n'y comptent pas : sous un tablier, le sol est le fond du vallon.
+
+**Le terrain** (`src/scene/Terrain.tsx`) remplace le plan sombre : une grille
+par tuile de 240 m, au même streaming que les bâtiments, à 6, 12 puis 30 m de
+maille, 60 cm sous le sol de la ville (les surfaces au sol commencent à
+−30 cm), avec une jupe verticale contre les fentes entre mailles différentes.
+Une corde entre deux sommets passait au-dessus des chaussées qui plongent :
+0,3 % des points de chaussée percés à 6 m, 3,6 % à 12 m, 13 % à 30 m, des
+taches sombres sur les rues vues de loin. Près d'une route, un sommet prend
+donc le minimum du sol sur sa demi-maille : plus aucun point percé à aucune
+maille. Coût mesuré au centre-ville : 11 ms la tuile pleine, 3 ms la réduite,
+moins d'une la lointaine ; deux tuiles par tick.
+
+**Les grandes surfaces naturelles sont peintes sur le terrain**, en couleur
+de sommet : herbe, forêt, zones d'activité, friches, jardins ouvriers, et
+toute surface de plus de 4 ha. Drapées comme maillages, elles faisaient
+4,5 millions de triangles et 15 s de calcul au chargement, l'herbe et la forêt
+des collines à elles seules 3,9 millions. Les surfaces de ville (places,
+parcs, parkings, eau, stades) restent des maillages à bords nets : 59 000
+triangles, 0,3 s.
+
+**Le drapé** (`src/lib/drape.ts`) pose sur ce sol ce qui a été dessiné à plat :
+places, allées, trottoirs et bordures, passages piétons, plateforme du tram,
+clôtures, viaduc ferroviaire. Le découpage est adaptatif : on coupe le plus
+long côté d'un triangle tant que le sol s'écarte de sa corde, une place plate
+reste en quelques triangles. Les faces verticales (bordures, clôtures, piles)
+gardent leurs arêtes au même décalage et restent verticales.
+
+**Les bâtiments** se construisent toujours de 0 à leur hauteur dans leur repère
+local, posé à mi-chemin entre le sol le plus bas et le plus haut sous leurs
+angles ; le toit reste plat. Les murs descendent à chaque angle jusqu'au sol,
+60 cm dessous : rue en pente, la façade aval gagne un étage, la façade amont
+s'enterre, comme les immeubles accrochés aux côtes. Les rangées de fenêtres
+partent toutes du sol le plus bas, sinon les étages se décaleraient d'un mur à
+l'autre. La vitrine suit la rue ; elle saute si elle ne laisse plus d'étage
+au-dessus d'elle. Silhouettes lointaines, kits de famille et repères montent au
+même niveau ; un repère qui remplace son bâtiment (Zénith, chevalement) se pose
+sur son point le plus bas pour ne flotter nulle part.
+
+Arbres, lampadaires, fontaines, poteaux de caténaire et objets d'espace public
+se posent sur le sol à leur pied ; la ligne du tracé de l'éditeur aussi.
+
+### Le balayage : ce que les images ont trouvé
+
+Dix-huit lieux posés automatiquement depuis la donnée (douze repères, trois
+têtes de tunnel, trois ponts), la voiture sur la chaussée la plus proche,
+tournée vers eux, en plus des rues les plus raides. Trois défauts, tous
+confirmés par la mesure avant d'être corrigés :
+
+**Les repères se posent au pied de leur façade.** Un repère posé à mi-pente
+comme un bâtiment ordinaire flottait : la BD TOPO mesure 18 m de dénivelé sous
+la Bourse du Travail (525,9 à 543,8 m), dont la façade donne en bas, sur le
+cours Victor-Hugo, et son péristyle flottait à 8 m au-dessus de la rue. Ses
+hauteurs ont été relevées sur photo depuis cette rue : c'est le sol devant le
+côté `face` du repère (cinq points, 3 m en avant) qui fait son niveau, pour ses
+murs comme pour son kit. Derrière, là où le sol monte plus haut que lui, le
+bâtiment est enterré entier et ses murs sont plafonnés sous le toit. Un repère
+qui remplace son bâtiment (Zénith, chevalement, auvents de quai) reçoit un
+soubassement de pierre sombre jusqu'au sol de chaque angle : 4,8 m sous le
+Zénith.
+
+**Les ponts routiers ont des piles** (`src/scene/Bridges.tsx`) : poutres de rive
+et sous-face du tablier, et une pile tous les 25 m là où le tablier passe à plus
+de 3 m du sol, décalée le long de l'ouvrage si une chaussée passe dessous. 116
+piles, 150 emplacements sautés. Sans elles, le viaduc de la N88 était un ruban
+sans épaisseur à 24 m au-dessus du vallon.
+
+**Les tunnels ont des tubes** (`src/scene/Tunnels.tsx`). Sans eux, la voiture
+qui entrait sous la colline roulait dans la masse du terrain : écran noir. Mais
+la plupart des 39 tunnels OSM sont des passages sous une rue, à un mètre sous
+le terrain, où un tube crèverait le sol. On tranche donc point par point, par
+tronçon de 8 m : un tube là où le terrain couvre la chaussée d'au moins 4,3 m,
+voûte à 5 m au plus et 0,8 m sous le terrain ; une tranchée ailleurs, où le sol
+se creuse comme pour une route au sol. Trancher edge par edge ne marchait pas :
+un tunnel OSM part de sa tête, où la couverture est nulle, et aucun edge ne
+passait. Le premier seuil, à 6,5 m, ratait l'A72 au nord, en tranchée couverte
+sous un bâtiment commercial à 4-5 m de profondeur : le sol s'y creusait jusqu'à
+l'autoroute et le bâtiment descendait avec, jusque dans la caméra. Résultat :
+1 212 m de tube, surtout la N88, avec plafonniers orange et une tête en béton à
+chaque sortie ; 1 383 m de tranchées. Dans un tube, la caméra passe sous la
+voûte.
 
 ## Streaming par anneaux de distance
 
@@ -1509,6 +1708,9 @@ la largeur réelle du ruban.
 Données © contributeurs OpenStreetMap, sous [ODbL](https://opendatacommons.org/licenses/odbl/).
 L'attribution est affichée dans l'UI. Pas de tuiles Google, pas de
 photogrammétrie.
+
+Relief : IGN, RGE ALTI, sous la même licence, quand `npm run fetch-relief` a
+été lancé.
 
 Bâti : IGN, BD TOPO, sous [Licence Ouverte Etalab 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence/),
 quand `npm run fetch-ign` a été lancé. L'attribution s'affiche alors dans l'UI.

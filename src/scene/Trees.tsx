@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { rand01 } from "../lib/features";
+import { surfaceY } from "../lib/elevation";
 
 // Arbres OSM, en InstancedMesh.
 //
@@ -155,12 +156,14 @@ function TreeSector({
       const slim = 0.85 + rand01(i * 7 + 3) * 0.4;
       const rot = rand01(i * 11 + 5) * Math.PI * 2;
       const z = -t.y;
-      const base = TRUNK_H * s;
+      // relief : l'arbre pousse sur le sol de la ville
+      const gy = surfaceY(t.x, t.y);
+      const base = gy + TRUNK_H * s;
 
       e.set(0, rot, 0);
       q.setFromEuler(e);
 
-      pos.set(t.x, (TRUNK_H * s) / 2, z);
+      pos.set(t.x, gy + (TRUNK_H * s) / 2, z);
       scl.set(s, s, s);
       trunks.current!.setMatrixAt(instIdx, m.compose(pos, q, scl));
 

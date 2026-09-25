@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useStore } from "../state/store";
+import { elevation } from "../lib/elevation";
 import { onPeers, peerListKey, peers } from "../lib/peers";
 import { countdownLeft } from "../lib/session";
 import { launchRace } from "../lib/net";
@@ -204,7 +205,8 @@ export function Hud({ onEdit }: { onEdit: () => void }) {
         </div>
         <div className="attrib">
           données © contributeurs OpenStreetMap, ODbL · {source}
-          {ign && " · bâti IGN BD TOPO, Licence Ouverte"} · relief SRTM, Copernicus EU-DEM
+          {ign && " · bâti IGN BD TOPO, Licence Ouverte"}
+          {elevation.on && " · relief IGN RGE ALTI"} · horizon SRTM, Copernicus EU-DEM
         </div>
       </div>
 

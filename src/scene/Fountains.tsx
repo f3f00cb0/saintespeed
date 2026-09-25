@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import * as THREE from "three";
+import { surfaceY } from "../lib/elevation";
 
 // Fontaines OSM. Elles sont posees exactement la ou on veut que le regard
 // s'arrete : au milieu des places. Une vasque sombre et un plan d'eau qui
@@ -58,14 +59,15 @@ export function Fountains({ points }: { points: { x: number; y: number; r: numbe
     points.forEach((p, i) => {
       // le cylindre et le disque sont unitaires, l'echelle porte le rayon reel
       s.set(p.r, 1, p.r);
+      const gy = surfaceY(p.x, p.y); // relief
       basins.current!.setMatrixAt(
         i,
-        m.makeTranslation(p.x, BASIN_H / 2, -p.y).scale(s),
+        m.makeTranslation(p.x, gy + BASIN_H / 2, -p.y).scale(s),
       );
       s.set(p.r * 0.82, p.r * 0.82, 1);
       water.current!.setMatrixAt(
         i,
-        m.copy(flat).setPosition(p.x, WATER_Y, -p.y).scale(s),
+        m.copy(flat).setPosition(p.x, gy + WATER_Y, -p.y).scale(s),
       );
     });
     basins.current.instanceMatrix.needsUpdate = true;

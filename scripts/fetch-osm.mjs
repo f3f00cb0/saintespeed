@@ -6,6 +6,7 @@
 //   npm run fetch-osm -- features surfaces au sol, arbres, tram, mobilier
 //   npm run fetch-osm -- rail     voies ferrees, dont les viaducs
 //   npm run fetch-osm -- voirie   cote du trottoir et passages pietons
+//   npm run fetch-osm -- ouvrages ponts, tunnels et layer des routes existantes
 // Donnees OpenStreetMap sous ODbL.
 
 import { writeFile, mkdir } from "node:fs/promises";
@@ -304,6 +305,27 @@ async function fetchBoxAdaptive(box, label, depth = 0) {
 // roulables. Seule l'appartenance a une zone pietonne compte.
 const NON_DRIVABLE_ACCESS = /^(no|private)$/;
 
+// --- ouvrages : ponts, tunnels, layer ----------------------------------------
+// Sur un sol plat ces tags ne servaient a rien et ils etaient jetes. Avec le
+// relief, ils decident de tout : un pont de la N88 qui suivrait le terrain
+// plongerait au fond du vallon qu'il enjambe, un tunnel passerait par-dessus la
+// colline. On garde donc bridge, tunnel, layer et covered tels quels.
+const OUVRAGE_KEYS = ["bridge", "tunnel", "layer", "covered"];
+
+function ouvrageTags(t) {
+  const out = {};
+  for (const k of OUVRAGE_KEYS) if (t[k] !== undefined && t[k] !== "no") out[k] = t[k];
+  return out;
+}
+
+// Les tags seuls, sans geometrie : de quoi completer sainte.geojson sans le
+// regenerer. Refaire tout le reseau changerait les ways (OSM bouge) et pourrait
+// deplacer le circuit ; ici on ne touche qu'aux proprietes, par id de way.
+const OUVRAGES_QUERY =
+  `[out:json][timeout:180];(` +
+  OUVRAGE_KEYS.map((k) => `way["highway"]["${k}"]${bb(BBOX)};`).join("") +
+  `);out tags;`;
+
 function roadsToGeoJSON(json) {
   const drivable = [];
   const pedRings = [];
@@ -379,6 +401,7 @@ function roadsToGeoJSON(json) {
     if (t.name) props.name = t.name;
     if (t.oneway) props.oneway = t.oneway;
     if (t.maxspeed) props.maxspeed = t.maxspeed;
+    Object.assign(props, ouvrageTags(t));
     features.push({
       type: "Feature",
       id: el.id,
@@ -1058,8 +1081,32 @@ const doBuildings = !arg || arg === "buildings";
 const doFeatures = !arg || arg === "features";
 const doRail = !arg || arg === "rail";
 const doVoirie = !arg || arg === "voirie";
+// Pas dans le lot par defaut : un fetch complet des routes porte deja ces tags.
+const doOuvrages = arg === "ouvrages";
 
 await mkdir(PUBLIC, { recursive: true });
+
+if (doOuvrages) {
+  console.log("ouvrages ->", BBOX.join(", "));
+  const json = await fetchWithRetry(OUVRAGES_QUERY, "ouvrages");
+  const tags = new Map();
+  for (const el of json.elements) if (el.type === "way") tags.set(el.id, ouvrageTags(el.tags || {}));
+  const path = resolve(PUBLIC, "sainte.geojson");
+  const gj = JSON.parse(readFileSync(path, "utf8"));
+  const count = { bridge: 0, tunnel: 0, layer: 0, covered: 0 };
+  for (const f of gj.features) {
+    for (const k of OUVRAGE_KEYS) delete f.properties[k];
+    const t = tags.get(f.id);
+    if (!t) continue;
+    Object.assign(f.properties, t);
+    for (const k of OUVRAGE_KEYS) if (t[k] !== undefined) count[k]++;
+  }
+  await writeFile(path, JSON.stringify(gj));
+  console.log(
+    `  ${tags.size} ways tagues dans la bbox ; poses sur sainte.geojson : ` +
+      `${count.bridge} ponts, ${count.tunnel} tunnels, ${count.layer} layer, ${count.covered} couverts`,
+  );
+}
 
 if (doRoads) {
   console.log("routes ->", BBOX.join(", "));

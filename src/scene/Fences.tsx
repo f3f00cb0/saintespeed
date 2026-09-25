@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import { AREA_BASE, type FlatFence } from "../lib/features";
+import { drapeGeometry } from "../lib/drape";
 
 // Clotures, haies et murets qui ceinturent les espaces ouverts.
 //
@@ -87,9 +88,11 @@ export function Fences({ fences }: { fences: FlatFence[] }) {
 
     const out: { kind: FlatFence["kind"]; geometry: THREE.BufferGeometry; color: number }[] = [];
     for (const [kind, pos] of buckets) {
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-      geometry.computeVertexNormals();
+      const flat = new THREE.BufferGeometry();
+      flat.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      flat.computeVertexNormals();
+      // relief : la cloture suit la pente, ses montants restent verticaux
+      const geometry = drapeGeometry(flat);
       geometry.computeBoundingSphere();
       out.push({ kind, geometry, color: SPECS[kind].color });
     }

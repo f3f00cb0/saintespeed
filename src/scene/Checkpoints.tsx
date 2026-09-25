@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useStore } from "../state/store";
 import type { Checkpoint } from "../lib/race";
+import { groundY } from "../lib/elevation";
 
 // Les portiques sont dessines comme le reste : deux poteaux rayes a la facon
 // d'une barriere de chantier, une banderole a damier qui porte le nom du
@@ -140,9 +141,11 @@ function Gate({
   const ny = cp.tx;
   const rot = Math.atan2(ny, nx);
   const half = Math.max(cp.width / 2, 5);
+  // le portique se pose sur la chaussee qu'il enjambe, relief compris
+  const z = useMemo(() => groundY(cp.x, cp.y, cp.tx, cp.ty), [cp.x, cp.y, cp.tx, cp.ty]);
 
   return (
-    <group position={[cp.x, 0, -cp.y]} rotation={[0, rot, 0]}>
+    <group position={[cp.x, z, -cp.y]} rotation={[0, rot, 0]}>
       {[-half, half].map((off) => (
         <group key={off} position={[off, 0, 0]}>
           <mesh position={[0, POST_H / 2, 0]}>

@@ -14,9 +14,11 @@ import type { FlatBuilding } from "../lib/buildings";
 import type { Projector } from "../lib/project";
 import { getFacadeTextures } from "../lib/facadeTextures";
 import {
-  frameOf, newEmit, toGeometry, type Anchor, type Tint,
+  frameOf, newEmit, toGeometry, type Anchor, type Buf as KitBuf, type Tint,
 } from "../lib/landmarkGeometry";
 import { LANDMARK_KITS, SYNTHETIC_LANDMARKS } from "../lib/landmarks";
+import { SINK, footingOf } from "../lib/footing";
+import { surfaceY } from "../lib/elevation";
 
 const tintOf = (hex: number): Tint => {
   const c = new THREE.Color(hex);
@@ -25,11 +27,50 @@ const tintOf = (hex: number): Tint => {
 
 type Built = {
   key: string;
+  /** niveau de pose sur le relief, y three.js */
+  y: number;
   archetype: Archetype;
   walls: THREE.BufferGeometry | null;
   roofs: THREE.BufferGeometry | null;
   glow: THREE.BufferGeometry | null;
 };
+
+/**
+ * Socle d'un repere qui remplace son batiment (Zenith, chevalement, auvents de
+ * quai). Son kit part de 0, pose au pied de sa facade ; mais sans murs extrudes
+ * descendus a chaque angle, l'arriere flottait la ou le sol baisse : 4,8 m sous
+ * le Zenith. Un soubassement de pierre sombre suit donc l'emprise, du sol de
+ * chaque angle (60 cm dessous) jusqu'au niveau du kit. En repere local du
+ * groupe, deja monte au niveau de reference.
+ */
+function plinth(R: KitBuf, b: FlatBuilding, tint: Tint) {
+  const foot = footingOf(b);
+  const n = b.ring.length;
+  const r = tint.r * 0.45;
+  const g = tint.g * 0.45;
+  const bl = tint.b * 0.45;
+  for (let i = 0; i < n; i++) {
+    const p = b.ring[i];
+    const q = b.ring[(i + 1) % n];
+    const lp = foot.g[i] - foot.y0 - SINK;
+    const lq = foot.g[(i + 1) % n] - foot.y0 - SINK;
+    if (lp >= 0 && lq >= 0) continue; // le sol est deja au niveau du kit
+    const top = 0.05;
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = dy / len;
+    const nz = dx / len;
+    R.pos.push(
+      p.x, Math.min(lp, top), -p.y, q.x, Math.min(lq, top), -q.y, q.x, top, -q.y,
+      p.x, Math.min(lp, top), -p.y, q.x, top, -q.y, p.x, top, -p.y,
+    );
+    for (let k = 0; k < 6; k++) {
+      R.norm.push(nx, 0, nz);
+      R.col.push(r, g, bl);
+    }
+  }
+}
 
 export function Landmarks({ buildings, proj }: { buildings: FlatBuilding[]; proj: Projector }) {
   const painted = useMemo(() => getFacadeTextures(), []);
@@ -48,10 +89,15 @@ export function Landmarks({ buildings, proj }: { buildings: FlatBuilding[]; proj
 
       const e = newEmit();
       kit(e, frame, painted[b.archetype], tint, roofTint, frame);
+      if (b.landmark.replaceBase) plinth(e.roofs, b, tint);
       const tris = (e.walls.pos.length + e.roofs.pos.length + e.glow.pos.length) / 9;
       if (tris === 0) console.warn(`repere ${b.id}: kit vide (aucune geometrie)`);
+      // Le kit monte au niveau de reference du repere : le sol devant sa
+      // facade principale (lib/footing.ts), le meme que ses murs extrudes.
+      const foot = footingOf(b);
       out.push({
         key: `lm-${b.id}`,
+        y: foot.y0,
         archetype: b.archetype,
         walls: toGeometry(e.walls, true),
         roofs: toGeometry(e.roofs, false),
@@ -68,6 +114,7 @@ export function Landmarks({ buildings, proj }: { buildings: FlatBuilding[]; proj
         { w: 0, d: 0, area: 0, height: 0, minx: 0, maxx: 0, miny: 0, maxy: 0 });
       out.push({
         key: syn.key,
+        y: surfaceY(p.x, p.y),
         archetype: Archetype.Pierre,
         walls: toGeometry(e.walls, true),
         roofs: toGeometry(e.roofs, false),
@@ -92,7 +139,7 @@ export function Landmarks({ buildings, proj }: { buildings: FlatBuilding[]; proj
   return (
     <group>
       {built.map((m) => (
-        <group key={m.key}>
+        <group key={m.key} position={[0, m.y, 0]}>
           {m.walls && (
             <mesh geometry={m.walls}>
               <meshLambertMaterial

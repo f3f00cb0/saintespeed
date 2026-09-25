@@ -12,10 +12,11 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# Les gros JSON OSM sortent du build tels quels (5,5 Mo a eux trois). On les
+# Les gros JSON OSM et la grille de relief (2,1 Mo de Uint16, qui se comprime
+# bien : le terrain varie lentement) sortent du build tels quels. On les
 # pre-compresse ici pour que nginx serve le .gz tout fait via gzip_static, au
 # lieu de recompresser 2,9 Mo a chaque requete froide.
-RUN find dist -type f \( -name '*.json' -o -name '*.geojson' -o -name '*.js' -o -name '*.css' \) \
+RUN find dist -type f \( -name '*.json' -o -name '*.geojson' -o -name '*.bin' -o -name '*.js' -o -name '*.css' \) \
       -exec gzip -9 -k {} \;
 
 # Etape 2 : nginx pour le SPA, Node pour le salon WebSocket.

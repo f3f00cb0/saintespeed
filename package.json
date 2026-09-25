@@ -10,6 +10,7 @@
     "salon": "node server/listen.mjs",
     "fetch-osm": "node scripts/fetch-osm.mjs",
     "fetch-ign": "node scripts/fetch-ign.mjs",
+    "fetch-relief": "node scripts/fetch-relief.mjs",
     "build-notable": "node scripts/build-notable.mjs",
     "fetch-reference": "node scripts/fetch-reference.mjs",
     "palette-reference": "node scripts/palette-reference.mjs",

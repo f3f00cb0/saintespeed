@@ -1,0 +1,19 @@
+{
+ "attribution": "IGN - RGE ALTI, Licence Ouverte Etalab 2.0",
+ "source": "ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES",
+ "bbox": [
+  4.2982,
+  45.3637,
+  4.4527,
+  45.5125
+ ],
+ "w": 1207,
+ "h": 1657,
+ "base": 392,
+ "step": 0.05,
+ "encoding": "delta-int16",
+ "cell": 10,
+ "min": 392.21,
+ "max": 1098.67,
+ "order": "lignes du nord au sud, colonnes d'ouest en est, valeurs aux centres des cellules"
+}

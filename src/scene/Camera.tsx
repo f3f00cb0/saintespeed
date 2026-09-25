@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { car } from "../lib/car";
 import type { WallIndex } from "../lib/buildings";
+import { inTube, tubeCeiling } from "../lib/elevation";
 
 const DIST = 14; // recul derriere la voiture
 const HEIGHT = 6.2;
@@ -26,6 +27,11 @@ export function ChaseCamera({ walls }: { walls: WallIndex | null }) {
     const cx = Math.cos(car.heading);
     const cy = Math.sin(car.heading);
     const v = Math.abs(car.speed);
+    // Relief : la camera suit l'altitude de la voiture. En descente, la
+    // chaussee derriere la voiture est PLUS HAUTE qu'elle : a 15 % sur 16 m de
+    // bras, 2,4 m. La camera monte d'autant pour ne pas finir dans le bitume.
+    const z = Number.isFinite(car.z) ? car.z : 0;
+    const slope = Math.tan(car.pitch);
 
     // plus on va vite, plus la camera recule et se leve
     const back = DIST + v * 0.16;
@@ -51,14 +57,16 @@ export function ChaseCamera({ walls }: { walls: WallIndex | null }) {
     const eff = back * boom.current;
     // Rentree, la camera monte au lieu de descendre : de pres et bas elle
     // perd la voiture, de pres et haut elle la surplombe et reste lisible.
-    targetScratch.set(
-      car.x - cx * eff,
-      4.2 + (wantY - 4.2) * boom.current,
-      -(car.y - cy * eff),
-    );
-    // le point vise se rapproche avec le bras, sinon la voiture sort du cadre
+    const climb = Math.max(0, -slope) * eff;
+    // Dans un tube, la camera passe sous la voute : a 6 m elle serait au-dessus
+    // du plafond, dans la masse de la colline, et ne verrait que du noir.
+    let camY = z + climb + 4.2 + (wantY - 4.2) * boom.current;
+    if (inTube(car.edgeId, car.t)) camY = Math.min(camY, z + tubeCeiling(car.edgeId, car.t) - 1.1);
+    targetScratch.set(car.x - cx * eff, camY, -(car.y - cy * eff));
+    // le point vise se rapproche avec le bras, sinon la voiture sort du cadre ;
+    // il suit la pente pour qu'une cote se voie devant soi
     const ahead = LOOK_AHEAD * (0.28 + 0.72 * boom.current);
-    lookAtScratch.set(car.x + cx * ahead, 1.6, -(car.y + cy * ahead));
+    lookAtScratch.set(car.x + cx * ahead, z + 1.6 + slope * ahead * 0.6, -(car.y + cy * ahead));
 
     if (!ready.current) {
       pos.current.copy(targetScratch);
@@ -75,7 +83,9 @@ export function ChaseCamera({ walls }: { walls: WallIndex | null }) {
     if (walls) {
       const camX = pos.current.x;
       const camY = -pos.current.z;
-      const hit = walls.clear(car.x, car.y, camX, camY, pos.current.y);
+      // hauteur au dessus du sol de la voiture : les murs sont indexes en
+      // hauteur de batiment, pas en altitude
+      const hit = walls.clear(car.x, car.y, camX, camY, pos.current.y - z);
       if (hit < 1) {
         const dx = camX - car.x;
         const dy = camY - car.y;

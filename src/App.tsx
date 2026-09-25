@@ -13,6 +13,12 @@ import { loadFeatures, prepareFeatures } from "./lib/features";
 import { loadVoirie, prepareVoirie } from "./lib/voirie";
 import { loadRail, prepareRail, railLength, makeRoadProbe } from "./lib/rail";
 import { useInput } from "./lib/input";
+import { loadRelief } from "./lib/relief";
+import { buildRoadProfile } from "./lib/roadProfile";
+import { elevation, reliefWanted, setElevation } from "./lib/elevation";
+import { Terrain } from "./scene/Terrain";
+import { Bridges } from "./scene/Bridges";
+import { Tunnels } from "./scene/Tunnels";
 import { useStore } from "./state/store";
 import { Roads } from "./scene/Roads";
 import { Car } from "./scene/Car";
@@ -106,6 +112,27 @@ export default function App() {
         const track = trackFromCheckpoints(draft.id, draft.name, cps);
         saveCurrent(track);
         if (cps.length) spawnAt(g, cps, 0);
+
+        // Relief (desactivable par `?plat`). Il est pose AVANT setLoaded : les
+        // routes, les portiques, le sol et les batiments lisent l'altitude a
+        // leur construction.
+        if (reliefWanted()) {
+          const relief = await loadRelief(g.proj);
+          if (dead) return;
+          if (relief) {
+            const profile = buildRoadProfile(g, relief);
+            // z0 : la chaussee sous la voiture au depart
+            const hit = g.nearestEdge(car.x, car.y, 40);
+            const z0 = hit ? profile.z(hit.edge.id, hit.t) : relief.at(car.x, car.y);
+            setElevation(g, relief, profile, z0);
+            const st = profile.stats;
+            console.log(
+              `relief: ${relief.meta.w} x ${relief.meta.h} cellules, profil de ${st.samples} points ` +
+                `(${st.structures} ouvrages) en ${Math.round(st.ms)} ms, ecart au terrain ` +
+                `p50 ${st.fit[0].toFixed(2)} m p99 ${st.fit[1].toFixed(2)} m, depart a ${z0.toFixed(1)} m`,
+            );
+          }
+        }
         const ms = Math.round(performance.now() - t0);
         setStats(`${g.stats.nodes} noeuds · ${g.stats.edges} segments · ${ms} ms`);
         useStore.getState().setLoaded(g, ways, cps, source, track);
@@ -235,8 +262,11 @@ export default function App() {
             <Sky />
             {/* le decor passe avant les routes : les surfaces sont sous la
                 chaussee, qui doit rester lisible par dessus une place */}
+            {elevation.on && <Terrain areas={features?.areas ?? null} />}
             {features && <Ground areas={features.areas} paths={features.paths} />}
-            <Roads ways={ways} proj={graph!.proj} />
+            <Roads ways={ways} proj={graph!.proj} graph={graph} />
+            {elevation.on && <Bridges graph={graph!} />}
+            {elevation.on && <Tunnels graph={graph!} />}
             {features && <Tram lines={features.tram} />}
             {features && <Trees trees={features.trees} />}
             {features && <Fountains points={features.fountains} />}
